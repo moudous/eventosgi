@@ -1,0 +1,17 @@
+@extends('layouts.app')
+@section('title',$participante->exists?'Editar participante':'Novo participante')
+@section('content')
+<div class="mb-4"><h1 class="page-title">{{$participante->exists?'Editar participante':'Novo participante'}}</h1><p class="page-description mb-0">Preencha os dados do participante.</p></div>
+@php($params=['id'=>$participante->id,'nome'=>$participante->getOriginal('nome',$participante->nome)])
+<form method="POST" action="{{$participante->exists?route('participantes.update',$params):route('participantes.store')}}">@csrf @if($participante->exists)@method('PUT')@endif
+<div class="card content-card"><div class="card-header"><h2 class="h5 fw-bold mb-0">Dados do participante</h2></div><div class="card-body p-4">@if($errors->any())<div class="alert alert-danger">{{$errors->first()}}</div>@endif<div class="row g-3">
+<div class="col-12 col-md-8"><label class="form-label" for="nome">Nome *</label><input class="form-control" id="nome" name="nome" maxlength="100" required value="{{old('nome',$participante->nome)}}"></div>
+<div class="col-12 col-md-4"><label class="form-label" for="cpf">CPF</label><input class="form-control" id="cpf" name="cpf" maxlength="11" inputmode="numeric" value="{{old('cpf',$participante->cpf)}}"></div>
+<div class="col-12 col-md-4"><label class="form-label" for="email">E-mail</label><input type="email" class="form-control" id="email" name="email" maxlength="150" value="{{old('email',$participante->email)}}"></div>
+<div class="col-12 col-md-4"><label class="form-label" for="email2">E-mail 2</label><input type="email" class="form-control" id="email2" name="email2" maxlength="150" value="{{old('email2',$participante->email2)}}"></div>
+<div class="col-12 col-md-4"><label class="form-label" for="email_institucional">E-mail institucional</label><input type="email" class="form-control" id="email_institucional" name="email_institucional" maxlength="150" value="{{old('email_institucional',$participante->email_institucional)}}"></div>
+<div class="col-12 col-md-6"><label class="form-label" for="instituicao_ensino">Instituição de ensino</label><input class="form-control" id="instituicao_ensino" name="instituicao_ensino" maxlength="80" value="{{old('instituicao_ensino',$participante->instituicao_ensino)}}"></div>
+<div class="col-4 col-md-2"><label class="form-label" for="sexo">Sexo</label><select class="form-select" id="sexo" name="sexo"><option value="">Não informado</option><option value="M" @selected(old('sexo',$participante->sexo)==='M')>Masculino</option><option value="F" @selected(old('sexo',$participante->sexo)==='F')>Feminino</option></select></div>
+<div class="col-4 col-md-2"><label class="form-label" for="grupo">Grupo</label><input class="form-control" id="grupo" name="grupo" maxlength="1" value="{{old('grupo',$participante->grupo)}}"></div>
+<div class="col-4 col-md-2"><label class="form-label" for="ativo">Status *</label><select class="form-select" id="ativo" name="ativo"><option value="1" @selected((int)old('ativo',$participante->exists?(int)$participante->ativo:1)===1)>Ativo</option><option value="0" @selected((int)old('ativo',$participante->exists?(int)$participante->ativo:1)===0)>Inativo</option></select></div>
+</div><div class="d-flex justify-content-end gap-2 mt-4"><a href="{{route('participantes.index')}}" class="btn btn-outline-secondary">Cancelar</a><button class="btn btn-primary">Salvar</button></div></div></div></form>@endsection

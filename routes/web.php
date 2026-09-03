@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\EventoController;
 use App\Http\Controllers\AtividadeController;
+use App\Http\Controllers\ParticipanteController;
+use App\Http\Controllers\ConvidadoController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -109,6 +111,28 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/{atividade}/editar', [AtividadeController::class, 'edit'])->middleware('gi.permission:atividades.editar')->name('edit');
     Route::put('/{atividade}', [AtividadeController::class, 'update'])->middleware('gi.permission:atividades.editar')->name('update');
     Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');
+});
+
+Route::prefix('participantes')->name('participantes.')->group(function (): void {
+    Route::get('/', [ParticipanteController::class, 'index'])->middleware('gi.permission:participantes.listar')->name('index');
+    Route::get('/dados', [ParticipanteController::class, 'dados'])->middleware('gi.permission:participantes.listar')->name('dados');
+    Route::get('/criar', [ParticipanteController::class, 'create'])->middleware('gi.permission:participantes.criar')->name('create');
+    Route::post('/', [ParticipanteController::class, 'store'])->middleware('gi.permission:participantes.criar')->name('store');
+    Route::get('/{id}/{nome}/editar', [ParticipanteController::class, 'edit'])->middleware('gi.permission:participantes.editar')->name('edit');
+    Route::get('/{id}/{nome}', [ParticipanteController::class, 'show'])->middleware('gi.permission:participantes.visualizar')->name('show');
+    Route::put('/{id}/{nome}', [ParticipanteController::class, 'update'])->middleware('gi.permission:participantes.editar')->name('update');
+    Route::delete('/{id}/{nome}', [ParticipanteController::class, 'destroy'])->middleware('gi.permission:participantes.excluir')->name('destroy');
+});
+
+Route::prefix('convidados')->name('convidados.')->group(function (): void {
+    Route::get('/', [ConvidadoController::class, 'index'])->middleware('gi.permission:convidados.listar')->name('index');
+    Route::get('/dados', [ConvidadoController::class, 'dados'])->middleware('gi.permission:convidados.listar')->name('dados');
+    Route::get('/criar', [ConvidadoController::class, 'create'])->middleware('gi.permission:convidados.criar')->name('create');
+    Route::post('/', [ConvidadoController::class, 'store'])->middleware('gi.permission:convidados.criar')->name('store');
+    Route::get('/{convidado}', [ConvidadoController::class, 'show'])->middleware('gi.permission:convidados.visualizar')->name('show');
+    Route::get('/{convidado}/editar', [ConvidadoController::class, 'edit'])->middleware('gi.permission:convidados.editar')->name('edit');
+    Route::put('/{convidado}', [ConvidadoController::class, 'update'])->middleware('gi.permission:convidados.editar')->name('update');
+    Route::delete('/{convidado}', [ConvidadoController::class, 'destroy'])->middleware('gi.permission:convidados.excluir')->name('destroy');
 });
 
 Route::post('/manutencao/{acao}', function (Request $request, string $acao) {
