@@ -1,0 +1,16 @@
+:root { --page-bg: #f4f6f9; --page-text: #2d3748; --page-muted: #7a869a; --page-border: #edf0f4; }
+html, body { width: 100%; min-height: 100%; }
+body { margin: 0; color: var(--page-text); background: var(--page-bg); font-family: Arial, Helvetica, sans-serif; }
+.page-content { padding: 25px; }
+.page-title { margin: 0 0 3px; font-size: 25px; font-weight: 700; }
+.page-description { color: var(--page-muted); }
+.content-card { border: 0; border-radius: 14px; box-shadow: 0 4px 18px rgba(50, 60, 80, .07); }
+.content-card .card-header { padding: 19px 22px; background: #fff; border-bottom: 1px solid var(--page-border); border-radius: 14px 14px 0 0; }
+.content-card .card-header h2 { font-size: 17px; }
+.table thead th { padding: 15px 18px; color: #748096; background: #fafbfc; border-bottom-width: 1px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.table tbody td { padding: 15px 18px; border-color: #eef1f5; font-size: 14px; }
+.listagem-acao { width: 32px; height: 32px; display: inline-grid; padding: 0; place-items: center; }
+@media (max-width: 575.98px) {
+    .page-content { padding: 18px 14px; }
+    .content-card .card-header { align-items: flex-start !important; flex-direction: column; }
+}

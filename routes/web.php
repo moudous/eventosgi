@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\UsuarioController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -17,9 +18,24 @@ Route::get('/auth/gi', function (Request $request) {
         ],
     );
 
-    abort_unless($response->successful(), 401, 'Não foi possível autenticar pelo GI.');
+    abort_unless(
+        $response->successful(),
+        401,
+        (string) ($response->json('message') ?: 'Não foi possível autenticar pelo GI.'),
+    );
 
     $context = (array) $response->json('data');
+    abort_unless(
+        isset(
+            $context['usuario']['id'],
+            $context['usuario']['nome'],
+            $context['sistema']['id'],
+            $context['perfil']['id'],
+            $context['access_token'],
+        ),
+        502,
+        'O GI retornou um contexto de autenticação incompleto.',
+    );
     if (! empty($context['atualizar'])) {
         $directory = Http::withToken($context['access_token'])->acceptJson()->timeout(10)
             ->get(rtrim(config('gi.gi_url'), '/').'/api/integracoes/v1/usuarios');
@@ -50,6 +66,15 @@ Route::get('/', function (Request $request) {
     return response()
         ->view('session', ['context' => $visibleContext])
         ->header('Cache-Control', 'no-store');
+});
+
+Route::prefix('usuarios')->name('usuarios.')->group(function (): void {
+    Route::get('/', [UsuarioController::class, 'index'])
+        ->middleware('gi.permission:usuarios.listar')->name('index');
+    Route::post('/importar', [UsuarioController::class, 'import'])
+        ->middleware('gi.permission:usuarios.importar')->name('import');
+    Route::get('/{usuario}', [UsuarioController::class, 'show'])
+        ->middleware('gi.permission:usuarios.visualizar')->name('show');
 });
 
 Route::post('/manutencao/{acao}', function (Request $request, string $acao) {
