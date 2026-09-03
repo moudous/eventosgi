@@ -10,6 +10,14 @@ body { margin: 0; color: var(--page-text); background: var(--page-bg); font-fami
 .table thead th { padding: 15px 18px; color: #748096; background: #fafbfc; border-bottom-width: 1px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .table tbody td { padding: 15px 18px; border-color: #eef1f5; font-size: 14px; }
 .listagem-acao { width: 32px; height: 32px; display: inline-grid; padding: 0; place-items: center; }
+.history-data-list { display: grid; gap: 5px; min-width: 230px; }
+.history-data-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; line-height: 1.25; }
+.history-data-field { color: #667085; font-weight: 700; white-space: nowrap; }
+.history-data-values { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; min-width: 0; }
+.history-data-value { max-width: 190px; padding: 3px 7px; overflow: hidden; border-radius: 6px; background: #f2f4f7; color: #344054; text-overflow: ellipsis; white-space: nowrap; }
+.history-data-value.old { color: #98a2b3; text-decoration: line-through; }
+.history-data-value.new { background: #ecfdf3; color: #027a48; }
+.history-data-arrow { color: #98a2b3; font-size: 11px; }
 @media (max-width: 575.98px) {
     .page-content { padding: 18px 14px; }
     .content-card .card-header { align-items: flex-start !important; flex-direction: column; }

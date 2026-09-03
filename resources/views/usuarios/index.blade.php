@@ -44,13 +44,32 @@
 <script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    new DataTable('#usuariosTable', {
+    const table = new DataTable('#usuariosTable', {
         order: [[0, 'desc']],
+        pageLength: @json($estadoTabela['por_pagina']),
+        displayStart: @json(($estadoTabela['page'] - 1) * $estadoTabela['por_pagina']),
+        search: {search: @json($estadoTabela['pesquisar'])},
         language: {
             emptyTable: 'Nenhum usuário cadastrado.', info: 'Exibindo _START_ a _END_ de _TOTAL_ usuários',
             infoEmpty: 'Nenhum usuário encontrado', lengthMenu: 'Exibir _MENU_ registros', search: 'Pesquisar:',
             zeroRecords: 'Nenhum usuário encontrado.', paginate: {first: 'Primeira', last: 'Última', next: 'Próxima', previous: 'Anterior'}
         }
+    });
+
+    let salvarEstadoTimer;
+    table.on('draw', function () {
+        window.clearTimeout(salvarEstadoTimer);
+        salvarEstadoTimer = window.setTimeout(function () {
+            const pagina = table.page.info();
+            fetch(@json(route('usuarios.estado-tabela', [], false)), {
+                method: 'POST', credentials: 'same-origin', keepalive: true,
+                headers: {
+                    'Accept': 'application/json', 'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': @json(csrf_token())
+                },
+                body: JSON.stringify({page: pagina.page + 1, pesquisar: table.search(), por_pagina: pagina.length})
+            });
+        }, 150);
     });
 
     const button = document.getElementById('importUsers');

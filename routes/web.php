@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\EventoController;
+use App\Http\Controllers\AtividadeController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -71,10 +73,42 @@ Route::get('/', function (Request $request) {
 Route::prefix('usuarios')->name('usuarios.')->group(function (): void {
     Route::get('/', [UsuarioController::class, 'index'])
         ->middleware('gi.permission:usuarios.listar')->name('index');
+    Route::post('/estado-tabela', [UsuarioController::class, 'salvarEstadoTabela'])
+        ->middleware('gi.permission:usuarios.listar')->name('estado-tabela');
     Route::post('/importar', [UsuarioController::class, 'import'])
         ->middleware('gi.permission:usuarios.importar')->name('import');
     Route::get('/{usuario}', [UsuarioController::class, 'show'])
         ->middleware('gi.permission:usuarios.visualizar')->name('show');
+});
+
+Route::prefix('eventos')->name('eventos.')->group(function (): void {
+    Route::get('/', [EventoController::class, 'index'])->middleware('gi.permission:eventos.listar')->name('index');
+    Route::get('/dados', [EventoController::class, 'dados'])->middleware('gi.permission:eventos.listar')->name('dados');
+    Route::get('/{evento}/historico', [EventoController::class, 'historico'])->middleware('gi.permission:eventos.visualizar')->name('historico');
+    Route::get('/apagados', [EventoController::class, 'apagados'])->middleware('gi.permission:eventos.listar')->name('apagados');
+    Route::get('/criar', [EventoController::class, 'create'])->middleware('gi.permission:eventos.criar')->name('create');
+    Route::post('/', [EventoController::class, 'store'])->middleware('gi.permission:eventos.criar')->name('store');
+    Route::patch('/{evento}/restaurar', [EventoController::class, 'restore'])->middleware('gi.permission:eventos.restaurar')->name('restore');
+    Route::delete('/{evento}/definitivamente', [EventoController::class, 'forceDestroy'])->middleware('gi.permission:eventos.excluir_definitivamente')->name('force-destroy');
+    Route::get('/{evento}', [EventoController::class, 'show'])->middleware('gi.permission:eventos.visualizar')->name('show');
+    Route::get('/{evento}/editar', [EventoController::class, 'edit'])->middleware('gi.permission:eventos.editar')->name('edit');
+    Route::put('/{evento}', [EventoController::class, 'update'])->middleware('gi.permission:eventos.editar')->name('update');
+    Route::delete('/{evento}', [EventoController::class, 'destroy'])->middleware('gi.permission:eventos.excluir')->name('destroy');
+});
+
+Route::prefix('atividades')->name('atividades.')->group(function (): void {
+    Route::get('/', [AtividadeController::class, 'index'])->middleware('gi.permission:atividades.listar')->name('index');
+    Route::get('/dados', [AtividadeController::class, 'dados'])->middleware('gi.permission:atividades.listar')->name('dados');
+    Route::get('/apagados', [AtividadeController::class, 'apagados'])->middleware('gi.permission:atividades.listar')->name('apagados');
+    Route::get('/criar', [AtividadeController::class, 'create'])->middleware('gi.permission:atividades.criar')->name('create');
+    Route::post('/', [AtividadeController::class, 'store'])->middleware('gi.permission:atividades.criar')->name('store');
+    Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.visualizar')->name('historico');
+    Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
+    Route::delete('/{atividade}/definitivamente', [AtividadeController::class, 'forceDestroy'])->middleware('gi.permission:atividades.excluir_definitivamente')->name('force-destroy');
+    Route::get('/{atividade}', [AtividadeController::class, 'show'])->middleware('gi.permission:atividades.visualizar')->name('show');
+    Route::get('/{atividade}/editar', [AtividadeController::class, 'edit'])->middleware('gi.permission:atividades.editar')->name('edit');
+    Route::put('/{atividade}', [AtividadeController::class, 'update'])->middleware('gi.permission:atividades.editar')->name('update');
+    Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');
 });
 
 Route::post('/manutencao/{acao}', function (Request $request, string $acao) {
