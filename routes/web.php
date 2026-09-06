@@ -102,6 +102,7 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/', [AtividadeController::class, 'index'])->middleware('gi.permission:atividades.listar')->name('index');
     Route::get('/dados', [AtividadeController::class, 'dados'])->middleware('gi.permission:atividades.listar')->name('dados');
     Route::get('/apagados', [AtividadeController::class, 'apagados'])->middleware('gi.permission:atividades.listar')->name('apagados');
+    Route::get('/plugin-wordpress', [AtividadeController::class, 'baixarPlugin'])->middleware('gi.permission:atividades.listar')->name('plugin-wordpress');
     Route::get('/criar', [AtividadeController::class, 'create'])->middleware('gi.permission:atividades.criar')->name('create');
     Route::post('/', [AtividadeController::class, 'store'])->middleware('gi.permission:atividades.criar')->name('store');
     Route::get('/{atividade}/formulario', [AtividadeController::class, 'formulario'])->middleware('gi.permission:atividades.editar')->name('formulario');

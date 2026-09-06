@@ -9,6 +9,7 @@ use App\Models\InscricaoAtividade;
 use App\Services\ArmazemService;
 use App\Services\FormularioInscricaoService;
 use App\Services\GiPermissionService;
+use App\Services\PluginWordpressService;
 use App\Services\HistoricoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -99,6 +100,7 @@ class AtividadeController
     {
         return app(\App\Services\InscricoesExportService::class)->download($atividade, $formato);
     }
+    public function baixarPlugin(PluginWordpressService $plugin) { return $plugin->download(); }
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {

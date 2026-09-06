@@ -4,7 +4,8 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
  <div><h1 class="page-title">{{ $apagados?'Atividades apagadas':'Atividades' }}</h1><p class="page-description mb-0">{{ $apagados?'Restaure ou exclua definitivamente as atividades apagadas.':'Cadastre e gerencie as atividades dos eventos.' }}</p></div>
- <div class="d-flex align-items-center gap-3"><a href="{{ $apagados ? route('atividades.index') : route('atividades.apagados') }}" class="btn btn-outline-secondary">{{ $apagados ? 'Visualizar ativas' : 'Visualizar apagadas' }}</a>
+ <div class="d-flex align-items-center gap-3"><a href="{{ route('atividades.plugin-wordpress') }}" class="btn btn-outline-dark" title="Baixar o plugin que exibe os formulários das atividades em um site WordPress"><i class="bi bi-wordpress me-2"></i>Plugin WordPress</a>
+ <a href="{{ $apagados ? route('atividades.index') : route('atividades.apagados') }}" class="btn btn-outline-secondary">{{ $apagados ? 'Visualizar ativas' : 'Visualizar apagadas' }}</a>
  @if(!$apagados && app(\App\Services\GiPermissionService::class)->permite('atividades.criar'))<a href="{{ route('atividades.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-2"></i>Nova atividade</a>@endif</div>
 </div>
 @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{session('status')}}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
