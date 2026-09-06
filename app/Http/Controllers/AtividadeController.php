@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Atividade;
 use App\Models\Evento;
 use App\Models\HistoricoAtividade;
+use App\Models\InscricaoAtividade;
 use App\Services\ArmazemService;
 use App\Services\GiPermissionService;
 use App\Services\HistoricoService;
@@ -12,6 +13,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\URL;
 
 class AtividadeController
 {
@@ -54,6 +56,54 @@ class AtividadeController
     }
     public function show(Atividade $atividade): View { $atividade->load('evento'); return view('atividades.show', compact('atividade')); }
     public function edit(Atividade $atividade): View { return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get()]); }
+    public function formulario(Atividade $atividade): View { return view('atividades.formulario', ['atividade' => $atividade]); }
+    public function salvarFormulario(Request $request, Atividade $atividade): RedirectResponse
+    {
+        $dados = $request->validate(['formulario' => ['required', 'json']]);
+        $atividade->update(['formulario' => json_decode($dados['formulario'], true)]);
+        return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
+    }
+    public function preview(Request $request, Atividade $atividade): View
+    {
+        abort_unless($atividade->formulario, 404);
+        return view('atividades.formulario-publico', ['atividade' => $atividade, 'config' => $atividade->formulario]);
+    }
+    public function previewRedirect(Atividade $atividade): RedirectResponse
+    {
+        return redirect()->to(URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade));
+    }
+    public function inscrever(Request $request, Atividade $atividade): RedirectResponse
+    {
+        $config = $atividade->formulario ?? [];
+        $agora = now();
+        abort_if(isset($config['abertura']) && $config['abertura'] && $agora->lt($config['abertura']), 403, $config['mensagem_antes'] ?? 'As inscrições ainda não foram abertas.');
+        abort_if(isset($config['fechamento']) && $config['fechamento'] && $agora->gt($config['fechamento']), 403, $config['mensagem_fechado'] ?? 'As inscrições estão encerradas.');
+        $regras = [];
+        foreach ($config['campos'] ?? [] as $campo) {
+            if (empty($campo['nome'])) continue;
+            $regras[$campo['nome']] = !empty($campo['obrigatorio']) ? ['required'] : ['nullable'];
+            if (($campo['tipo'] ?? '') === 'file') {
+                $regras[$campo['nome']][] = ($campo['max_arquivos'] ?? 1) > 1 ? 'array|max:' . min(10, max(1, (int) $campo['max_arquivos'])) : 'file';
+                if (!empty($campo['aceitos'])) $regras[$campo['nome'] . '.*'] = ['file', 'mimes:' . implode(',', $campo['aceitos'])];
+            }
+            if (($campo['validacao'] ?? '') === 'email') $regras[$campo['nome']][] = 'email';
+            if (($campo['validacao'] ?? '') === 'cpf') $regras[$campo['nome']][] = ['regex:/^\d{11}$/'];
+            if (($campo['validacao'] ?? '') === 'telefone') $regras[$campo['nome']][] = ['regex:/^[0-9()+\s-]{8,20}$/'];
+        }
+        $resposta = $request->validate($regras);
+        foreach ($request->allFiles() as $nome => $arquivos) {
+            $lista = is_array($arquivos) ? $arquivos : [$arquivos];
+            $resposta[$nome] = array_map(fn ($arquivo) => $arquivo->store('inscricoes', 'public'), $lista);
+        }
+        InscricaoAtividade::create(['atividade_id' => $atividade->id, 'resposta' => $resposta]);
+        return back()->with('status', $config['mensagem_sucesso'] ?? 'Inscrição realizada com sucesso.');
+    }
+    public function inscricoes(Atividade $atividade): View { return view('atividades.inscricoes', ['atividade' => $atividade, 'inscricoes' => InscricaoAtividade::where('atividade_id', $atividade->id)->latest()->paginate(20)]); }
+    public function exportarInscricoes(Atividade $atividade, string $formato)
+    {
+        return app(\App\Services\InscricoesExportService::class)->download($atividade, $formato);
+    }
+    public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
         $campos = ['nome', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim'];

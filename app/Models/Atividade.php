@@ -10,10 +10,10 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim'];
+    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario'];
     protected $casts = [
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer',
-        'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime',
+        'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
     ];
 
     public function evento(): BelongsTo

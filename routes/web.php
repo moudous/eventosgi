@@ -104,6 +104,14 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/apagados', [AtividadeController::class, 'apagados'])->middleware('gi.permission:atividades.listar')->name('apagados');
     Route::get('/criar', [AtividadeController::class, 'create'])->middleware('gi.permission:atividades.criar')->name('create');
     Route::post('/', [AtividadeController::class, 'store'])->middleware('gi.permission:atividades.criar')->name('store');
+    Route::get('/{atividade}/formulario', [AtividadeController::class, 'formulario'])->middleware('gi.permission:atividades.editar')->name('formulario');
+    Route::post('/{atividade}/formulario', [AtividadeController::class, 'salvarFormulario'])->middleware('gi.permission:atividades.editar')->name('formulario.salvar');
+    Route::get('/{atividade}/formulario/visualizar', [AtividadeController::class, 'previewRedirect'])->middleware('gi.permission:atividades.visualizar')->name('formulario.visualizar');
+    Route::get('/{atividade}/formulario/preview-link', [AtividadeController::class, 'previewLink'])->middleware('gi.permission:atividades.editar')->name('formulario.preview-link');
+    Route::get('/{atividade}/formulario/preview', [AtividadeController::class, 'preview'])->middleware('signed')->name('formulario.preview');
+    Route::post('/{atividade}/formulario/preview', [AtividadeController::class, 'inscrever'])->middleware('signed')->name('formulario.inscrever');
+    Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('gi.permission:atividades.visualizar')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
+    Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.visualizar')->name('inscricoes');
     Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.visualizar')->name('historico');
     Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
     Route::delete('/{atividade}/definitivamente', [AtividadeController::class, 'forceDestroy'])->middleware('gi.permission:atividades.excluir_definitivamente')->name('force-destroy');

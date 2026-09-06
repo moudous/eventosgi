@@ -1,0 +1,12 @@
+@extends('layouts.app')
+@section('title', $config['titulo'] ?? $atividade->nome)
+@section('content')
+@php($agora=now())
+<div class="container py-4"><div class="mb-4"><h1 class="page-title">{{ $config['titulo'] ?? $atividade->nome }}</h1><p class="page-description">{{ $config['subtitulo'] ?? '' }}</p></div>
+@if(($config['abertura']??null) && $agora->lt($config['abertura']))<div class="alert alert-info">{{ $config['mensagem_antes'] ?? 'As inscrições ainda não foram abertas.' }}</div>@elseif(($config['fechamento']??null) && $agora->gt($config['fechamento']))<div class="alert alert-warning">{{ $config['mensagem_fechado'] ?? 'As inscrições estão encerradas.' }}</div>@else
+<form method="POST" action="{{ request()->fullUrl() }}" enctype="multipart/form-data">@csrf
+@if(!empty($config['editor']['conteudo']) && in_array($config['editor']['posicao']??'', ['acima','esquerda']))<div class="mb-3">{!! $config['editor']['conteudo'] !!}</div>@endif
+<div class="row g-3">@foreach($config['campos']??[] as $campo)<div class="col-md-6"><label class="form-label">{{ $campo['label'] ?? $campo['nome'] }} @if(!empty($campo['obrigatorio']))* @endif</label>@if(in_array($campo['tipo']??'text',['select','radio','checkbox','multiselect']))<select class="form-select" name="{{ $campo['nome'] }}{{ $campo['tipo']==='multiselect'?'[]':'' }}" {{ !empty($campo['obrigatorio'])?'required':'' }} {{ $campo['tipo']==='multiselect'?'multiple':'' }}>@foreach($campo['opcoes']??[] as $opcao)<option value="{{ $opcao }}">{{ $opcao }}</option>@endforeach</select>@elseif(($campo['tipo']??'text')==='textarea')<textarea class="form-control" name="{{ $campo['nome'] }}" placeholder="{{ $campo['placeholder']??'' }}" {{ !empty($campo['obrigatorio'])?'required':'' }}></textarea>@else<input class="form-control" type="{{ ($campo['tipo']??'text')==='file'?'file':$campo['tipo']??'text' }}" name="{{ $campo['nome'] }}{{ ($campo['tipo']??'')==='file' && ($campo['max_arquivos']??1)>1?'[]':'' }}" placeholder="{{ $campo['placeholder']??'' }}" {{ ($campo['tipo']??'')==='file' && ($campo['max_arquivos']??1)>1?'multiple':'' }} {{ !empty($campo['obrigatorio'])?'required':'' }} accept="{{ implode(',', $campo['aceitos']??[]) }}">@endif</div>@endforeach</div>
+@if(!empty($config['editor']['conteudo']) && in_array($config['editor']['posicao']??'', ['abaixo','direita']))<div class="mt-3">{!! $config['editor']['conteudo'] !!}</div>@endif
+<button class="btn btn-primary mt-4"><i class="bi bi-send me-1"></i>Enviar inscrição</button></form>@endif</div>
+@endsection
