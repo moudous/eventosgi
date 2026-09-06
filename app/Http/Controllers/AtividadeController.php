@@ -7,6 +7,7 @@ use App\Models\Evento;
 use App\Models\HistoricoAtividade;
 use App\Models\InscricaoAtividade;
 use App\Services\ArmazemService;
+use App\Services\FormularioInscricaoService;
 use App\Services\GiPermissionService;
 use App\Services\HistoricoService;
 use Illuminate\Http\JsonResponse;
@@ -23,23 +24,24 @@ class AtividadeController
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
         $apagados = $request->boolean('apagados');
-        $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with('evento');
+        $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with(['evento', 'criador:id,nome'])->withCount('inscricoes');
         $total = (clone $query)->count();
         $busca = trim((string) $request->input('search.value', ''));
-        if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%")));
+        if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%"))->orWhereHas('criador', fn ($u) => $u->where('nome', 'like', "%{$busca}%")));
         $filtrados = (clone $query)->count();
-        $colunas = ['id', 'nome', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'ativo', 'criado_por', 'created_at', 'updated_at', 'deleted_at'];
+        $colunas = ['id', 'nome', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'inscricoes_count', 'ativo', 'criado_por', 'created_at', 'updated_at', 'deleted_at'];
         $coluna = $colunas[(int) $request->input('order.0.column', 0)] ?? 'id';
+        if ($coluna === 'criado_por') $coluna = \App\Models\Usuario::select('nome')->whereColumn('usuarios.id', 'atividades.criado_por')->limit(1);
         $direcao = $request->input('order.0.dir') === 'asc' ? 'asc' : 'desc';
         $inicio = max(0, (int) $request->input('start', 0));
         $tamanho = min(100, max(1, (int) $request->input('length', 10)));
         $armazem->salvar('atividades', $request, intdiv($inicio, $tamanho) + 1, $busca, $tamanho);
         $permissoes = app(GiPermissionService::class);
         $dados = $query->orderBy($coluna, $direcao)->skip($inicio)->take($tamanho)->get()->map(fn (Atividade $atividade) => [
-            'id' => $atividade->id, 'nome' => e($atividade->nome), 'evento' => e($atividade->evento?->nome ?? '—'),
+            'inscricoes_count' => $atividade->inscricoes_count, 'id' => $atividade->id, 'nome' => e($atividade->nome), 'evento' => e($atividade->evento?->nome ?? '—'),
             'modalidade' => $atividade->modalidade ? strtoupper($atividade->modalidade) : '—',
             'data_inicio' => $atividade->data_inicio?->format('d/m/Y H:i') ?? '—', 'data_fim' => $atividade->data_fim?->format('d/m/Y H:i') ?? '—',
-            'ativo' => view('eventos.partials.status', ['evento' => $atividade])->render(), 'criado_por' => $atividade->criado_por,
+            'ativo' => view('eventos.partials.status', ['evento' => $atividade])->render(), 'criado_por' => e($atividade->criador?->nome ?? 'Usuário não encontrado'),
             'created_at' => $atividade->created_at?->format('d/m/Y H:i') ?? '—', 'updated_at' => $atividade->updated_at?->format('d/m/Y H:i') ?? '—',
             'deleted_at' => $atividade->deleted_at?->format('d/m/Y H:i') ?? '—',
             'acoes' => view('atividades.partials.acoes', ['atividade' => $atividade, 'apagados' => $apagados, 'permissoes' => $permissoes])->render(),
@@ -60,7 +62,20 @@ class AtividadeController
     public function salvarFormulario(Request $request, Atividade $atividade): RedirectResponse
     {
         $dados = $request->validate(['formulario' => ['required', 'json']]);
-        $atividade->update(['formulario' => json_decode($dados['formulario'], true)]);
+        $config = json_decode($dados['formulario'], true);
+        $validator = validator(['config' => $config], [
+            'config' => ['required', 'array'],
+            'config.limitar_inscricoes' => ['sometimes', 'boolean'],
+            'config.limite_inscricoes' => ['required_if:config.limitar_inscricoes,true', 'nullable', 'integer', 'min:1'],
+            'config.mensagem_vagas_esgotadas' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'config.limite_inscricoes.required_if' => 'Informe a quantidade de inscrições disponíveis ao ativar o limite.',
+            'config.limite_inscricoes.integer' => 'A quantidade de inscrições deve ser um número inteiro.',
+            'config.limite_inscricoes.min' => 'A quantidade de inscrições deve ser pelo menos 1.',
+        ]);
+        if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
+        $config['mensagem_vagas_esgotadas'] = trim($config['mensagem_vagas_esgotadas'] ?? '') ?: Atividade::MENSAGEM_VAGAS_ESGOTADAS;
+        $atividade->update(['formulario' => $config]);
         return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
     }
     public function preview(Request $request, Atividade $atividade): View
@@ -72,31 +87,12 @@ class AtividadeController
     {
         return redirect()->to(URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade));
     }
-    public function inscrever(Request $request, Atividade $atividade): RedirectResponse
+    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico): RedirectResponse
     {
-        $config = $atividade->formulario ?? [];
-        $agora = now();
-        abort_if(isset($config['abertura']) && $config['abertura'] && $agora->lt($config['abertura']), 403, $config['mensagem_antes'] ?? 'As inscrições ainda não foram abertas.');
-        abort_if(isset($config['fechamento']) && $config['fechamento'] && $agora->gt($config['fechamento']), 403, $config['mensagem_fechado'] ?? 'As inscrições estão encerradas.');
-        $regras = [];
-        foreach ($config['campos'] ?? [] as $campo) {
-            if (empty($campo['nome'])) continue;
-            $regras[$campo['nome']] = !empty($campo['obrigatorio']) ? ['required'] : ['nullable'];
-            if (($campo['tipo'] ?? '') === 'file') {
-                $regras[$campo['nome']][] = ($campo['max_arquivos'] ?? 1) > 1 ? 'array|max:' . min(10, max(1, (int) $campo['max_arquivos'])) : 'file';
-                if (!empty($campo['aceitos'])) $regras[$campo['nome'] . '.*'] = ['file', 'mimes:' . implode(',', $campo['aceitos'])];
-            }
-            if (($campo['validacao'] ?? '') === 'email') $regras[$campo['nome']][] = 'email';
-            if (($campo['validacao'] ?? '') === 'cpf') $regras[$campo['nome']][] = ['regex:/^\d{11}$/'];
-            if (($campo['validacao'] ?? '') === 'telefone') $regras[$campo['nome']][] = ['regex:/^[0-9()+\s-]{8,20}$/'];
-        }
-        $resposta = $request->validate($regras);
-        foreach ($request->allFiles() as $nome => $arquivos) {
-            $lista = is_array($arquivos) ? $arquivos : [$arquivos];
-            $resposta[$nome] = array_map(fn ($arquivo) => $arquivo->store('inscricoes', 'public'), $lista);
-        }
-        InscricaoAtividade::create(['atividade_id' => $atividade->id, 'resposta' => $resposta]);
-        return back()->with('status', $config['mensagem_sucesso'] ?? 'Inscrição realizada com sucesso.');
+        $resultado = $servico->inscrever($request, $atividade);
+        if ($resultado['sucesso']) return back()->with('status', $resultado['mensagem']);
+        if ($resultado['motivo'] === 'esgotado') return back()->with('vagas_esgotadas', $resultado['mensagem']);
+        abort(403, $resultado['mensagem']);
     }
     public function inscricoes(Atividade $atividade): View { return view('atividades.inscricoes', ['atividade' => $atividade, 'inscricoes' => InscricaoAtividade::where('atividade_id', $atividade->id)->latest()->paginate(20)]); }
     public function exportarInscricoes(Atividade $atividade, string $formato)

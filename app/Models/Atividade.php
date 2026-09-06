@@ -16,8 +16,31 @@ class Atividade extends Model
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
     ];
 
+    public const MENSAGEM_VAGAS_ESGOTADAS = 'Todas as vagas para esta atividade foram preenchidas. Agradecemos seu interesse e esperamos você nas próximas oportunidades!';
+
+    public function inscricoes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(InscricaoAtividade::class);
+    }
+
+    public function vagasEsgotadas(): bool
+    {
+        return !empty($this->formulario['limitar_inscricoes'])
+            && $this->inscricoes()->count() >= (int) ($this->formulario['limite_inscricoes'] ?? 0);
+    }
+
+    public function mensagemVagasEsgotadas(): string
+    {
+        return trim($this->formulario['mensagem_vagas_esgotadas'] ?? '') ?: self::MENSAGEM_VAGAS_ESGOTADAS;
+    }
+
     public function evento(): BelongsTo
     {
         return $this->belongsTo(Evento::class)->withTrashed();
+    }
+
+    public function criador(): BelongsTo
+    {
+        return $this->belongsTo(Usuario::class, 'criado_por');
     }
 }

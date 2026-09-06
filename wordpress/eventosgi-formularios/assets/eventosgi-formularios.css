@@ -1,0 +1,41 @@
+/* Estilos neutros: herdam fonte e cores do tema do site sempre que possível. */
+.eventosgi-formulario { margin: 0 0 2rem; }
+.eventosgi-titulo { margin: 0 0 .25rem; }
+.eventosgi-subtitulo { margin: 0 0 1.25rem; opacity: .8; }
+.eventosgi-conteudo { margin: 0 0 1.25rem; }
+
+.eventosgi-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+@media (max-width: 640px) { .eventosgi-campos { grid-template-columns: 1fr; } }
+
+.eventosgi-campo { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.eventosgi-campo--textarea { grid-column: 1 / -1; }
+.eventosgi-label { font-weight: 600; }
+.eventosgi-obrigatorio { color: #b3261e; margin-left: .15rem; }
+
+.eventosgi-controle {
+	width: 100%; box-sizing: border-box; padding: .55rem .7rem;
+	border: 1px solid currentColor; border-color: rgba(0, 0, 0, .25); border-radius: 6px;
+	background: transparent; color: inherit; font: inherit;
+}
+.eventosgi-controle:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.eventosgi-campo--erro .eventosgi-controle { border-color: #b3261e; }
+
+.eventosgi-opcoes { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.eventosgi-opcao { display: inline-flex; align-items: center; gap: .35rem; font-weight: 400; }
+
+.eventosgi-ajuda { opacity: .75; }
+.eventosgi-erro { color: #b3261e; }
+
+.eventosgi-alerta { padding: .8rem 1rem; border-radius: 6px; border: 1px solid; margin: 0 0 1.25rem; }
+.eventosgi-alerta--sucesso { border-color: #1e7a3c; background: rgba(30, 122, 60, .1); }
+.eventosgi-alerta--aviso   { border-color: #9a6700; background: rgba(154, 103, 0, .1); }
+.eventosgi-alerta--erro    { border-color: #b3261e; background: rgba(179, 38, 30, .1); }
+
+.eventosgi-botao {
+	margin-top: 1.5rem; padding: .65rem 1.4rem; border: 0; border-radius: 6px;
+	background: #1e3a8a; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.eventosgi-botao:hover { filter: brightness(1.1); }
+
+/* Campo isca antispam: fora da tela, mas não display:none, para que robôs o preencham. */
+.eventosgi-isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }

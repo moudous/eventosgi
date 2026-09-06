@@ -10,8 +10,10 @@ class AllowGiEmbedding
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // A API publica de formularios tem autenticacao propria por token e e chamada de fora do iframe do GI.
         if (! filter_var(config('gi.allow_outside_iframe'), FILTER_VALIDATE_BOOL)
-            && ! $request->is('health')) {
+            && ! $request->is('health')
+            && ! $request->is('api/*')) {
             $destination = strtolower((string) $request->header('Sec-Fetch-Dest'));
 
             if (in_array($destination, ['', 'document'], true)) {
