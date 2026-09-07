@@ -570,7 +570,15 @@ class EventosGI_Shortcode {
 
 				<h3 class="eventosgi-secao"><?php esc_html_e( 'Identifique-se para se inscrever', 'eventosgi-formularios' ); ?></h3>
 				<p class="eventosgi-ajuda-secao">
-					<?php esc_html_e( 'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.', 'eventosgi-formularios' ); ?>
+					<?php
+					// Texto configurado no construtor de formulários do sistema de eventos; a
+					// tradução local só entra quando a API não informa nada.
+					echo esc_html(
+						isset( $estrutura['identificacao']['mensagem'] ) && '' !== $estrutura['identificacao']['mensagem']
+							? $estrutura['identificacao']['mensagem']
+							: __( 'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.', 'eventosgi-formularios' )
+					);
+					?>
 				</p>
 
 				<div class="eventosgi-campo">

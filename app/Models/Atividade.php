@@ -10,15 +10,17 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario'];
+    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario'];
     protected $casts = [
-        'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer',
+        'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
     ];
 
     public const MENSAGEM_VAGAS_ESGOTADAS = 'Todas as vagas para esta atividade foram preenchidas. Agradecemos seu interesse e esperamos você nas próximas oportunidades!';
 
     public const MENSAGEM_JA_INSCRITO = 'Você já está inscrito nesta atividade. Cada participante pode se inscrever uma única vez.';
+
+    public const MENSAGEM_IDENTIFICACAO = 'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.';
 
     public function inscricoes(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
@@ -41,9 +43,20 @@ class Atividade extends Model
         return trim($this->formulario['mensagem_ja_inscrito'] ?? '') ?: self::MENSAGEM_JA_INSCRITO;
     }
 
+    /** Texto de apoio da etapa em que o visitante confirma o e-mail. */
+    public function mensagemIdentificacao(): string
+    {
+        return trim($this->formulario['mensagem_identificacao'] ?? '') ?: self::MENSAGEM_IDENTIFICACAO;
+    }
+
     public function evento(): BelongsTo
     {
         return $this->belongsTo(Evento::class)->withTrashed();
+    }
+
+    public function categoria(): BelongsTo
+    {
+        return $this->belongsTo(Categoria::class);
     }
 
     public function criador(): BelongsTo

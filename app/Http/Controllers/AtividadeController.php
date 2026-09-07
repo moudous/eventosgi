@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Atividade;
+use App\Models\Categoria;
 use App\Models\Evento;
 use App\Models\HistoricoAtividade;
 use App\Models\InscricaoAtividade;
@@ -11,8 +12,8 @@ use App\Services\ArmazemService;
 use App\Services\FormularioInscricaoService;
 use App\Services\IdentificacaoParticipanteService;
 use App\Services\GiPermissionService;
-use App\Services\PluginWordpressService;
 use App\Services\HistoricoService;
+use App\Services\LimiteEnvioCodigoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,16 +56,29 @@ class AtividadeController
         return response()->json(['draw' => (int) $request->input('draw'), 'recordsTotal' => $total, 'recordsFiltered' => $filtrados, 'data' => $dados]);
     }
 
-    public function create(): View { return view('atividades.create', ['eventos' => Evento::query()->where('ativo', true)->orderBy('nome')->get()]); }
+    public function create(): View { return view('atividades.create', ['eventos' => Evento::query()->where('ativo', true)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis()]); }
     public function store(Request $request, HistoricoService $historico): RedirectResponse
     {
         $dados = $this->validar($request); $dados['criado_por'] = (int) $request->session()->get('gi_context.usuario.id');
         $atividade = Atividade::create($dados); $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim']), $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade cadastrada com sucesso.');
     }
-    public function show(Atividade $atividade): View { $atividade->load('evento'); return view('atividades.show', compact('atividade')); }
-    public function edit(Atividade $atividade): View { return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get()]); }
-    public function formulario(Atividade $atividade): View { return view('atividades.formulario', ['atividade' => $atividade]); }
+    public function show(Atividade $atividade): View { $atividade->load(['evento', 'categoria']); return view('atividades.show', compact('atividade')); }
+    public function edit(Atividade $atividade): View { return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis($atividade)]); }
+
+    /**
+     * Categorias oferecidas no combo: as ativas e, na edicao, tambem a que ja esta
+     * escolhida -- desativada depois, ela sumiria da lista e a atividade perderia a
+     * classificacao no primeiro salvamento.
+     */
+    private function categoriasDisponiveis(?Atividade $atividade = null): \Illuminate\Support\Collection
+    {
+        return Categoria::query()
+            ->where('ativo', true)
+            ->when($atividade?->categoria_id, fn ($consulta, $id) => $consulta->orWhereKey($id))
+            ->orderBy('nome')->get();
+    }
+    public function formulario(Atividade $atividade, GiPermissionService $permissoes): View { return view('atividades.formulario', ['atividade' => $atividade, 'permissoes' => $permissoes]); }
     public function salvarFormulario(Request $request, Atividade $atividade): RedirectResponse
     {
         $dados = $request->validate(['formulario' => ['required', 'json']]);
@@ -75,14 +89,25 @@ class AtividadeController
             'config.limite_inscricoes' => ['required_if:config.limitar_inscricoes,true', 'nullable', 'integer', 'min:1'],
             'config.mensagem_vagas_esgotadas' => ['nullable', 'string', 'max:2000'],
             'config.mensagem_ja_inscrito' => ['nullable', 'string', 'max:2000'],
+            'config.mensagem_identificacao' => ['nullable', 'string', 'max:2000'],
         ], [
             'config.limite_inscricoes.required_if' => 'Informe a quantidade de inscrições disponíveis ao ativar o limite.',
             'config.limite_inscricoes.integer' => 'A quantidade de inscrições deve ser um número inteiro.',
             'config.limite_inscricoes.min' => 'A quantidade de inscrições deve ser pelo menos 1.',
         ]);
         if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
+
+        // Sem atividades.formulario.estrutura o bloco Estrutura nem e exibido, entao o
+        // JSON chega sem campo nenhum. Mantemos o que ja estava gravado: salvar a
+        // configuracao nao pode apagar os campos que alguem sem essa permissao nao viu.
+        if (! app(GiPermissionService::class)->permite('atividades.formulario.estrutura')) {
+            foreach (['campos', 'rows', 'grupos', 'fieldsets'] as $chave) {
+                $config[$chave] = $atividade->formulario[$chave] ?? [];
+            }
+        }
         $config['mensagem_vagas_esgotadas'] = trim($config['mensagem_vagas_esgotadas'] ?? '') ?: Atividade::MENSAGEM_VAGAS_ESGOTADAS;
         $config['mensagem_ja_inscrito'] = trim($config['mensagem_ja_inscrito'] ?? '') ?: Atividade::MENSAGEM_JA_INSCRITO;
+        $config['mensagem_identificacao'] = trim($config['mensagem_identificacao'] ?? '') ?: Atividade::MENSAGEM_IDENTIFICACAO;
         $atividade->update(['formulario' => $config]);
         return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
     }
@@ -105,8 +130,26 @@ class AtividadeController
             'identificacao' => $sessao,
             'participante' => $participante,
             'estado' => $servico->estado($atividade, $participante, $sessao['email'] ?? null),
+            // Selo novo a cada exibicao: e ele que prova, no pedido de codigo, que houve
+            // um formulario aberto antes.
+            'selo' => $identificacao->selo(),
         ]);
     }
+    /**
+     * Pagina publica de inscricao em uma atividade.
+     *
+     * Mesma tela da previa, sem a assinatura: e para ca que a pagina do evento manda quem
+     * clica numa atividade, e e ela que um visitante de fora abre. So atividade ativa e
+     * com formulario publicado; as protecoes contra abuso sao as mesmas da previa, porque
+     * o POST cai no mesmo inscrever().
+     */
+    public function inscricaoPublica(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico): View
+    {
+        abort_unless($atividade->ativo, 404);
+
+        return $this->preview($request, $atividade, $identificacao, $servico);
+    }
+
     public function previewRedirect(Atividade $atividade): RedirectResponse
     {
         return redirect()->to(URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade));
@@ -117,12 +160,12 @@ class AtividadeController
      * identificacao (pedir codigo, conferir codigo, trocar de e-mail) reaproveitam a
      * mesma assinatura e se distinguem pelo campo "acao".
      */
-    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, LimiteEnvioCodigoService $limites): RedirectResponse
     {
         abort_unless($atividade->formulario, 404);
 
         return match ((string) $request->input('acao')) {
-            'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao),
+            'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $servico, $limites),
             'validar_codigo' => $this->validarCodigo($request, $atividade, $identificacao),
             'trocar_email' => $this->trocarEmail($request, $atividade, $identificacao),
             default => $this->registrarInscricao($request, $atividade, $servico, $identificacao),
@@ -136,7 +179,7 @@ class AtividadeController
         return back();
     }
 
-    private function solicitarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    private function solicitarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico, LimiteEnvioCodigoService $limites): RedirectResponse
     {
         // validateWithBag: a etapa de identificacao exibe apenas o bag "identificacao".
         $dados = Validator::make(
@@ -147,10 +190,34 @@ class AtividadeController
         )->validateWithBag('identificacao');
         $email = mb_strtolower(trim($dados['email']));
 
-        // Robo que caiu na isca recebe a mesma tela de sempre, sem disparo nenhum.
-        if (! $identificacao->pareceRobo($request)) {
-            $identificacao->solicitarCodigo($request, $atividade, $email);
+        // Robo que caiu na isca, ou que respondeu rapido demais para ter lido a tela,
+        // recebe a mesma resposta de sempre e nenhum disparo.
+        if ($identificacao->pareceRobo($request) || $identificacao->pedidoApressado($request)) {
+            return back()->with('codigo_enviado', $email);
         }
+
+        // Selo ausente ou adulterado: o pedido nao veio de um formulario aberto aqui. O
+        // aviso e explicito de proposito -- se um dia o campo sumir da tela, o erro
+        // aparece na hora, em vez de todo mundo achar que recebeu um e-mail que nao saiu.
+        if (! $identificacao->seloConfere($request)) {
+            return back()->withInput()->withErrors(
+                ['email' => 'Não foi possível confirmar o envio deste formulário. Recarregue a página e tente novamente.'],
+                'identificacao',
+            );
+        }
+
+        // Limites antes de qualquer resposta que dependa do e-mail digitado. A conferencia
+        // de duplicidade logo abaixo diz se um endereco esta inscrito, e de graca ela viraria
+        // um jeito de descobrir quem participa da atividade, um endereco por vez.
+        $limites->conferir($request, $atividade, $email);
+
+        // Duplicidade antes do envio: quem ja se inscreveu recebe o aviso, nao um codigo.
+        if ($servico->jaInscritoPorEmail($atividade, $email)) {
+            return back()->withInput()->with('ja_inscrito', $atividade->mensagemJaInscrito());
+        }
+
+        // conferir() ja rodou: a chamada equivalente dentro de solicitarCodigo() nao conta de novo.
+        $identificacao->solicitarCodigo($request, $atividade, $email);
 
         return back()->with('codigo_enviado', $email);
     }
@@ -255,7 +322,6 @@ class AtividadeController
             'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; media-src 'self'; object-src 'self'; style-src 'unsafe-inline'; sandbox",
         ], ($modo === 'baixar' || ! $podeExibir) ? 'attachment' : 'inline');
     }
-    public function baixarPlugin(PluginWordpressService $plugin) { return $plugin->download(); }
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
@@ -274,5 +340,5 @@ class AtividadeController
         $dados=$query->latest('data_hora')->latest('id')->skip($inicio)->take($tamanho)->get()->values()->map(fn($item,$i)=>['numero'=>$total-$inicio-$i,'historico'=>e($item->historico),'usuario'=>$item->usuario??'—','dados'=>view('partials.historico-dados',['dados'=>$item->dados??[]])->render(),'data_hora'=>$item->data_hora?->format('d/m/Y H:i:s')??'—']);
         return response()->json(['draw'=>(int)$request->input('draw'),'recordsTotal'=>$total,'recordsFiltered'=>$total,'data'=>$dados]);
     }
-    private function validar(Request $request): array { return $request->validate(['nome'=>['required','string','max:255'],'ativo'=>['required','boolean'],'evento_id'=>['required','integer','exists:eventos,id'],'modalidade'=>['nullable','in:ead,presencial'],'data_inicio'=>['nullable','date'],'data_fim'=>['nullable','date']]); }
+    private function validar(Request $request): array { return $request->validate(['nome'=>['required','string','max:255'],'ativo'=>['required','boolean'],'evento_id'=>['required','integer','exists:eventos,id'],'categoria_id'=>['nullable','integer','exists:categorias,id'],'modalidade'=>['nullable','in:ead,presencial'],'data_inicio'=>['nullable','date'],'data_fim'=>['nullable','date']]); }
 }

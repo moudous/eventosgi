@@ -7,14 +7,17 @@ use App\Models\Participante;
 use App\Rules\EmailValido;
 use App\Services\FormularioInscricaoService;
 use App\Services\IdentificacaoParticipanteService;
+use App\Services\LimiteEnvioCodigoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class FormularioPublicoController
 {
     public function __construct(
         private readonly FormularioInscricaoService $inscricoes,
         private readonly IdentificacaoParticipanteService $identificacao,
+        private readonly LimiteEnvioCodigoService $limites,
     ) {}
 
     /**
@@ -60,6 +63,7 @@ class FormularioPublicoController
             // a estrutura em cache; o que varia por visitante fica aqui e so vem com o token.
             'identificacao' => [
                 'obrigatoria' => true,
+                'mensagem' => $atividade->mensagemIdentificacao(),
                 'minutos_validade' => IdentificacaoParticipanteService::MINUTOS_VALIDADE,
                 'campos_participante' => $this->inscricoes->camposDoParticipante(),
                 'campo_isca' => IdentificacaoParticipanteService::CAMPO_ISCA,
@@ -94,6 +98,15 @@ class FormularioPublicoController
             ], 202);
         }
 
+        // Limites antes da conferencia de duplicidade: a resposta dela revela se um
+        // endereco esta inscrito, e sem cota isso viraria uma sondagem gratuita.
+        $this->limites->conferir($request, $atividade, $email);
+
+        // Duplicidade antes do envio: quem ja se inscreveu recebe o aviso, nao um codigo.
+        if ($this->inscricoes->jaInscritoPorEmail($atividade, $email)) {
+            throw ValidationException::withMessages(['email' => $atividade->mensagemJaInscrito()]);
+        }
+
         $resultado = $this->identificacao->solicitarCodigo($request, $atividade, $email);
 
         return response()->json([
@@ -116,7 +129,7 @@ class FormularioPublicoController
             ['email' => 'e-mail', 'codigo' => 'código'],
         );
 
-        $resultado = $this->identificacao->emitirToken($atividade, $dados['email'], $dados['codigo']);
+        $resultado = $this->identificacao->emitirToken($request, $atividade, $dados['email'], $dados['codigo']);
         $email = mb_strtolower(trim($dados['email']));
 
         return response()->json([

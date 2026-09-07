@@ -30,10 +30,13 @@
         <div class="card content-card">
             <div class="card-header"><h2 class="h5 fw-bold mb-0">Identifique-se para se inscrever</h2></div>
             <div class="card-body p-4">
-                <p class="text-muted">Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.</p>
+                <p class="text-muted">{{ $atividade->mensagemIdentificacao() }}</p>
 
                 @if($errosIdentificacao->any())
                     <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach($errosIdentificacao->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>
+                @endif
+                @if(session('ja_inscrito'))
+                    <div class="alert alert-warning"><i class="bi bi-person-check me-1"></i>{{ session('ja_inscrito') }}</div>
                 @endif
                 @if(session('codigo_enviado'))
                     <div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>Enviamos o código para <strong>{{ session('codigo_enviado') }}</strong>. Ele vale por {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</div>
@@ -41,6 +44,9 @@
 
                 <form method="POST" action="{{ request()->fullUrl() }}">
                     @csrf
+                    {{-- Selo do momento em que esta tela foi montada: assinado, então
+                         quem faz POST direto no endereço não consegue produzir um. --}}
+                    <input type="hidden" name="{{ \App\Services\IdentificacaoParticipanteService::CAMPO_SELO }}" value="{{ $selo }}">
                     {{-- Campo isca: fica fora da tela, então só um robô o preenche. --}}
                     <div class="campo-isca" aria-hidden="true">
                         <label>Deixe este campo em branco

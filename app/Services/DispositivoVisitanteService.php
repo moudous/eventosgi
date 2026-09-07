@@ -70,6 +70,35 @@ class DispositivoVisitanteService
     }
 
     /**
+     * Faixa de rede do visitante: /24 no IPv4, /64 no IPv6.
+     *
+     * Os limites de envio contam por faixa, nunca por endereco exato. Qualquer contratacao
+     * de IPv6 vem com um /64 inteiro, o que rende enderecos praticamente ilimitados de
+     * graca: um balde por endereco seria contornado trocando de IP a cada pedido, e o
+     * limite existiria so no papel.
+     */
+    public function faixaDoVisitante(Request $request): ?string
+    {
+        $ip = $this->ipDoVisitante($request);
+
+        if ($ip === null) return null;
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return implode('.', array_slice(explode('.', $ip), 0, 3)).'.0/24';
+        }
+
+        $binario = @inet_pton($ip);
+
+        if ($binario === false || strlen($binario) !== 16) return null;
+
+        // Primeiros 64 bits: o prefixo que o provedor delega. Os 64 finais a propria
+        // maquina escolhe, e e justamente ai que um robo trocaria de endereco.
+        $prefixo = @inet_ntop(substr($binario, 0, 8).str_repeat("\0", 8));
+
+        return $prefixo === false ? null : $prefixo.'/64';
+    }
+
+    /**
      * IP e User-Agent de quem preencheu o formulario.
      *
      * Numa chamada de API o remetente e o servidor do consumidor, nao o visitante; nesse

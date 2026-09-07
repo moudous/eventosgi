@@ -22,6 +22,7 @@
 /storage/*.key
 /storage/pail
 /storage/framework/cache/*
+/templates/*
 /vendor
 /backup/
 _ide_helper.php

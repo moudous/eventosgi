@@ -102,12 +102,45 @@ class FormularioInscricaoService
     {
         $email = trim((string) ($email ?: $participante?->email));
 
-        if (! $participante && $email === '') return false;
+        return $this->existeInscricao($atividade, $participante ? [$participante->id] : [], $email);
+    }
+
+    /**
+     * Mesma conferencia, porem a partir apenas do e-mail digitado, antes de existir
+     * participante identificado.
+     *
+     * Serve a etapa em que o visitante so informou o e-mail: assim quem ja se inscreveu
+     * recebe o aviso em vez de um codigo. Alem da inscricao gravada com o proprio e-mail,
+     * alcanca a feita por cadastro que o tenha em qualquer coluna de e-mail — e, ao
+     * contrario de resolverParticipante(), nao cria cadastro nenhum para descobrir isso.
+     */
+    public function jaInscritoPorEmail(Atividade $atividade, string $email): bool
+    {
+        $email = mb_strtolower(trim($email));
+
+        if ($email === '') return false;
+
+        $cadastros = Participante::query()
+            ->where(function ($consulta) use ($email): void {
+                foreach (IdentificacaoParticipanteService::COLUNAS_EMAIL as $coluna) $consulta->orWhere($coluna, $email);
+            })
+            ->pluck('id')->all();
+
+        return $this->existeInscricao($atividade, $cadastros, $email);
+    }
+
+    /**
+     * @param list<int> $participantes
+     */
+    private function existeInscricao(Atividade $atividade, array $participantes, string $email): bool
+    {
+        // Sem nenhum criterio a consulta encontraria a atividade inteira: nao ha o que conferir.
+        if ($participantes === [] && $email === '') return false;
 
         return InscricaoAtividade::query()
             ->where('atividade_id', $atividade->id)
-            ->where(function ($consulta) use ($participante, $email): void {
-                if ($participante) $consulta->orWhere('participante_id', $participante->id);
+            ->where(function ($consulta) use ($participantes, $email): void {
+                if ($participantes !== []) $consulta->orWhereIn('participante_id', $participantes);
                 if ($email !== '') $consulta->orWhere('participante_email', $email);
             })
             ->exists();

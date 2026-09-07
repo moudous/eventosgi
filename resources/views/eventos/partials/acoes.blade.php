@@ -10,6 +10,13 @@
         <button type="button" class="btn btn-sm btn-outline-danger listagem-acao" title="Excluir definitivamente" aria-label="Excluir definitivamente {{ $evento->nome }}" data-action="force-delete" data-method="DELETE" data-action-url="{{ route('eventos.force-destroy', $evento->id) }}"><i class="bi bi-trash3-fill"></i></button>
     @endif
 @else
+    @if($permissoes->permite('eventos.pagina.editar'))
+        <a href="{{ route('eventos.pagina.editar', $evento) }}" class="btn btn-sm btn-outline-success listagem-acao" title="Editar página do evento" aria-label="Editar a página de {{ $evento->nome }}"><i class="bi bi-layout-text-window"></i></a>
+    @endif
+    @if($permissoes->permite('eventos.pagina.visualizar'))
+        {{-- Abre em outra janela: a página sai sem o layout do sistema, como será exibida. --}}
+        <a href="{{ route('eventos.pagina.visualizar', $evento) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-info listagem-acao" title="Visualizar página em outra janela" aria-label="Visualizar a página de {{ $evento->nome }}"><i class="bi bi-box-arrow-up-right"></i></a>
+    @endif
     @if($permissoes->permite('eventos.visualizar'))
         <a href="{{ route('eventos.show', $evento) }}" class="btn btn-sm btn-outline-dark listagem-acao" title="Visualizar evento" aria-label="Visualizar {{ $evento->nome }}"><i class="bi bi-eye-fill"></i></a>
     @endif

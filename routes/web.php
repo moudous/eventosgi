@@ -9,6 +9,10 @@ use App\Http\Controllers\EventoController;
 use App\Http\Controllers\AtividadeController;
 use App\Http\Controllers\ParticipanteController;
 use App\Http\Controllers\ConvidadoController;
+use App\Http\Controllers\ConfiguracaoController;
+use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\PaginaEventoController;
+use App\Http\Controllers\TemplatePaginaController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -98,26 +102,76 @@ Route::prefix('eventos')->name('eventos.')->group(function (): void {
     Route::delete('/{evento}', [EventoController::class, 'destroy'])->middleware('gi.permission:eventos.excluir')->name('destroy');
 });
 
+// Pagina publica do evento: escolha do template e exibicao.
+Route::prefix('eventos/{evento}/pagina')->name('eventos.pagina.')->group(function (): void {
+    Route::get('/', [PaginaEventoController::class, 'editar'])->middleware('gi.permission:eventos.pagina.editar')->name('editar');
+    Route::put('/', [PaginaEventoController::class, 'salvar'])->middleware('gi.permission:eventos.pagina.editar')->name('salvar');
+    Route::get('/visualizar', [PaginaEventoController::class, 'visualizar'])->middleware('gi.permission:eventos.pagina.visualizar')->name('visualizar');
+});
+
+// Catalogo dos templates de pagina, importados por ZIP.
+Route::prefix('templates')->name('templates.')->group(function (): void {
+    Route::get('/', [TemplatePaginaController::class, 'index'])->middleware('gi.permission:templates.listar')->name('index');
+    Route::post('/', [TemplatePaginaController::class, 'store'])->middleware('gi.permission:templates.importar')->name('store');
+    Route::get('/{template}/exportar', [TemplatePaginaController::class, 'exportar'])->middleware('gi.permission:templates.exportar')->name('exportar');
+    Route::delete('/{template}', [TemplatePaginaController::class, 'destroy'])->middleware('gi.permission:templates.excluir')->name('destroy');
+    // Sem permissao: a pagina do evento e publica e o navegador de quem a abre precisa
+    // dos arquivos. O servico so entrega extensoes de uma lista fechada.
+    Route::get('/{template}/assets/{caminho}', [TemplatePaginaController::class, 'asset'])
+        ->where('caminho', '[^?]+')->name('asset');
+});
+
+// Categorias das atividades. A categoria e opcional na atividade, mas uma vez usada
+// nao pode ser excluida nem desativada -- ver CategoriaController.
+Route::prefix('categorias')->name('categorias.')->group(function (): void {
+    Route::get('/', [CategoriaController::class, 'index'])->middleware('gi.permission:categorias.listar')->name('index');
+    Route::get('/dados', [CategoriaController::class, 'dados'])->middleware('gi.permission:categorias.listar')->name('dados');
+    Route::get('/criar', [CategoriaController::class, 'create'])->middleware('gi.permission:categorias.criar')->name('create');
+    Route::post('/', [CategoriaController::class, 'store'])->middleware('gi.permission:categorias.criar')->name('store');
+    Route::patch('/{categoria}/alternar', [CategoriaController::class, 'alternar'])->middleware('gi.permission:categorias.ativar_desativar')->name('alternar');
+    Route::get('/{categoria}', [CategoriaController::class, 'show'])->middleware('gi.permission:categorias.visualizar')->name('show');
+    Route::get('/{categoria}/editar', [CategoriaController::class, 'edit'])->middleware('gi.permission:categorias.editar')->name('edit');
+    Route::put('/{categoria}', [CategoriaController::class, 'update'])->middleware('gi.permission:categorias.editar')->name('update');
+    Route::delete('/{categoria}', [CategoriaController::class, 'destroy'])->middleware('gi.permission:categorias.excluir')->name('destroy');
+});
+
+// Configuracao da aplicacao. Permissoes proprias, cadastradas no perfil do GI: liberar
+// uma rede dos limites de envio mexe em como o formulario publico se protege, e nao e a
+// mesma capacidade de editar uma atividade.
+//
+// configuracao.visualizar abre a tela; as demais liberam cada acao dentro dela. Quem so
+// tem a primeira ve a configuracao atual sem poder altera-la.
+Route::prefix('configuracao')->name('configuracao.')->group(function (): void {
+    Route::get('/', [ConfiguracaoController::class, 'index'])->middleware('gi.permission:configuracao.visualizar')->name('index');
+    Route::post('/faixas-ip', [ConfiguracaoController::class, 'guardarFaixa'])->middleware('gi.permission:configuracao.faixa.criar')->name('faixas-ip.store');
+    Route::patch('/faixas-ip/{faixa}', [ConfiguracaoController::class, 'alternarFaixa'])->middleware('gi.permission:configuracao.faixa.ativar_desativar')->name('faixas-ip.toggle');
+    Route::delete('/faixas-ip/{faixa}', [ConfiguracaoController::class, 'removerFaixa'])->middleware('gi.permission:configuracao.faixa.excluir')->name('faixas-ip.destroy');
+    Route::get('/plugin-wordpress', [ConfiguracaoController::class, 'baixarPlugin'])->middleware('gi.permission:configuracao.wordpress.visualizar')->name('plugin-wordpress');
+});
+
 Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/', [AtividadeController::class, 'index'])->middleware('gi.permission:atividades.listar')->name('index');
     Route::get('/dados', [AtividadeController::class, 'dados'])->middleware('gi.permission:atividades.listar')->name('dados');
     Route::get('/apagados', [AtividadeController::class, 'apagados'])->middleware('gi.permission:atividades.listar')->name('apagados');
-    Route::get('/plugin-wordpress', [AtividadeController::class, 'baixarPlugin'])->middleware('gi.permission:atividades.listar')->name('plugin-wordpress');
     Route::get('/criar', [AtividadeController::class, 'create'])->middleware('gi.permission:atividades.criar')->name('create');
     Route::post('/', [AtividadeController::class, 'store'])->middleware('gi.permission:atividades.criar')->name('store');
-    Route::get('/{atividade}/formulario', [AtividadeController::class, 'formulario'])->middleware('gi.permission:atividades.editar')->name('formulario');
-    Route::post('/{atividade}/formulario', [AtividadeController::class, 'salvarFormulario'])->middleware('gi.permission:atividades.editar')->name('formulario.salvar');
-    Route::get('/{atividade}/formulario/visualizar', [AtividadeController::class, 'previewRedirect'])->middleware('gi.permission:atividades.visualizar')->name('formulario.visualizar');
-    Route::get('/{atividade}/formulario/preview-link', [AtividadeController::class, 'previewLink'])->middleware('gi.permission:atividades.editar')->name('formulario.preview-link');
+    // O construtor de formulario abre com atividades.formulario. Dentro dele, o bloco
+    // Estrutura -- linhas, colunas e campos -- exige atividades.formulario.estrutura:
+    // quem so tem a primeira ajusta titulo, datas, limites e mensagens sem poder mexer
+    // nos campos ja publicados. Ver salvarFormulario().
+    Route::get('/{atividade}/formulario', [AtividadeController::class, 'formulario'])->middleware('gi.permission:atividades.formulario')->name('formulario');
+    Route::post('/{atividade}/formulario', [AtividadeController::class, 'salvarFormulario'])->middleware('gi.permission:atividades.formulario')->name('formulario.salvar');
+    Route::get('/{atividade}/formulario/visualizar', [AtividadeController::class, 'previewRedirect'])->middleware('gi.permission:atividades.visualizar_formulario')->name('formulario.visualizar');
+    Route::get('/{atividade}/formulario/preview-link', [AtividadeController::class, 'previewLink'])->middleware('gi.permission:atividades.visualizar_formulario')->name('formulario.preview-link');
     Route::get('/{atividade}/formulario/preview', [AtividadeController::class, 'preview'])->middleware('signed')->name('formulario.preview');
     Route::post('/{atividade}/formulario/preview', [AtividadeController::class, 'inscrever'])->middleware('signed')->name('formulario.inscrever');
-    Route::get('/{atividade}/inscricoes/exportar-link/{formato}', [AtividadeController::class, 'exportarLink'])->middleware('gi.permission:atividades.visualizar')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar-link');
+    Route::get('/{atividade}/inscricoes/exportar-link/{formato}', [AtividadeController::class, 'exportarLink'])->middleware('gi.permission:atividades.inscritos')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar-link');
     // Assinada em vez de protegida por permissao: o download roda dentro do iframe do GI,
     // onde o cookie de sessao pode nao acompanhar a requisicao. Quem gera o link ja passou
     // pela permissao em inscricoes.exportar-link.
     Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
-    Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.visualizar')->name('inscricoes');
-    Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.visualizar')->name('historico');
+    Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.inscritos')->name('inscricoes');
+    Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.historico')->name('historico');
     Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
     Route::delete('/{atividade}/definitivamente', [AtividadeController::class, 'forceDestroy'])->middleware('gi.permission:atividades.excluir_definitivamente')->name('force-destroy');
     Route::get('/{atividade}', [AtividadeController::class, 'show'])->middleware('gi.permission:atividades.visualizar')->name('show');
@@ -125,6 +179,13 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::put('/{atividade}', [AtividadeController::class, 'update'])->middleware('gi.permission:atividades.editar')->name('update');
     Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');
 });
+
+// Inscricao publica em uma atividade. Sem assinatura, ao contrario da previa do
+// construtor: e a pagina para onde o template do evento manda quem clica numa atividade,
+// e a mesma que o visitante de um site abre. Vale para atividade ativa; as protecoes
+// contra abuso (isca, selo e LimiteEnvioCodigoService) sao as mesmas da previa.
+Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
+Route::post('/inscricoes/{atividade}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
 
 // Anexos das inscricoes: ficam em disco privado e so saem por aqui, com URL assinada
 // gerada na tela de inscricoes (que exige atividades.visualizar).

@@ -7,7 +7,6 @@ use App\Models\CodigoInscricao;
 use App\Models\Participante;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -21,33 +20,38 @@ use Throwable;
  */
 class IdentificacaoParticipanteService
 {
-    /** Colunas de participantes consultadas ao procurar o e-mail informado. */
-    private const COLUNAS_EMAIL = ['email', 'email2', 'email_institucional'];
+    /**
+     * Colunas de participantes consultadas ao procurar o e-mail informado.
+     *
+     * Publica porque FormularioInscricaoService procura pelo mesmo criterio ao conferir
+     * duplicidade a partir de um e-mail ainda nao identificado.
+     */
+    public const COLUNAS_EMAIL = ['email', 'email2', 'email_institucional'];
 
     public const MINUTOS_VALIDADE = 15;
 
     /** Tentativas de digitacao aceitas antes de o codigo ser invalidado. */
     public const MAX_TENTATIVAS = 5;
 
-    /** Intervalo minimo, em segundos, entre dois envios para o mesmo e-mail e atividade. */
-    public const INTERVALO_REENVIO = 60;
-
     /** Validade do token entregue a consumidores externos apos a conferencia do codigo. */
     public const HORAS_TOKEN = 2;
-
-    /**
-     * Codigos por hora aceitos de um mesmo IP. Folgado de proposito: redes de instituicoes
-     * saem por um unico endereco, e varias pessoas se inscrevem do mesmo lugar.
-     */
-    public const MAX_POR_IP = 20;
 
     /** Nome do campo isca. Visitante nao ve; robo que preenche formulario inteiro cai nele. */
     public const CAMPO_ISCA = 'confirmacao_inscricao';
 
+    /** Nome do campo que carrega o selo de quando o formulario foi montado. */
+    public const CAMPO_SELO = 'formulario_aberto_em';
+
+    /** Segundos minimos entre o formulario aparecer e o pedido de codigo chegar. */
+    private const SEGUNDOS_MINIMOS = 3;
+
+    /** Horas que o selo de um formulario continua valendo. */
+    private const HORAS_SELO = 4;
+
     public function __construct(
         private readonly GiEmailService $email,
         private readonly ParticipanteUnificacaoService $unificacao,
-        private readonly DispositivoVisitanteService $dispositivo,
+        private readonly LimiteEnvioCodigoService $limites,
     ) {}
 
     /**
@@ -62,6 +66,60 @@ class IdentificacaoParticipanteService
     }
 
     /**
+     * Selo com o momento em que o formulario foi montado.
+     *
+     * Assinado com a chave da aplicacao: sem isso o visitante escolheria o valor. Serve
+     * para saber que o pedido veio de um formulario que alguem realmente abriu -- um
+     * script que dispara POST direto no endpoint nao tem como produzir um selo valido, e
+     * cada tentativa passa a custar tambem uma visita a pagina.
+     */
+    public function selo(): string
+    {
+        $momento = (string) now()->getTimestamp();
+
+        return $momento.'.'.hash_hmac('sha256', $momento, (string) config('app.key'));
+    }
+
+    /** O selo veio no pedido, confere com a assinatura e ainda esta na validade? */
+    public function seloConfere(Request $request): bool
+    {
+        return $this->momentoDoSelo($request) !== null;
+    }
+
+    /**
+     * O pedido chegou rapido demais depois de o formulario aparecer?
+     *
+     * Ninguem le a tela, digita o proprio e-mail e envia em menos de tres segundos.
+     */
+    public function pedidoApressado(Request $request): bool
+    {
+        $momento = $this->momentoDoSelo($request);
+
+        return $momento !== null && (now()->getTimestamp() - $momento) < self::SEGUNDOS_MINIMOS;
+    }
+
+    /** Momento gravado em um selo integro e dentro da validade, ou null. */
+    private function momentoDoSelo(Request $request): ?int
+    {
+        $partes = explode('.', (string) $request->input(self::CAMPO_SELO, ''), 2);
+
+        if (count($partes) !== 2 || ! ctype_digit($partes[0])) return null;
+
+        $esperada = hash_hmac('sha256', $partes[0], (string) config('app.key'));
+
+        if (! hash_equals($esperada, $partes[1])) return null;
+
+        $momento = (int) $partes[0];
+        $agora = now()->getTimestamp();
+
+        // Selo do futuro so aparece com relogio adulterado; selo velho demais e pagina
+        // que ficou aberta a noite toda, e o visitante precisa recarregar.
+        if ($momento > $agora || ($agora - $momento) > self::HORAS_SELO * 3600) return null;
+
+        return $momento;
+    }
+
+    /**
      * Gera e envia um novo codigo, invalidando os anteriores da mesma atividade e e-mail.
      *
      * @return array{email: string, expira_em: \Illuminate\Support\Carbon}
@@ -69,33 +127,10 @@ class IdentificacaoParticipanteService
     public function solicitarCodigo(Request $request, Atividade $atividade, string $email): array
     {
         $email = mb_strtolower(trim($email));
-        $chave = 'codigo-inscricao:'.$atividade->id.':'.sha1($email);
 
-        if (RateLimiter::tooManyAttempts($chave, 1)) {
-            throw ValidationException::withMessages([
-                'email' => 'Aguarde '.RateLimiter::availableIn($chave).' segundos para pedir um novo código.',
-            ])->errorBag('identificacao');
-        }
-
-        if (RateLimiter::tooManyAttempts($chave.':hora', 5)) {
-            throw ValidationException::withMessages([
-                'email' => 'Muitos códigos foram solicitados para este e-mail. Tente novamente mais tarde.',
-            ])->errorBag('identificacao');
-        }
-
-        // Limite por origem: sem ele, bastaria variar o e-mail a cada envio para escapar do limite acima.
-        $ip = $this->dispositivo->ipDoVisitante($request);
-        $chaveIp = $ip !== null ? 'codigo-inscricao-ip:'.sha1($ip) : null;
-
-        if ($chaveIp !== null && RateLimiter::tooManyAttempts($chaveIp, self::MAX_POR_IP)) {
-            throw ValidationException::withMessages([
-                'email' => 'Muitos códigos foram solicitados a partir desta conexão. Tente novamente mais tarde.',
-            ])->errorBag('identificacao');
-        }
-
-        // Conta antes de disparar: uma falha no envio nao pode virar porta para repetir sem limite.
-        RateLimiter::hit($chave.':hora', 3600);
-        if ($chaveIp !== null) RateLimiter::hit($chaveIp, 3600);
+        // Todos os limites -- por e-mail, por sessao, por faixa de rede, por atividade --
+        // ficam em LimiteEnvioCodigoService, que contabiliza o pedido ao aprova-lo.
+        $this->limites->conferir($request, $atividade, $email);
 
         $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $expiraEm = now()->addMinutes(self::MINUTOS_VALIDADE);
@@ -133,7 +168,7 @@ class IdentificacaoParticipanteService
             ])->errorBag('identificacao');
         }
 
-        RateLimiter::hit($chave, self::INTERVALO_REENVIO);
+        $this->limites->registrarEnvio($atividade, $email);
 
         return ['email' => $email, 'expira_em' => $expiraEm];
     }
@@ -147,6 +182,10 @@ class IdentificacaoParticipanteService
     {
         $email = mb_strtolower(trim($email));
         $registro = $this->conferirCodigo($atividade, $email, $codigo);
+
+        // Endereco confirmado e endereco de gente: devolve a vaga que o pedido consumiu.
+        $this->limites->liberar($request, $email);
+
         $resolucao = $this->resolverParticipante($email);
         $participante = $resolucao['participante'];
 
@@ -224,10 +263,14 @@ class IdentificacaoParticipanteService
      *
      * @return array{token: string, expira_em: \Illuminate\Support\Carbon, participante: Participante, criado: bool, unificados: int}
      */
-    public function emitirToken(Atividade $atividade, string $email, string $codigo): array
+    public function emitirToken(Request $request, Atividade $atividade, string $email, string $codigo): array
     {
         $email = mb_strtolower(trim($email));
         $registro = $this->conferirCodigo($atividade, $email, $codigo);
+
+        // Vale para o consumidor externo o mesmo do fluxo desta aplicacao: codigo
+        // confirmado devolve a vaga de endereco novo daquela origem.
+        $this->limites->liberar($request, $email);
         $resolucao = $this->resolverParticipante($email);
 
         $token = Str::random(64);
