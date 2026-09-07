@@ -29,9 +29,14 @@ class AllowGiEmbedding
 
         $response->headers->remove('X-Frame-Options');
 
-        // Respostas que servem conteudo enviado por terceiros definem a propria politica,
-        // mais restritiva; sobrescrever aqui devolveria a elas permissoes que nao querem.
-        if (! $response->headers->has('Content-Security-Policy')) {
+        // Estas páginas foram feitas para visitantes e podem ser incorporadas em sites
+        // externos. As demais continuam limitadas às origens configuradas para o GI.
+        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*')) {
+            $response->headers->set(
+                'Content-Security-Policy',
+                "frame-ancestors *; object-src 'none'; base-uri 'self'",
+            );
+        } elseif (! $response->headers->has('Content-Security-Policy')) {
             $response->headers->set(
                 'Content-Security-Policy',
                 "frame-ancestors ".config('gi.frame_ancestors')."; object-src 'none'; base-uri 'self'",
@@ -48,12 +53,16 @@ class AllowGiEmbedding
      * e os arquivos que ele gera, abertos por visitantes anonimos ou em aba nova. Exigir o
      * iframe neles derrubaria justamente quem tem direito de entrar.
      *
-     * Nada e liberado aqui: a URL assinada e o token da API continuam sendo conferidos
-     * pelos middlewares das proprias rotas, logo adiante.
+     * A página pública do evento é a exceção deliberadamente anônima: só eventos ativos
+     * são entregues e a resposta define sua própria política de incorporação.
      */
     private function temAutenticacaoPropria(Request $request): bool
     {
         if ($request->is('health') || $request->is('api/*')) {
+            return true;
+        }
+
+        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*')) {
             return true;
         }
 

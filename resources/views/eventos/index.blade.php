@@ -66,7 +66,36 @@ document.addEventListener('DOMContentLoaded', function () {
     const feedback = document.getElementById('actionFeedback');
     let historyTable = null;
     const historyModal = new bootstrap.Modal('#historicoModal');
+    function copiar(texto) {
+        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(texto);
+        return new Promise((resolve, reject) => {
+            const area = document.createElement('textarea');
+            area.value = texto;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            const copiado = document.execCommand('copy');
+            document.body.removeChild(area);
+            copiado ? resolve() : reject(new Error('Copie manualmente: ' + texto));
+        });
+    }
     document.getElementById('eventosTable').addEventListener('click', async function (event) {
+        const shortcodeButton = event.target.closest('[data-shortcode]');
+        if (shortcodeButton) {
+            try {
+                await copiar(shortcodeButton.dataset.shortcode);
+                feedback.querySelector('span').textContent = 'Shortcode copiado: ' + shortcodeButton.dataset.shortcode + ' — cole em uma página ou post do WordPress.';
+                feedback.classList.remove('d-none', 'alert-danger');
+                feedback.classList.add('show', 'alert-success');
+            } catch (error) {
+                feedback.querySelector('span').textContent = error.message;
+                feedback.classList.remove('d-none', 'alert-success');
+                feedback.classList.add('show', 'alert-danger');
+            }
+            return;
+        }
         const historyButton = event.target.closest('[data-history-url]');
         if (historyButton) {
             document.getElementById('historicoRegistro').textContent = historyButton.dataset.historyName;

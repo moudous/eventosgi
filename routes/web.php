@@ -102,11 +102,12 @@ Route::prefix('eventos')->name('eventos.')->group(function (): void {
     Route::delete('/{evento}', [EventoController::class, 'destroy'])->middleware('gi.permission:eventos.excluir')->name('destroy');
 });
 
-// Pagina publica do evento: escolha do template e exibicao.
+// A edição exige permissão; a visualização é pública para sites externos poderem
+// incorporá-la diretamente em um iframe.
 Route::prefix('eventos/{evento}/pagina')->name('eventos.pagina.')->group(function (): void {
     Route::get('/', [PaginaEventoController::class, 'editar'])->middleware('gi.permission:eventos.pagina.editar')->name('editar');
     Route::put('/', [PaginaEventoController::class, 'salvar'])->middleware('gi.permission:eventos.pagina.editar')->name('salvar');
-    Route::get('/visualizar', [PaginaEventoController::class, 'visualizar'])->middleware('gi.permission:eventos.pagina.visualizar')->name('visualizar');
+    Route::get('/visualizar', [PaginaEventoController::class, 'visualizar'])->name('visualizar');
 });
 
 // Catalogo dos templates de pagina, importados por ZIP.
@@ -210,6 +211,7 @@ Route::prefix('participantes')->name('participantes.')->group(function (): void 
 });
 
 Route::prefix('convidados')->name('convidados.')->group(function (): void {
+    Route::get('/foto/{codigo}', [ConvidadoController::class, 'foto'])->where('codigo', '[a-f0-9]{40}\.jpg')->name('foto');
     Route::get('/', [ConvidadoController::class, 'index'])->middleware('gi.permission:convidados.listar')->name('index');
     Route::get('/dados', [ConvidadoController::class, 'dados'])->middleware('gi.permission:convidados.listar')->name('dados');
     Route::get('/criar', [ConvidadoController::class, 'create'])->middleware('gi.permission:convidados.criar')->name('create');

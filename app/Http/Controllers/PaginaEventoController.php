@@ -14,8 +14,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Pagina publica de um evento: escolha do template e das variaveis, e a exibicao.
  *
- * A exibicao devolve o HTML do template puro, sem o layout do sistema -- e assim que ela
- * podera ser embutida no WordPress por shortcode mais adiante.
+ * A exibicao devolve o HTML do template puro, sem o layout do sistema, para acesso
+ * público direto ou incorporação em sites externos.
  */
 class PaginaEventoController
 {
@@ -26,6 +26,10 @@ class PaginaEventoController
 
     public function editar(Evento $evento): View
     {
+        // Templates versionados no projeto podem ter recebido novas variáveis desde
+        // que foram registrados no banco. Atualiza apenas os metadados do template;
+        // os valores já escolhidos pelo evento permanecem em pagina_variaveis.
+        $this->templates->sincronizar();
         $evento->load('templatePagina');
 
         return view('eventos.pagina', [
@@ -66,12 +70,14 @@ class PaginaEventoController
     /**
      * HTML da pagina, sem o layout do sistema.
      *
-     * Rota separada da edicao porque e ela que o botao "Visualizar página" abre em outra
-     * janela, e sera a mesma que o shortcode do WordPress vai consumir.
+     * Rota separada da edição porque é pública, enquanto a configuração continua
+     * protegida pelas permissões do GI.
      */
     public function visualizar(Evento $evento): Response
     {
         $evento->load('templatePagina');
+
+        abort_unless($evento->ativo, 404, 'Este evento não está ativo.');
 
         if ($evento->template_pagina_id === null) {
             return response(view('eventos.pagina-sem-template', ['evento' => $evento])->render(), 200)

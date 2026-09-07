@@ -99,7 +99,7 @@
         </a>
     </div>
     <div class="card-body">
-        <p class="text-muted">O plugin exibe o formulário de inscrição de uma atividade em qualquer página ou post do seu site. As inscrições e os arquivos enviados são gravados aqui; nada fica guardado no WordPress.</p>
+        <p class="text-muted">O plugin exibe a página completa de um evento ou o formulário de inscrição de uma atividade em qualquer página ou post do seu site. As inscrições e os arquivos enviados são gravados aqui; nada fica guardado no WordPress.</p>
 
         <h3 class="h6 fw-bold mt-4">1. Instalar no WordPress</h3>
         <ol class="text-muted">
@@ -114,15 +114,15 @@
             <li>No WordPress, vá em <strong>Ajustes → EventosGI</strong>.</li>
             <li>Em <strong>URL do sistema</strong>, informe: <code>{{ rtrim(url('/'), '/') }}</code></li>
             <li>Em <strong>Token da API</strong>, cole o valor de <code>FORMULARIOS_API_TOKEN</code> do arquivo <code>.env</code> desta aplicação. <span class="fst-italic">Ele não é exibido aqui de propósito: é um segredo, e esta tela pode estar visível para outras pessoas.</span></li>
-            <li>Em <strong>Cache do formulário</strong>, deixe alguns minutos para o site não consultar este sistema a cada visita. Alterações no formulário levam esse tempo para aparecer.</li>
+            <li>Em <strong>Cache do formulário</strong>, deixe alguns minutos para o site não consultar este sistema a cada visita. Alterações no formulário levam esse tempo para aparecer; a página do evento é carregada diretamente pela URL pública.</li>
             <li>Salve e use o botão <strong>Testar</strong> da própria tela de ajustes, informando o ID de uma atividade. Ele confirma a conexão e mostra quantos campos o formulário tem.</li>
         </ol>
 
-        <h3 class="h6 fw-bold mt-4">3. Copiar o shortcode da atividade</h3>
+        <h3 class="h6 fw-bold mt-4">3. Copiar o shortcode</h3>
         <ol class="text-muted">
-            <li>Vá em <a href="{{ route('atividades.index') }}">Atividades</a>.</li>
-            <li>Na linha da atividade desejada, clique no botão <span class="badge text-bg-light border"><i class="bi bi-wordpress"></i></span> da coluna <strong>Ações</strong> — o shortcode vai direto para a área de transferência.</li>
-            <li>O texto copiado tem esta forma: <code>[eventosgi_formulario id="1"]</code>, em que o número é o ID da atividade.</li>
+            <li>Vá em <a href="{{ route('eventos.index') }}">Eventos</a> para copiar uma página completa ou em <a href="{{ route('atividades.index') }}">Atividades</a> para copiar um formulário.</li>
+            <li>Na linha desejada, clique no botão <span class="badge text-bg-light border"><i class="bi bi-wordpress"></i></span> da coluna <strong>Ações</strong> — o shortcode vai direto para a área de transferência.</li>
+            <li>Para eventos, o texto tem a forma <code>[eventosgi_evento id="1"]</code>. Para atividades, <code>[eventosgi_formulario id="1"]</code>.</li>
         </ol>
 
         <h3 class="h6 fw-bold mt-4">4. Usar em uma página ou post</h3>
@@ -130,13 +130,14 @@
             <li>No WordPress, crie ou edite a página (ou post) que vai receber o formulário.</li>
             <li><strong>Editor de blocos:</strong> adicione um bloco <strong>Shortcode</strong> e cole o texto dentro dele.<br>
                 <strong>Editor clássico:</strong> cole o texto direto no corpo, na aba <em>Visual</em> ou <em>Texto</em>.</li>
-            <li>Publique ou atualize a página. O formulário aparece no lugar do shortcode, com as fontes e cores do tema do site.</li>
+            <li>Publique ou atualize a página. O conteúdo aparece no lugar do shortcode.</li>
         </ol>
 
         <div class="alert alert-light border mt-3 mb-0">
             <strong>Atributos opcionais do shortcode</strong>
             <ul class="mb-0 mt-2">
-                <li><code>id</code> — ID da atividade. Obrigatório.</li>
+                <li><code>id</code> — ID do evento ou da atividade. Obrigatório.</li>
+                <li><code>altura="1200"</code> — define, em pixels, a altura reservada para a página do evento.</li>
                 <li><code>titulo="nao"</code> — oculta o título e o subtítulo do formulário, útil quando a própria página já tem um.</li>
                 <li><code>conteudo="nao"</code> — oculta o texto livre configurado na atividade.</li>
             </ul>

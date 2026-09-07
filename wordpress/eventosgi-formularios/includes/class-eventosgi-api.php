@@ -61,6 +61,15 @@ class EventosGI_Api {
 		return $resposta;
 	}
 
+	/** URL pública usada pelo iframe da página do evento. */
+	public function url_pagina_evento( $evento_id ) {
+		if ( '' === $this->url_base ) {
+			return new WP_Error( 'eventosgi_sem_url', __( 'Informe a URL do sistema de eventos nos ajustes do plugin.', 'eventosgi-formularios' ) );
+		}
+
+		return $this->url_base . '/eventos/' . (int) $evento_id . '/pagina/visualizar';
+	}
+
 	/**
 	 * Pede o envio do código de inscrição para o e-mail informado.
 	 *

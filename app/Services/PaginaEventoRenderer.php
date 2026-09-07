@@ -104,6 +104,7 @@ class PaginaEventoRenderer
                     'curriculo' => (string) $convidado->curriculo,
                     'local' => (string) $convidado->local,
                     'email' => (string) $convidado->email,
+                    'foto' => $convidado->foto_nome ? route('convidados.foto', $convidado->foto_nome) : null,
                     'redes_sociais' => array_values((array) ($convidado->redes_sociais ?? [])),
                 ])->all(),
             'eventos' => Evento::query()->where('ativo', true)->orderBy('nome')
@@ -115,6 +116,15 @@ class PaginaEventoRenderer
         // agrupa nem filtra, entao quem monta o contexto entrega o agrupamento feito.
         $dados['dias'] = $this->porDia($dados['atividades']);
         $dados['menu'] = $this->porCategoria($dados['atividades']);
+
+        // Os padrões do manifesto também entram no contexto: assim uma página recém
+        // criada já renderiza corretamente antes de o usuário clicar em Salvar.
+        foreach ((array) ($template->variaveis ?? []) as $variavel) {
+            $nome = (string) ($variavel['nome'] ?? '');
+            if ($nome !== '' && ! in_array($nome, self::RESERVADOS, true)) {
+                $dados[$nome] = (string) ($variavel['padrao'] ?? '');
+            }
+        }
 
         // Variaveis do evento entram por ultimo, mas sem poder sobrescrever os reservados.
         foreach ((array) ($evento->pagina_variaveis ?? []) as $nome => $valor) {

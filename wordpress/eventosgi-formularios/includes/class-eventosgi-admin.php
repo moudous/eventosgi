@@ -21,7 +21,7 @@ class EventosGI_Admin {
 
 	public function menu() {
 		add_options_page(
-			__( 'EventosGI — Formulários', 'eventosgi-formularios' ),
+			__( 'EventosGI — Eventos e Formulários', 'eventosgi-formularios' ),
 			__( 'EventosGI', 'eventosgi-formularios' ),
 			'manage_options',
 			'eventosgi-formularios',
@@ -41,7 +41,7 @@ class EventosGI_Admin {
 		);
 
 		add_settings_section( 'eventosgi_conexao', __( 'Conexão', 'eventosgi-formularios' ), function () {
-			echo '<p>' . esc_html__( 'Dados de acesso à API pública de formulários do sistema Gestão de Eventos.', 'eventosgi-formularios' ) . '</p>';
+			echo '<p>' . esc_html__( 'Dados de acesso à API pública do sistema Gestão de Eventos.', 'eventosgi-formularios' ) . '</p>';
 		}, 'eventosgi-formularios' );
 
 		add_settings_field( 'url_base', __( 'URL do sistema', 'eventosgi-formularios' ), array( $this, 'campo_url' ), 'eventosgi-formularios', 'eventosgi_conexao' );
@@ -95,7 +95,7 @@ class EventosGI_Admin {
 		$teste = $this->testar();
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'EventosGI — Formulários', 'eventosgi-formularios' ); ?></h1>
+			<h1><?php esc_html_e( 'EventosGI — Eventos e Formulários', 'eventosgi-formularios' ); ?></h1>
 
 			<?php if ( $teste ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $teste['tipo'] ); ?>"><p><?php echo esc_html( $teste['mensagem'] ); ?></p></div>
@@ -110,9 +110,11 @@ class EventosGI_Admin {
 			</form>
 
 			<h2><?php esc_html_e( 'Como usar', 'eventosgi-formularios' ); ?></h2>
-			<p><?php esc_html_e( 'Adicione o shortcode abaixo em qualquer post ou página, trocando o ID pelo da atividade desejada:', 'eventosgi-formularios' ); ?></p>
-			<p><code>[eventosgi_formulario id="1"]</code></p>
+			<p><?php esc_html_e( 'Adicione um destes shortcodes em qualquer post ou página, trocando o ID pelo registro desejado:', 'eventosgi-formularios' ); ?></p>
+			<p><code>[eventosgi_evento id="1"]</code> — <?php esc_html_e( 'página completa do evento', 'eventosgi-formularios' ); ?></p>
+			<p><code>[eventosgi_formulario id="1"]</code> — <?php esc_html_e( 'formulário de uma atividade', 'eventosgi-formularios' ); ?></p>
 			<p><?php esc_html_e( 'Atributos opcionais: titulo="nao" oculta o título e o subtítulo; conteudo="nao" oculta o texto livre configurado na atividade.', 'eventosgi-formularios' ); ?></p>
+			<p><?php esc_html_e( 'Na página do evento, altura="1200" altera a altura do quadro em pixels.', 'eventosgi-formularios' ); ?></p>
 
 			<h2><?php esc_html_e( 'Testar uma atividade', 'eventosgi-formularios' ); ?></h2>
 			<form method="get">

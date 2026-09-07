@@ -15,7 +15,8 @@
     @endif
     @if($permissoes->permite('eventos.pagina.visualizar'))
         {{-- Abre em outra janela: a página sai sem o layout do sistema, como será exibida. --}}
-        <a href="{{ route('eventos.pagina.visualizar', $evento) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-info listagem-acao" title="Visualizar página em outra janela" aria-label="Visualizar a página de {{ $evento->nome }}"><i class="bi bi-box-arrow-up-right"></i></a>
+        <a href="{{ route('eventos.pagina.visualizar', $evento) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-info listagem-acao" title="Visualizar página pública" aria-label="Visualizar a página pública de {{ $evento->nome }}"><i class="bi bi-box-arrow-up-right"></i></a>
+        <button type="button" class="btn btn-sm btn-outline-dark listagem-acao" title="Copiar shortcode do WordPress" aria-label="Copiar shortcode da página de {{ $evento->nome }}" data-shortcode='[eventosgi_evento id="{{ $evento->id }}"]'><i class="bi bi-wordpress"></i></button>
     @endif
     @if($permissoes->permite('eventos.visualizar'))
         <a href="{{ route('eventos.show', $evento) }}" class="btn btn-sm btn-outline-dark listagem-acao" title="Visualizar evento" aria-label="Visualizar {{ $evento->nome }}"><i class="bi bi-eye-fill"></i></a>

@@ -163,6 +163,7 @@ class AtividadeController
     public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, LimiteEnvioCodigoService $limites): RedirectResponse
     {
         abort_unless($atividade->formulario, 404);
+        if ($request->routeIs('inscricoes.publica.enviar')) abort_unless($atividade->ativo, 404);
 
         return match ((string) $request->input('acao')) {
             'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $servico, $limites),

@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name:       EventosGI — Formulários de Atividades
+ * Plugin Name:       EventosGI — Eventos e Formulários
  * Plugin URI:        https://github.com/nossafco/eventosgi
- * Description:       Exibe em qualquer post ou página o formulário de inscrição de uma atividade do sistema Gestão de Eventos, através do shortcode [eventosgi_formulario id="1"].
- * Version:           1.1.0
+ * Description:       Exibe páginas de eventos e formulários de atividades através dos shortcodes [eventosgi_evento] e [eventosgi_formulario].
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Nossa FCO
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'EVENTOSGI_FORM_VERSAO', '1.1.0' );
+define( 'EVENTOSGI_FORM_VERSAO', '1.2.0' );
 define( 'EVENTOSGI_FORM_ARQUIVO', __FILE__ );
 define( 'EVENTOSGI_FORM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EVENTOSGI_FORM_URL', plugin_dir_url( __FILE__ ) );
@@ -21,6 +21,7 @@ define( 'EVENTOSGI_FORM_OPCOES', 'eventosgi_formularios_opcoes' );
 
 require_once EVENTOSGI_FORM_DIR . 'includes/class-eventosgi-api.php';
 require_once EVENTOSGI_FORM_DIR . 'includes/class-eventosgi-shortcode.php';
+require_once EVENTOSGI_FORM_DIR . 'includes/class-eventosgi-evento.php';
 require_once EVENTOSGI_FORM_DIR . 'includes/class-eventosgi-admin.php';
 
 /**
@@ -40,6 +41,7 @@ add_action(
 	'plugins_loaded',
 	function () {
 		( new EventosGI_Shortcode() )->registrar();
+		( new EventosGI_Evento() )->registrar();
 
 		if ( is_admin() ) {
 			( new EventosGI_Admin() )->registrar();

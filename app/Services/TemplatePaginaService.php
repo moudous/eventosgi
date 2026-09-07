@@ -185,18 +185,32 @@ class TemplatePaginaService
 
         if (! is_dir($raiz)) return 0;
 
-        $registradas = TemplatePagina::query()->pluck('pasta')->all();
+        $registradas = TemplatePagina::query()->get(['id', 'pasta', 'importado_por'])->keyBy('pasta');
         $novos = 0;
 
         foreach (File::directories($raiz) as $caminho) {
             $pasta = basename($caminho);
 
-            if (in_array($pasta, $registradas, true)) continue;
             if (! is_readable($caminho.'/'.self::ENTRADA)) continue;
 
             $manifesto = [];
             if (is_readable($caminho.'/'.self::MANIFESTO)) {
                 $manifesto = json_decode((string) File::get($caminho.'/'.self::MANIFESTO), true) ?: [];
+            }
+
+            // Templates que vieram versionados com a aplicação podem evoluir sem
+            // exigir uma nova importação. Templates importados por usuários não são
+            // sobrescritos por este sincronismo.
+            if (isset($registradas[$pasta])) {
+                if ($registradas[$pasta]->importado_por === null) {
+                    $registradas[$pasta]->update([
+                        'nome' => mb_substr((string) ($manifesto['nome'] ?? $pasta), 0, 150),
+                        'descricao' => isset($manifesto['descricao']) ? mb_substr((string) $manifesto['descricao'], 0, 500) : null,
+                        'versao' => isset($manifesto['versao']) ? mb_substr((string) $manifesto['versao'], 0, 20) : null,
+                        'variaveis' => $this->variaveis($manifesto),
+                    ]);
+                }
+                continue;
             }
 
             TemplatePagina::create([
@@ -260,7 +274,7 @@ class TemplatePaginaService
      * Variaveis declaradas pelo template, normalizadas.
      *
      * @param  array<string, mixed>  $manifesto
-     * @return list<array{nome: string, rotulo: string, padrao: string}>
+     * @return list<array{nome: string, rotulo: string, padrao: string, tipo: string}>
      */
     private function variaveis(array $manifesto): array
     {
@@ -279,6 +293,7 @@ class TemplatePaginaService
                 'nome' => $nome,
                 'rotulo' => trim((string) (is_array($declarada) ? ($declarada['rotulo'] ?? $nome) : $nome)),
                 'padrao' => (string) (is_array($declarada) ? ($declarada['padrao'] ?? '') : ''),
+                'tipo' => is_array($declarada) && ($declarada['tipo'] ?? '') === 'color' ? 'color' : 'text',
             ];
         }
 
