@@ -8,18 +8,18 @@ use RuntimeException;
 /**
  * Disparo de e-mail pela API do GI.
  *
- * Existem tres caminhos, e qual deles vale depende de quem disparou:
+ * Existem tres caminhos, tentados nesta ordem:
  *
- * 1. Sessao da aplicacao externa (POST /api/integracoes/v1/email-disparos), autenticada
- *    com o access_token que o GI devolve na troca do codigo em /auth/gi. E o caminho que
- *    o gi-starter-aprova usa, e so existe enquanto ha um usuario logado pelo GI.
+ * 1. Credenciais da aplicacao (POST /api/integracoes/v1/email-disparos/aplicacao), com
+ *    client_id e client_secret. A aplicacao se identifica sozinha, entao o disparo nao
+ *    depende de haver alguem logado no GI. E o caminho de todo e-mail que sai daqui.
  *
- * 2. Credenciais da aplicacao (POST /api/integracoes/v1/email-disparos/aplicacao), com
- *    client_id e client_secret. E o caminho do formulario publico: o visitante e anonimo
- *    e nao existe access_token de sessao, mas a aplicacao se identifica sozinha.
+ * 2. Sessao da aplicacao externa (POST /api/integracoes/v1/email-disparos), autenticada
+ *    com o access_token que o GI devolve na troca do codigo em /auth/gi. So existe
+ *    enquanto ha um usuario logado pelo GI, e vale apenas sem credenciais configuradas.
  *
  * 3. Token da API GI (POST /api/v1/email-disparos), usado apenas se GI_API_TOKEN estiver
- *    definido e nao houver credenciais configuradas.
+ *    definido e nao houver nem credenciais nem sessao.
  *
  * Em todos os casos a aplicacao precisa declarar email-disparos.enviar no GI.
  */
@@ -45,10 +45,15 @@ class GiEmailService
             ...$extras,
         ], fn ($valor) => $valor !== null && $valor !== []);
 
+        // Credenciais primeiro: quem responde pelo disparo e a aplicacao, nao quem estiver
+        // logado. O access_token da sessao aparece por acaso -- o organizador abre a previa
+        // do formulario ainda logado no GI -- e falha de dois jeitos: expira em 2 horas e so
+        // carrega email-disparos.enviar se o perfil dele tiver essa permissao. Preferi-lo
+        // fazia a previa recusar o envio enquanto o formulario publico, anonimo, enviava.
+        if ($this->temCredenciais()) return $this->enviarPelasCredenciais($payload);
+
         $tokenDaSessao = $this->tokenDaSessao();
         if ($tokenDaSessao !== null) return $this->enviarPelaSessao($tokenDaSessao, $payload);
-
-        if ($this->temCredenciais()) return $this->enviarPelasCredenciais($payload);
 
         return $this->enviarPeloTokenDaApi($payload);
     }
@@ -136,9 +141,13 @@ class GiEmailService
 
     private function resultado(\Illuminate\Http\Client\Response $resposta, string $caminho): ?int
     {
+        // Status e caminho sempre na mensagem: quem le o log precisa saber qual dos tres
+        // caminhos falhou, e o visitante ve so o aviso generico de quem chamou este servico.
         if (! $resposta->successful()) {
-            throw new RuntimeException((string) ($resposta->json('message')
-                ?: "O GI respondeu HTTP {$resposta->status()} em {$caminho}."));
+            $mensagem = trim((string) $resposta->json('message'));
+
+            throw new RuntimeException("O GI respondeu HTTP {$resposta->status()} em {$caminho}"
+                .($mensagem !== '' ? ": {$mensagem}" : '.'));
         }
 
         $id = $resposta->json('data.id');
