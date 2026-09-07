@@ -21,6 +21,7 @@
 /storage/storage/inscricoes
 /storage/*.key
 /storage/pail
+/storage/framework/cache/*
 /vendor
 /backup/
 _ide_helper.php

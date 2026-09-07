@@ -1,9 +1,13 @@
 @extends('layouts.app')
 @section('title','Inscrições da atividade')
 @section('content')
-<div class="mb-4 d-flex flex-wrap gap-3 justify-content-between"><div><h1 class="page-title">Inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div><div class="d-flex gap-2 align-items-start"><div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download me-1"></i>Exportar respostas</button><ul class="dropdown-menu">@foreach(['ods' => 'Planilha (.ods)', 'csv' => 'CSV (.csv)', 'xls' => 'Excel (.xls)', 'xlsx' => 'Excel (.xlsx)'] as $formato => $rotulo)<li><a class="dropdown-item exportar-respostas" href="{{ route('atividades.inscricoes.exportar', [$atividade, $formato]) }}">{{ $rotulo }}</a></li>@endforeach</ul></div><a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a></div></div>
+<div class="mb-4 d-flex flex-wrap gap-3 justify-content-between"><div><h1 class="page-title">Inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div><div class="d-flex gap-2 align-items-start"><div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download me-1"></i>Exportar respostas</button><ul class="dropdown-menu">@foreach(['ods' => 'Planilha (.ods)', 'csv' => 'CSV (.csv)', 'xls' => 'Excel (.xls)', 'xlsx' => 'Excel (.xlsx)'] as $formato => $rotulo)<li><a class="dropdown-item exportar-respostas" href="#" data-link="{{ route('atividades.inscricoes.exportar-link', [$atividade, $formato]) }}">{{ $rotulo }}</a></li>@endforeach</ul></div><a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a></div></div>
 @php
     $campos = collect($atividade->formulario['campos'] ?? [])->keyBy('nome');
+    $participantes = App\Models\Participante::query()
+        ->whereIn('id', $inscricoes->pluck('participante_id')->filter()->unique()->all())
+        ->pluck('nome', 'id');
+    $dispositivos = app(App\Services\DispositivoVisitanteService::class);
     // Quantidade de respostas exibidas na linha; o restante fica no modal.
     $visiveis = 4;
     $linhas = [];
@@ -25,13 +29,21 @@
             $textos = [];
             $arquivos = [];
 
+            $posicao = 0;
             foreach ($valores as $item) {
                 // Stored uploads also remain accessible after their field is removed.
                 if (is_string($item) && str_starts_with($item, 'inscricoes/') && !str_contains($item, '..')) {
+                    // Disco privado: o acesso passa por rota assinada, válida por 2 horas.
+                    $assinar = fn (string $modo) => Illuminate\Support\Facades\URL::temporarySignedRoute(
+                        'inscricoes.arquivo', now()->addHours(2),
+                        ['inscricao' => $inscricao->id, 'campo' => $nome, 'indice' => $posicao, 'modo' => $modo],
+                    );
                     $arquivos[] = [
-                        'url' => Illuminate\Support\Facades\Storage::disk('public')->url($item),
+                        'url' => $assinar('visualizar'),
+                        'download' => $assinar('baixar'),
                         'extensao' => strtoupper(pathinfo($item, PATHINFO_EXTENSION)) ?: 'ARQUIVO',
                     ];
+                    $posicao++;
                 } else {
                     $textos[] = is_bool($item) ? ($item ? 'Sim' : 'Não') : (string) $item;
                 }
@@ -43,8 +55,24 @@
             }
         }
 
+        $dispositivo = $inscricao->dispositivo ?? [];
+
         $linhas[] = [
             'id' => $inscricao->id,
+            'ip' => $inscricao->ip,
+            'user_agent' => $inscricao->user_agent,
+            'dispositivo_resumo' => $dispositivos->resumo($dispositivo),
+            'dispositivo' => array_filter([
+                'Navegador' => trim(($dispositivo['navegador'] ?? '').' '.($dispositivo['navegador_versao'] ?? '')),
+                'Sistema operacional' => trim(($dispositivo['sistema'] ?? '').' '.($dispositivo['sistema_versao'] ?? '')),
+                'Aparelho' => $dispositivo['plataforma'] ?? '',
+                'Idioma' => $dispositivo['idioma'] ?? '',
+                'Origem' => $dispositivo['origem'] ?? '',
+                'Sessão' => $dispositivo['sessao'] ?? '',
+            ], 'strlen'),
+            'participante' => $participantes->get($inscricao->participante_id),
+            'participante_id' => $inscricao->participante_id,
+            'participante_email' => $inscricao->participante_email,
             'data' => $inscricao->created_at?->format('d/m/Y') ?? '—',
             'hora' => $inscricao->created_at?->format('H:i') ?? '',
             'respostas' => $respostas,
@@ -56,12 +84,28 @@
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 tabela-inscricoes">
-                <thead><tr><th>ID</th><th>Data</th><th>Respostas</th><th>Anexos</th><th class="text-end">Ações</th></tr></thead>
+                <thead><tr><th>ID</th><th>Data</th><th>Participante</th><th>Origem</th><th>Respostas</th><th>Anexos</th><th class="text-end">Ações</th></tr></thead>
                 <tbody>
                 @forelse($linhas as $linha)
                     <tr>
                         <td class="text-muted">#{{ $linha['id'] }}</td>
                         <td class="text-nowrap">{{ $linha['data'] }} <small class="text-muted">{{ $linha['hora'] }}</small></td>
+                        <td>
+                            @if($linha['participante_id'])
+                                <div class="resposta-item" style="max-width: 220px">
+                                    <span class="resposta-valor" title="{{ $linha['participante'] ?? 'Cadastro removido' }}">{{ $linha['participante'] ?? 'Cadastro removido' }}</span>
+                                    <span class="resposta-rotulo text-lowercase" title="{{ $linha['participante_email'] }}">#{{ $linha['participante_id'] }} · {{ $linha['participante_email'] ?? '—' }}</span>
+                                </div>
+                            @else
+                                <span class="text-muted small">Não identificado</span>
+                            @endif
+                        </td>
+                        <td>
+                            <div class="resposta-item" style="max-width: 190px">
+                                <span class="resposta-valor" title="{{ $linha['ip'] ?? 'IP não registrado' }}">{{ $linha['ip'] ?? '—' }}</span>
+                                <span class="resposta-rotulo rotulo-livre" title="{{ $linha['user_agent'] }}">{{ $linha['dispositivo_resumo'] }}</span>
+                            </div>
+                        </td>
                         <td>
                             @if($linha['respostas'])
                                 <div class="respostas-inline">
@@ -102,7 +146,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="text-center py-4">Nenhuma inscrição encontrada.</td></tr>
+                    <tr><td colspan="7" class="text-center py-4">Nenhuma inscrição encontrada.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -124,6 +168,9 @@
     .resposta-item { min-width: 0; max-width: 190px; }
     .resposta-rotulo { display: block; font-size: 11px; font-weight: 700; line-height: 1.3; color: #748096; text-transform: uppercase; letter-spacing: .02em; }
     .resposta-valor { display: block; overflow: hidden; font-size: 13.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+    /* Navegador e sistema operacional perdem legibilidade em caixa alta. */
+    .rotulo-livre { overflow: hidden; text-overflow: ellipsis; text-transform: none; white-space: nowrap; letter-spacing: 0; }
+    .resposta-detalhe dd:not(:last-child) { margin-bottom: 8px; }
     .resposta-detalhe { padding: 10px 14px; background: #fafbfc; border: 1px solid #eef1f5; border-radius: 10px; }
     .resposta-detalhe dt { font-size: 11px; font-weight: 700; color: #748096; text-transform: uppercase; letter-spacing: .02em; }
     .resposta-detalhe dd { margin: 2px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -139,7 +186,8 @@ document.querySelectorAll('.ver-respostas').forEach(botao => botao.addEventListe
     if (!inscricao) return;
 
     document.getElementById('respostaNumero').textContent = '#' + inscricao.id;
-    document.getElementById('respostaData').textContent = 'Enviada em ' + inscricao.data + ' às ' + inscricao.hora;
+    document.getElementById('respostaData').textContent = 'Enviada em ' + inscricao.data + ' às ' + inscricao.hora
+        + (inscricao.participante_id ? ' — ' + (inscricao.participante || 'cadastro removido') + ' (#' + inscricao.participante_id + ')' : '');
 
     const corpo = document.getElementById('respostaCorpo');
     corpo.replaceChildren();
@@ -190,30 +238,49 @@ document.querySelectorAll('.ver-respostas').forEach(botao => botao.addEventListe
         corpo.append(titulo, lista);
     });
 
+    const origem = Object.entries(inscricao.dispositivo || {});
+    if (inscricao.ip || origem.length || inscricao.user_agent) {
+        const titulo = document.createElement('div');
+        titulo.className = 'fw-semibold small text-muted text-uppercase mt-3 mb-1';
+        titulo.textContent = 'Origem do envio';
+
+        const lista = document.createElement('dl');
+        lista.className = 'resposta-detalhe mb-0';
+        const itens = inscricao.ip ? [['IP', inscricao.ip], ...origem] : origem;
+        if (inscricao.user_agent) itens.push(['User-Agent', inscricao.user_agent]);
+        itens.forEach(([rotulo, valor]) => {
+            const dt = document.createElement('dt');
+            dt.textContent = rotulo;
+            const dd = document.createElement('dd');
+            dd.textContent = valor;
+            lista.append(dt, dd);
+        });
+
+        corpo.append(titulo, lista);
+    }
+
     bootstrap.Modal.getOrCreateInstance(document.getElementById('respostaModal')).show();
 }));
 
+// Baixar por blob não funciona dentro do iframe do GI: o arquivo se perde antes de chegar
+// ao visitante. Aqui o servidor devolve uma URL assinada e um iframe oculto a carrega —
+// como a resposta vem com Content-Disposition: attachment, o navegador baixa sem sair da página.
 document.querySelectorAll('.exportar-respostas').forEach(link => link.addEventListener('click', async event => {
     event.preventDefault();
     const button = document.querySelector('.dropdown-toggle');
     if (button.disabled) return;
     button.disabled = true;
     try {
-        const response = await fetch(link.href, {credentials: 'same-origin', headers: {'Accept': 'application/octet-stream'}});
-        if (!response.ok) throw new Error('Não foi possível exportar as respostas. Verifique sua sessão e tente novamente.');
-        const disposition = response.headers.get('Content-Disposition') || '';
-        if (!disposition.includes('attachment')) throw new Error('A sessão expirou. Reabra a aplicação pelo sistema GI e tente novamente.');
-        const utf8 = disposition.match(/filename\*=utf-8''([^;]+)/i);
-        const fallback = disposition.match(/filename="([^"]+)"|filename=([^;]+)/i);
-        const filename = utf8 ? decodeURIComponent(utf8[1]) : (fallback?.[1] || fallback?.[2] || 'respostas');
-        const url = URL.createObjectURL(await response.blob());
-        const download = document.createElement('a');
-        download.href = url;
-        download.download = filename;
-        document.body.appendChild(download);
-        download.click();
-        download.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        const response = await fetch(link.dataset.link, {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+        if (!response.ok) throw new Error('A sessão expirou. Reabra a aplicação pelo sistema GI e tente novamente.');
+        const {url} = await response.json();
+        if (!url) throw new Error('Não foi possível preparar o arquivo. Tente novamente.');
+
+        const oculto = document.createElement('iframe');
+        oculto.hidden = true;
+        oculto.src = url;
+        document.body.appendChild(oculto);
+        setTimeout(() => oculto.remove(), 120000);
     } catch (error) {
         alert(error.message || 'Não foi possível baixar o arquivo. Tente novamente.');
     } finally {

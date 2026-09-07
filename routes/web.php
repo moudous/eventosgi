@@ -111,7 +111,11 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/{atividade}/formulario/preview-link', [AtividadeController::class, 'previewLink'])->middleware('gi.permission:atividades.editar')->name('formulario.preview-link');
     Route::get('/{atividade}/formulario/preview', [AtividadeController::class, 'preview'])->middleware('signed')->name('formulario.preview');
     Route::post('/{atividade}/formulario/preview', [AtividadeController::class, 'inscrever'])->middleware('signed')->name('formulario.inscrever');
-    Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('gi.permission:atividades.visualizar')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
+    Route::get('/{atividade}/inscricoes/exportar-link/{formato}', [AtividadeController::class, 'exportarLink'])->middleware('gi.permission:atividades.visualizar')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar-link');
+    // Assinada em vez de protegida por permissao: o download roda dentro do iframe do GI,
+    // onde o cookie de sessao pode nao acompanhar a requisicao. Quem gera o link ja passou
+    // pela permissao em inscricoes.exportar-link.
+    Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
     Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.visualizar')->name('inscricoes');
     Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.visualizar')->name('historico');
     Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
@@ -121,6 +125,17 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::put('/{atividade}', [AtividadeController::class, 'update'])->middleware('gi.permission:atividades.editar')->name('update');
     Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');
 });
+
+// Anexos das inscricoes: ficam em disco privado e so saem por aqui, com URL assinada
+// gerada na tela de inscricoes (que exige atividades.visualizar).
+Route::get('/inscricoes/{inscricao}/arquivos/{campo}/{indice}/{modo}', [AtividadeController::class, 'arquivoInscricao'])
+    ->middleware('signed')
+    ->whereNumber('indice')
+    // O nome do campo vem do construtor de formularios e pode ter acento; so a barra e
+    // barrada, para nao confundir o roteador. Quem valida o caminho do arquivo e o controller.
+    ->where('campo', '[^/]+')
+    ->whereIn('modo', ['visualizar', 'baixar'])
+    ->name('inscricoes.arquivo');
 
 Route::prefix('participantes')->name('participantes.')->group(function (): void {
     Route::get('/', [ParticipanteController::class, 'index'])->middleware('gi.permission:participantes.listar')->name('index');

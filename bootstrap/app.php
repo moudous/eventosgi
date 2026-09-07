@@ -15,7 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/health',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->append(AllowGiEmbedding::class);
+        // Precisa rodar dentro do grupo web: depende da sessao (StartSession) e da rota ja resolvida.
+        $middleware->web(append: [AllowGiEmbedding::class]);
         $middleware->alias([
             'gi.permission' => RequireGiPermission::class,
             'formulario.token' => VerificarTokenFormulario::class,

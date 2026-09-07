@@ -3,24 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Atividade;
+use App\Models\Participante;
+use App\Rules\EmailValido;
 use App\Services\FormularioInscricaoService;
+use App\Services\IdentificacaoParticipanteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class FormularioPublicoController
 {
-    public function __construct(private readonly FormularioInscricaoService $inscricoes) {}
+    public function __construct(
+        private readonly FormularioInscricaoService $inscricoes,
+        private readonly IdentificacaoParticipanteService $identificacao,
+    ) {}
 
     /**
      * Estrutura do formulario para que consumidores externos (ex.: WordPress) o renderizem.
      */
-    public function mostrar(Atividade $atividade): JsonResponse
+    public function mostrar(Request $request, Atividade $atividade): JsonResponse
     {
-        abort_unless($atividade->formulario, 404, 'Esta atividade não possui formulário publicado.');
-        abort_unless($atividade->ativo, 404, 'Esta atividade não está ativa.');
+        $this->conferirAtividade($atividade);
 
         $config = $atividade->formulario;
         $estado = $this->inscricoes->estado($atividade);
+        $identificado = $this->identificado($request, $atividade);
 
         return response()->json([
             'atividade' => [
@@ -48,16 +54,151 @@ class FormularioPublicoController
                 'validacao' => $campo['validacao'] ?? '',
             ], array_filter($config['campos'] ?? [], fn ($campo) => ! empty($campo['nome'])))),
             'estado' => $estado,
+            // Identificacao por e-mail: o consumidor externo exibe esta etapa antes dos campos.
+            //
+            // "estado" acima nao depende de quem esta olhando, para o consumidor poder guardar
+            // a estrutura em cache; o que varia por visitante fica aqui e so vem com o token.
+            'identificacao' => [
+                'obrigatoria' => true,
+                'minutos_validade' => IdentificacaoParticipanteService::MINUTOS_VALIDADE,
+                'campos_participante' => $this->inscricoes->camposDoParticipante(),
+                'campo_isca' => IdentificacaoParticipanteService::CAMPO_ISCA,
+                'participante' => $identificado ? $this->dados($identificado['participante'], $identificado['email']) : null,
+                'ja_inscrito' => $identificado
+                    ? $this->inscricoes->jaInscrito($atividade, $identificado['participante'], $identificado['email'])
+                    : false,
+                'mensagem_ja_inscrito' => $atividade->mensagemJaInscrito(),
+            ],
         ]);
     }
 
-    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico): JsonResponse
+    /** Gera e envia por e-mail o codigo de inscricao. */
+    public function solicitarCodigo(Request $request, Atividade $atividade): JsonResponse
+    {
+        $this->conferirAtividade($atividade);
+
+        $dados = $request->validate(
+            ['email' => ['required', 'max:150', new EmailValido]],
+            ['required' => 'Informe o seu e-mail.'],
+            ['email' => 'e-mail'],
+        );
+
+        $email = mb_strtolower(trim($dados['email']));
+
+        // Robo que caiu na isca recebe a mesma resposta de sempre, sem disparo nenhum.
+        if ($this->identificacao->pareceRobo($request)) {
+            return response()->json([
+                'email' => $email,
+                'expira_em' => now()->addMinutes(IdentificacaoParticipanteService::MINUTOS_VALIDADE)->toIso8601String(),
+                'mensagem' => 'O código de inscrição foi enviado para seu email.',
+            ], 202);
+        }
+
+        $resultado = $this->identificacao->solicitarCodigo($request, $atividade, $email);
+
+        return response()->json([
+            'email' => $resultado['email'],
+            'expira_em' => $resultado['expira_em']->toIso8601String(),
+            'mensagem' => 'O código de inscrição foi enviado para seu email.',
+        ], 202);
+    }
+
+    /**
+     * Confere o codigo e devolve o token que identifica o visitante nas chamadas seguintes.
+     */
+    public function identificar(Request $request, Atividade $atividade): JsonResponse
+    {
+        $this->conferirAtividade($atividade);
+
+        $dados = $request->validate(
+            ['email' => ['required', 'max:150', new EmailValido], 'codigo' => ['required', 'string', 'max:10']],
+            ['required' => 'Informe o e-mail e o código recebido.'],
+            ['email' => 'e-mail', 'codigo' => 'código'],
+        );
+
+        $resultado = $this->identificacao->emitirToken($atividade, $dados['email'], $dados['codigo']);
+        $email = mb_strtolower(trim($dados['email']));
+
+        return response()->json([
+            'token' => $resultado['token'],
+            'expira_em' => $resultado['expira_em']->toIso8601String(),
+            'criado' => $resultado['criado'],
+            'unificados' => $resultado['unificados'],
+            'ja_inscrito' => $this->inscricoes->jaInscrito($atividade, $resultado['participante'], $email),
+            'mensagem_ja_inscrito' => $atividade->mensagemJaInscrito(),
+            'participante' => $this->dados($resultado['participante'], $email),
+        ]);
+    }
+
+    /** Dados do visitante identificado, para recompor o formulario a cada exibicao. */
+    public function identificacao(Request $request, Atividade $atividade): JsonResponse
+    {
+        $this->conferirAtividade($atividade);
+        $identificado = $this->identificado($request, $atividade);
+
+        abort_unless($identificado, 401, 'Identificação expirada. Confirme o seu e-mail novamente.');
+
+        return response()->json([
+            'participante' => $this->dados($identificado['participante'], $identificado['email']),
+            'ja_inscrito' => $this->inscricoes->jaInscrito($atividade, $identificado['participante'], $identificado['email']),
+            'mensagem_ja_inscrito' => $atividade->mensagemJaInscrito(),
+        ]);
+    }
+
+    /** Encerra a identificacao para que o visitante recomece com outro e-mail. */
+    public function encerrarIdentificacao(Request $request, Atividade $atividade): JsonResponse
+    {
+        $this->conferirAtividade($atividade);
+        $this->identificacao->revogarToken($atividade, $this->token($request));
+
+        return response()->json(['mensagem' => 'Identificação encerrada.']);
+    }
+
+    public function inscrever(Request $request, Atividade $atividade): JsonResponse
+    {
+        $this->conferirAtividade($atividade);
+        $identificado = $this->identificado($request, $atividade);
+
+        abort_unless($identificado, 401, 'Identificação expirada. Confirme o seu e-mail novamente.');
+
+        $resultado = $this->inscricoes->inscrever($request, $atividade, $identificado['participante'], $identificado['email']);
+
+        if ($resultado['sucesso']) $this->identificacao->revogarToken($atividade, $this->token($request));
+
+        return response()->json($resultado, $resultado['sucesso'] ? 201 : 422);
+    }
+
+    private function conferirAtividade(Atividade $atividade): void
     {
         abort_unless($atividade->formulario, 404, 'Esta atividade não possui formulário publicado.');
         abort_unless($atividade->ativo, 404, 'Esta atividade não está ativa.');
+    }
 
-        $resultado = $servico->inscrever($request, $atividade);
+    /**
+     * @return array{participante: Participante, email: string}|null
+     */
+    private function identificado(Request $request, Atividade $atividade): ?array
+    {
+        return $this->identificacao->porToken($atividade, $this->token($request));
+    }
 
-        return response()->json($resultado, $resultado['sucesso'] ? 201 : 422);
+    private function token(Request $request): string
+    {
+        return (string) ($request->header('X-Identificacao-Token') ?: $request->input('identificacao_token', ''));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dados(Participante $participante, string $email): array
+    {
+        return [
+            'id' => (int) $participante->id,
+            'email' => $email,
+            ...array_map(
+                fn (string $campo) => $participante->getAttribute($campo),
+                array_combine(FormularioInscricaoService::CAMPOS_PARTICIPANTE, FormularioInscricaoService::CAMPOS_PARTICIPANTE),
+            ),
+        ];
     }
 }

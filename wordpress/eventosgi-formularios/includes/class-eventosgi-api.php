@@ -62,6 +62,72 @@ class EventosGI_Api {
 	}
 
 	/**
+	 * Pede o envio do código de inscrição para o e-mail informado.
+	 *
+	 * @param int    $atividade_id ID da atividade.
+	 * @param string $email        E-mail digitado pelo visitante.
+	 * @return array|WP_Error
+	 */
+	public function solicitar_codigo( $atividade_id, $email ) {
+		return $this->requisitar(
+			'POST',
+			'/api/v1/formularios/' . (int) $atividade_id . '/identificacao/codigo',
+			array( 'email' => $email )
+		);
+	}
+
+	/**
+	 * Confere o código e devolve o token que identifica o visitante nas chamadas seguintes.
+	 *
+	 * @param int    $atividade_id ID da atividade.
+	 * @param string $email        E-mail informado.
+	 * @param string $codigo       Código recebido por e-mail.
+	 * @return array|WP_Error
+	 */
+	public function identificar( $atividade_id, $email, $codigo ) {
+		return $this->requisitar(
+			'POST',
+			'/api/v1/formularios/' . (int) $atividade_id . '/identificacao',
+			array(
+				'email'  => $email,
+				'codigo' => $codigo,
+			)
+		);
+	}
+
+	/**
+	 * Dados do participante por trás de um token, para recompor o formulário.
+	 *
+	 * @param int    $atividade_id ID da atividade.
+	 * @param string $token        Token devolvido por identificar().
+	 * @return array|WP_Error
+	 */
+	public function identificacao( $atividade_id, $token ) {
+		return $this->requisitar(
+			'GET',
+			'/api/v1/formularios/' . (int) $atividade_id . '/identificacao',
+			null,
+			array( 'X-Identificacao-Token' => $token )
+		);
+	}
+
+	/**
+	 * Invalida o token para o visitante recomeçar com outro e-mail.
+	 *
+	 * @param int    $atividade_id ID da atividade.
+	 * @param string $token        Token a invalidar.
+	 * @return array|WP_Error
+	 */
+	public function encerrar_identificacao( $atividade_id, $token ) {
+		return $this->requisitar(
+			'DELETE',
+			'/api/v1/formularios/' . (int) $atividade_id . '/identificacao',
+			null,
+			array( 'X-Identificacao-Token' => $token )
+		);
+	}
+
+	/**
 	 * Envia uma inscrição. Os arquivos vêm no formato do $_FILES do WordPress.
 	 *
 	 * @param int   $atividade_id ID da atividade.
@@ -69,7 +135,7 @@ class EventosGI_Api {
 	 * @param array $arquivos     Pares nome => array( 'name', 'type', 'tmp_name' ) ou lista deles.
 	 * @return array|WP_Error
 	 */
-	public function inscrever( $atividade_id, array $campos, array $arquivos = array() ) {
+	public function inscrever( $atividade_id, array $campos, array $arquivos = array(), $token = '' ) {
 		$atividade_id = (int) $atividade_id;
 		$fronteira    = 'eventosgi' . wp_generate_password( 24, false );
 		$corpo        = $this->montar_multipart( $campos, $arquivos, $fronteira );
@@ -82,7 +148,10 @@ class EventosGI_Api {
 			'POST',
 			"/api/v1/formularios/{$atividade_id}/inscricoes",
 			$corpo,
-			array( 'Content-Type' => 'multipart/form-data; boundary=' . $fronteira )
+			array(
+				'Content-Type'          => 'multipart/form-data; boundary=' . $fronteira,
+				'X-Identificacao-Token' => $token,
+			)
 		);
 	}
 
@@ -135,6 +204,11 @@ class EventosGI_Api {
 			return new WP_Error( 'eventosgi_sem_config', __( 'Informe a URL do sistema de eventos e o token da API nos ajustes do plugin.', 'eventosgi-formularios' ) );
 		}
 
+		if ( is_array( $corpo ) ) {
+			$cabecalhos['Content-Type'] = 'application/json';
+			$corpo                      = wp_json_encode( $corpo );
+		}
+
 		$argumentos = array(
 			'method'  => $metodo,
 			'timeout' => 20,
@@ -143,7 +217,8 @@ class EventosGI_Api {
 					'X-Formulario-Token' => $this->token,
 					'Accept'             => 'application/json',
 				),
-				$cabecalhos
+				$this->cabecalhos_do_visitante(),
+				array_filter( $cabecalhos, 'strlen' )
 			),
 		);
 
@@ -171,6 +246,37 @@ class EventosGI_Api {
 			: sprintf( /* translators: %d: código HTTP. */ __( 'O sistema de eventos respondeu com o código %d.', 'eventosgi-formularios' ), $status );
 
 		return new WP_Error( 'eventosgi_http_' . $status, $mensagem, is_array( $dados ) ? $dados : array() );
+	}
+
+	/**
+	 * Quem chama a API é este servidor, então o IP e o navegador que chegariam lá seriam os
+	 * dele. Estes cabeçalhos repassam os do visitante, e o sistema de eventos só confia
+	 * neles porque a chamada vai assinada com o token da API.
+	 *
+	 * @return array<string, string>
+	 */
+	private function cabecalhos_do_visitante() {
+		$cabecalhos = array();
+
+		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+			$cabecalhos['X-Visitante-Ip'] = $ip;
+		}
+
+		if ( ! empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
+			$cabecalhos['X-Visitante-User-Agent'] = substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 512 );
+		}
+
+		if ( ! empty( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) ) {
+			$cabecalhos['X-Visitante-Idioma'] = substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) ), 0, 100 );
+		}
+
+		$origem = home_url( add_query_arg( array() ) );
+		if ( $origem ) {
+			$cabecalhos['X-Visitante-Origem'] = substr( $origem, 0, 255 );
+		}
+
+		return $cabecalhos;
 	}
 
 	/** Remove todos os formulários guardados em cache. */

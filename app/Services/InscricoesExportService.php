@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Atividade;
 use App\Models\InscricaoAtividade;
+use App\Models\Participante;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Writer\Csv;
@@ -28,11 +29,34 @@ class InscricoesExportService
                 $campos[$chave] ??= $chave;
             }
         }
-        $linhas = [['ID', 'Data da inscrição', ...array_values($campos)]];
+        $participantes = Participante::query()
+            ->whereIn('id', $inscricoes->pluck('participante_id')->filter()->unique()->all())
+            ->pluck('nome', 'id');
+
+        $linhas = [['ID', 'Data da inscrição', 'Participante', 'ID do participante', 'E-mail identificado', ...array_values($campos),
+            'IP', 'Navegador', 'Sistema operacional', 'Aparelho', 'Idioma', 'Origem', 'Sessão', 'User-Agent']];
         foreach ($inscricoes as $inscricao) {
-            $linha = [(string) $inscricao->id, $inscricao->created_at?->format('d/m/Y H:i:s') ?? ''];
+            $dispositivo = $inscricao->dispositivo ?? [];
+            $linha = [
+                (string) $inscricao->id,
+                $inscricao->created_at?->format('d/m/Y H:i:s') ?? '',
+                (string) $participantes->get($inscricao->participante_id, ''),
+                $inscricao->participante_id ? (string) $inscricao->participante_id : '',
+                (string) ($inscricao->participante_email ?? ''),
+            ];
             foreach ($campos as $chave => $label) $linha[] = $this->texto($inscricao->resposta[$chave] ?? '');
-            $linhas[] = $linha;
+
+            // Origem tecnica fica depois das respostas para nao empurrar as colunas do formulario.
+            $linhas[] = [...$linha,
+                (string) ($inscricao->ip ?? ''),
+                trim(($dispositivo['navegador'] ?? '').' '.($dispositivo['navegador_versao'] ?? '')),
+                trim(($dispositivo['sistema'] ?? '').' '.($dispositivo['sistema_versao'] ?? '')),
+                (string) ($dispositivo['plataforma'] ?? ''),
+                (string) ($dispositivo['idioma'] ?? ''),
+                (string) ($dispositivo['origem'] ?? ''),
+                (string) ($dispositivo['sessao'] ?? ''),
+                (string) ($inscricao->user_agent ?? ''),
+            ];
         }
         $nome = preg_replace('/[\x00-\x1F\x7F\/\\\\:*?"<>|]/u', '-', $atividade->nome);
         $nome = mb_substr(trim($nome, ' .'), 0, 120) ?: 'Atividade';

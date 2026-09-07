@@ -6,8 +6,10 @@ use App\Models\Atividade;
 use App\Models\Evento;
 use App\Models\HistoricoAtividade;
 use App\Models\InscricaoAtividade;
+use App\Rules\EmailValido;
 use App\Services\ArmazemService;
 use App\Services\FormularioInscricaoService;
+use App\Services\IdentificacaoParticipanteService;
 use App\Services\GiPermissionService;
 use App\Services\PluginWordpressService;
 use App\Services\HistoricoService;
@@ -15,7 +17,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Validator;
 
 class AtividadeController
 {
@@ -69,6 +74,7 @@ class AtividadeController
             'config.limitar_inscricoes' => ['sometimes', 'boolean'],
             'config.limite_inscricoes' => ['required_if:config.limitar_inscricoes,true', 'nullable', 'integer', 'min:1'],
             'config.mensagem_vagas_esgotadas' => ['nullable', 'string', 'max:2000'],
+            'config.mensagem_ja_inscrito' => ['nullable', 'string', 'max:2000'],
         ], [
             'config.limite_inscricoes.required_if' => 'Informe a quantidade de inscrições disponíveis ao ativar o limite.',
             'config.limite_inscricoes.integer' => 'A quantidade de inscrições deve ser um número inteiro.',
@@ -76,29 +82,178 @@ class AtividadeController
         ]);
         if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
         $config['mensagem_vagas_esgotadas'] = trim($config['mensagem_vagas_esgotadas'] ?? '') ?: Atividade::MENSAGEM_VAGAS_ESGOTADAS;
+        $config['mensagem_ja_inscrito'] = trim($config['mensagem_ja_inscrito'] ?? '') ?: Atividade::MENSAGEM_JA_INSCRITO;
         $atividade->update(['formulario' => $config]);
         return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
     }
-    public function preview(Request $request, Atividade $atividade): View
+    public function preview(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico): View
     {
         abort_unless($atividade->formulario, 404);
-        return view('atividades.formulario-publico', ['atividade' => $atividade, 'config' => $atividade->formulario]);
+
+        $sessao = $identificacao->daSessao($request, $atividade);
+        $participante = $sessao ? $identificacao->participanteDaSessao($request, $atividade) : null;
+
+        // O cadastro pode ter sido removido ou unificado depois da identificacao.
+        if ($sessao && ! $participante) {
+            $identificacao->esquecer($request, $atividade);
+            $sessao = null;
+        }
+
+        return view('atividades.formulario-publico', [
+            'atividade' => $atividade,
+            'config' => $atividade->formulario,
+            'identificacao' => $sessao,
+            'participante' => $participante,
+            'estado' => $servico->estado($atividade, $participante, $sessao['email'] ?? null),
+        ]);
     }
     public function previewRedirect(Atividade $atividade): RedirectResponse
     {
         return redirect()->to(URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade));
     }
-    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico): RedirectResponse
+
+    /**
+     * Unico destino POST do formulario publico. A URL e assinada, entao as etapas de
+     * identificacao (pedir codigo, conferir codigo, trocar de e-mail) reaproveitam a
+     * mesma assinatura e se distinguem pelo campo "acao".
+     */
+    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao): RedirectResponse
     {
-        $resultado = $servico->inscrever($request, $atividade);
-        if ($resultado['sucesso']) return back()->with('status', $resultado['mensagem']);
+        abort_unless($atividade->formulario, 404);
+
+        return match ((string) $request->input('acao')) {
+            'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao),
+            'validar_codigo' => $this->validarCodigo($request, $atividade, $identificacao),
+            'trocar_email' => $this->trocarEmail($request, $atividade, $identificacao),
+            default => $this->registrarInscricao($request, $atividade, $servico, $identificacao),
+        };
+    }
+
+    private function trocarEmail(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    {
+        $identificacao->esquecer($request, $atividade);
+
+        return back();
+    }
+
+    private function solicitarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    {
+        // validateWithBag: a etapa de identificacao exibe apenas o bag "identificacao".
+        $dados = Validator::make(
+            $request->all(),
+            ['email' => ['required', 'max:150', new EmailValido]],
+            ['required' => 'Informe o seu e-mail.'],
+            ['email' => 'e-mail'],
+        )->validateWithBag('identificacao');
+        $email = mb_strtolower(trim($dados['email']));
+
+        // Robo que caiu na isca recebe a mesma tela de sempre, sem disparo nenhum.
+        if (! $identificacao->pareceRobo($request)) {
+            $identificacao->solicitarCodigo($request, $atividade, $email);
+        }
+
+        return back()->with('codigo_enviado', $email);
+    }
+
+    private function validarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    {
+        $dados = Validator::make(
+            $request->all(),
+            ['email' => ['required', 'max:150', new EmailValido], 'codigo' => ['required', 'string', 'max:10']],
+            ['required' => 'Informe o e-mail e o código recebido.'],
+            ['email' => 'e-mail', 'codigo' => 'código'],
+        )->validateWithBag('identificacao');
+        $resultado = $identificacao->validarCodigo($request, $atividade, $dados['email'], $dados['codigo']);
+
+        $participante = $identificacao->participanteDaSessao($request, $atividade);
+        if ($participante && app(FormularioInscricaoService::class)->jaInscrito($atividade, $participante, $dados['email'])) {
+            return back()->with('identificado', $atividade->mensagemJaInscrito());
+        }
+
+        $aviso = $resultado['unificados'] > 0
+            ? 'Encontramos '.($resultado['unificados'] + 1).' cadastros com este e-mail e eles foram unificados. Confira os dados abaixo.'
+            : ($resultado['criado']
+                ? 'E-mail confirmado. Complete o seu cadastro abaixo.'
+                : 'E-mail confirmado. Confira e complete os seus dados abaixo.');
+
+        return back()->with('identificado', $aviso);
+    }
+
+    private function registrarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    {
+        $sessao = $identificacao->daSessao($request, $atividade);
+        $participante = $identificacao->participanteDaSessao($request, $atividade);
+
+        if (! $sessao || ! $participante) {
+            $identificacao->esquecer($request, $atividade);
+
+            return back()->with('identificacao_expirada', 'Confirme o seu e-mail novamente para enviar a inscrição.');
+        }
+
+        $resultado = $servico->inscrever($request, $atividade, $participante, $sessao['email']);
+        if ($resultado['sucesso']) {
+            $identificacao->esquecer($request, $atividade);
+
+            return back()->with('status', $resultado['mensagem']);
+        }
         if ($resultado['motivo'] === 'esgotado') return back()->with('vagas_esgotadas', $resultado['mensagem']);
         abort(403, $resultado['mensagem']);
     }
     public function inscricoes(Atividade $atividade): View { return view('atividades.inscricoes', ['atividade' => $atividade, 'inscricoes' => InscricaoAtividade::where('atividade_id', $atividade->id)->latest()->paginate(20)]); }
+
+    /**
+     * URL assinada e temporaria da planilha de respostas.
+     *
+     * O download acontece por navegacao para esta URL, e nao por fetch mais blob: dentro
+     * do iframe do GI o blob nao chega ao visitante. A assinatura tambem dispensa o cookie
+     * de sessao, que um navegador pode recusar num iframe de outro dominio.
+     */
+    public function exportarLink(Atividade $atividade, string $formato): JsonResponse
+    {
+        abort_unless(in_array($formato, ['csv', 'ods', 'xls', 'xlsx'], true), 404);
+
+        return response()->json([
+            'url' => URL::temporarySignedRoute('atividades.inscricoes.exportar', now()->addMinutes(10), [$atividade, $formato]),
+        ]);
+    }
+
     public function exportarInscricoes(Atividade $atividade, string $formato)
     {
         return app(\App\Services\InscricoesExportService::class)->download($atividade, $formato);
+    }
+
+    /**
+     * Entrega um anexo enviado na inscricao.
+     *
+     * Os anexos ficam em disco privado; esta e a unica porta para eles, sempre por URL
+     * assinada gerada na tela de inscricoes, que ja exige permissao.
+     */
+    public function arquivoInscricao(InscricaoAtividade $inscricao, string $campo, int $indice, string $modo): StreamedResponse
+    {
+        $valores = $inscricao->resposta[$campo] ?? null;
+        $caminho = is_array($valores) ? ($valores[$indice] ?? null) : ($indice === 0 ? $valores : null);
+
+        abort_unless(is_string($caminho) && $caminho !== '', 404);
+        abort_if(str_contains($caminho, '..'), 404);
+        abort_unless(str_starts_with($caminho, FormularioInscricaoService::PASTA_ANEXOS.'/'), 404);
+
+        $disco = Storage::disk(FormularioInscricaoService::DISCO_ANEXOS);
+        // Anexos anteriores a mudanca para disco privado podem ter ficado no disco publico.
+        if (! $disco->exists($caminho)) $disco = Storage::disk('public');
+        abort_unless($disco->exists($caminho), 404);
+
+        // HTML e SVG enviados por terceiros virariam script rodando na origem da aplicacao,
+        // entao so tipos inertes abrem embutidos; o resto e sempre baixado.
+        $tipo = (string) $disco->mimeType($caminho);
+        $podeExibir = str_starts_with($tipo, 'image/') && $tipo !== 'image/svg+xml'
+            || $tipo === 'application/pdf' || $tipo === 'text/plain';
+
+        return $disco->response($caminho, basename($caminho), [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+            // Conteudo de terceiros: nada de script, nada de requisicao para fora.
+            'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; media-src 'self'; object-src 'self'; style-src 'unsafe-inline'; sandbox",
+        ], ($modo === 'baixar' || ! $podeExibir) ? 'attachment' : 'inline');
     }
     public function baixarPlugin(PluginWordpressService $plugin) { return $plugin->download(); }
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }

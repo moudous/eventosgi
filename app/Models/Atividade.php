@@ -18,6 +18,8 @@ class Atividade extends Model
 
     public const MENSAGEM_VAGAS_ESGOTADAS = 'Todas as vagas para esta atividade foram preenchidas. Agradecemos seu interesse e esperamos você nas próximas oportunidades!';
 
+    public const MENSAGEM_JA_INSCRITO = 'Você já está inscrito nesta atividade. Cada participante pode se inscrever uma única vez.';
+
     public function inscricoes(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(InscricaoAtividade::class);
@@ -32,6 +34,11 @@ class Atividade extends Model
     public function mensagemVagasEsgotadas(): string
     {
         return trim($this->formulario['mensagem_vagas_esgotadas'] ?? '') ?: self::MENSAGEM_VAGAS_ESGOTADAS;
+    }
+
+    public function mensagemJaInscrito(): string
+    {
+        return trim($this->formulario['mensagem_ja_inscrito'] ?? '') ?: self::MENSAGEM_JA_INSCRITO;
     }
 
     public function evento(): BelongsTo

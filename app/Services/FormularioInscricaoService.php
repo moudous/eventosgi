@@ -4,20 +4,46 @@ namespace App\Services;
 
 use App\Models\Atividade;
 use App\Models\InscricaoAtividade;
+use App\Models\Participante;
+use App\Rules\Cpf;
+use App\Rules\EmailValido;
+use App\Rules\NomeCompleto;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 class FormularioInscricaoService
 {
+    public function __construct(private readonly DispositivoVisitanteService $dispositivo) {}
+
+    /** Disco privado dos anexos: fora de public/, para nao serem servidos direto pelo servidor web. */
+    public const DISCO_ANEXOS = 'local';
+
+    /** Pasta dos anexos dentro do disco. Mantida igual a antiga para os caminhos ja gravados continuarem valendo. */
+    public const PASTA_ANEXOS = 'inscricoes';
+
+    /** Campos de participantes que o visitante completa antes dos campos da atividade. */
+    public const CAMPOS_PARTICIPANTE = ['nome', 'cpf', 'sexo', 'instituicao_ensino', 'email2', 'email_institucional', 'grupo'];
+
     /**
-     * Estado atual do formulario: se aceita inscricoes e, se nao aceitar, o motivo.
+     * Estado atual do formulario: se aceita inscricoes e, se nao aceitar, o motivo
+     * (duplicada, antes, fechado ou esgotado).
+     *
+     * O participante e opcional porque so o fluxo identificado consegue saber se
+     * aquela pessoa ja se inscreveu.
      *
      * @return array{aberto: bool, motivo: ?string, mensagem: ?string}
      */
-    public function estado(Atividade $atividade): array
+    public function estado(Atividade $atividade, ?Participante $participante = null, ?string $email = null): array
     {
         $config = $atividade->formulario ?? [];
         $agora = now();
+
+        // Antes das datas e das vagas: quem já se inscreveu não deve nem ver o formulário.
+        if ($participante && $this->jaInscrito($atividade, $participante, $email)) {
+            return ['aberto' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito()];
+        }
 
         if (! empty($config['abertura']) && $agora->lt($config['abertura'])) {
             return ['aberto' => false, 'motivo' => 'antes', 'mensagem' => $config['mensagem_antes'] ?? 'As inscrições ainda não foram abertas.'];
@@ -58,12 +84,78 @@ class FormularioInscricaoService
                 if (! empty($campo['aceitos'])) $regras[$destino][] = 'mimes:'.implode(',', $campo['aceitos']);
             }
 
-            if (($campo['validacao'] ?? '') === 'email') $regras[$campo['nome']][] = 'email';
-            if (($campo['validacao'] ?? '') === 'cpf') $regras[$campo['nome']][] = 'regex:/^\d{11}$/';
+            if (($campo['validacao'] ?? '') === 'email') $regras[$campo['nome']][] = new EmailValido;
+            if (($campo['validacao'] ?? '') === 'cpf') $regras[$campo['nome']][] = new Cpf;
             if (($campo['validacao'] ?? '') === 'telefone') $regras[$campo['nome']][] = 'regex:/^[0-9()+\s-]{8,20}$/';
         }
 
         return $regras;
+    }
+
+    /**
+     * Se este participante ja tem inscricao nesta atividade.
+     *
+     * Confere tambem pelo e-mail identificado: inscricoes gravadas antes de uma unificacao
+     * de cadastros podem ter ficado com outro participante_id, mas o e-mail e o mesmo.
+     */
+    public function jaInscrito(Atividade $atividade, ?Participante $participante, ?string $email = null): bool
+    {
+        $email = trim((string) ($email ?: $participante?->email));
+
+        if (! $participante && $email === '') return false;
+
+        return InscricaoAtividade::query()
+            ->where('atividade_id', $atividade->id)
+            ->where(function ($consulta) use ($participante, $email): void {
+                if ($participante) $consulta->orWhere('participante_id', $participante->id);
+                if ($email !== '') $consulta->orWhere('participante_email', $email);
+            })
+            ->exists();
+    }
+
+    /**
+     * Definicao do bloco "Seus dados", usada tanto pela tela desta aplicacao quanto pela
+     * API que descreve o formulario a consumidores externos (plugin do WordPress), para
+     * que rotulos e obrigatoriedade nao divirjam entre as duas.
+     *
+     * "colunas" e a largura em uma grade de 12, seguida por ambas as telas.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function camposDoParticipante(): array
+    {
+        return [
+            ['nome' => 'nome', 'label' => 'Nome completo', 'tipo' => 'text', 'obrigatorio' => true, 'colunas' => 8,
+                'maxlength' => 100, 'placeholder' => 'Nome e sobrenome', 'ajuda' => '', 'opcoes' => []],
+            ['nome' => 'cpf', 'label' => 'CPF', 'tipo' => 'text', 'obrigatorio' => true, 'colunas' => 4,
+                'maxlength' => 14, 'placeholder' => '000.000.000-00', 'ajuda' => '', 'opcoes' => []],
+            ['nome' => 'email2', 'label' => 'E-mail alternativo', 'tipo' => 'email', 'obrigatorio' => false, 'colunas' => 4,
+                'maxlength' => 150, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
+            ['nome' => 'email_institucional', 'label' => 'E-mail institucional', 'tipo' => 'email', 'obrigatorio' => false, 'colunas' => 4,
+                'maxlength' => 150, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
+            ['nome' => 'instituicao_ensino', 'label' => 'Instituição de ensino', 'tipo' => 'text', 'obrigatorio' => false, 'colunas' => 6,
+                'maxlength' => 80, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
+            ['nome' => 'sexo', 'label' => 'Sexo', 'tipo' => 'select', 'obrigatorio' => false, 'colunas' => 3,
+                'maxlength' => 1, 'placeholder' => 'Não informado', 'ajuda' => '', 'opcoes' => ['M' => 'Masculino', 'F' => 'Feminino']],
+            ['nome' => 'grupo', 'label' => 'Grupo', 'tipo' => 'text', 'obrigatorio' => false, 'colunas' => 3,
+                'maxlength' => 1, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
+        ];
+    }
+
+    /**
+     * Regras do bloco "Seus dados", preenchido apenas quando ha participante identificado.
+     */
+    public function regrasParticipante(): array
+    {
+        return [
+            'participante.nome' => ['required', 'string', 'max:100', new NomeCompleto],
+            'participante.cpf' => ['required', new Cpf],
+            'participante.sexo' => ['nullable', 'in:M,F'],
+            'participante.instituicao_ensino' => ['nullable', 'string', 'max:80'],
+            'participante.email2' => ['nullable', 'max:150', new EmailValido],
+            'participante.email_institucional' => ['nullable', 'max:150', new EmailValido],
+            'participante.grupo' => ['nullable', 'string', 'max:1'],
+        ];
     }
 
     /**
@@ -115,36 +207,98 @@ class FormularioInscricaoService
             $atributos[$campo['nome'].'.*'] = $rotulo;
         }
 
-        return $atributos;
+        return $atributos + [
+            'participante.nome' => 'nome completo',
+            'participante.cpf' => 'CPF',
+            'participante.sexo' => 'sexo',
+            'participante.instituicao_ensino' => 'instituição de ensino',
+            'participante.email2' => 'e-mail alternativo',
+            'participante.email_institucional' => 'e-mail institucional',
+            'participante.grupo' => 'grupo',
+        ];
+    }
+
+    /**
+     * Reduz os CPFs a digitos antes da validacao: o visitante pode digitar 000.000.000-00,
+     * mas a coluna guarda apenas os 11 numeros.
+     */
+    private function normalizarCpfs(Request $request, Atividade $atividade, bool $comParticipante): void
+    {
+        if ($comParticipante && is_array($participante = $request->input('participante')) && isset($participante['cpf'])) {
+            $participante['cpf'] = $this->apenasDigitos($participante['cpf']);
+            $request->merge(['participante' => $participante]);
+        }
+
+        foreach (($atividade->formulario['campos'] ?? []) as $campo) {
+            if (($campo['validacao'] ?? '') !== 'cpf' || empty($campo['nome'])) continue;
+            if ($request->has($campo['nome'])) {
+                $request->merge([$campo['nome'] => $this->apenasDigitos($request->input($campo['nome']))]);
+            }
+        }
+    }
+
+    private function apenasDigitos(mixed $valor): mixed
+    {
+        if (! is_scalar($valor)) return $valor;
+
+        $texto = trim((string) $valor);
+        $digitos = preg_replace('/\D/', '', $texto) ?? '';
+
+        // Sem nenhum digito, devolve o que foi digitado para a regra recusar,
+        // em vez de limpar o campo em silencio.
+        return $digitos !== '' ? $digitos : ($texto === '' ? null : $texto);
     }
 
     /**
      * Registra a inscricao. Lanca ValidationException quando os dados enviados nao passam nas regras.
      *
+     * Quando o visitante foi identificado por e-mail, o bloco "Seus dados" tambem e validado,
+     * o cadastro em participantes e atualizado e a inscricao guarda a identificacao dele.
+     *
      * @return array{sucesso: bool, motivo: ?string, mensagem: string, inscricao_id: ?int}
      */
-    public function inscrever(Request $request, Atividade $atividade): array
+    public function inscrever(Request $request, Atividade $atividade, ?Participante $participante = null, ?string $emailIdentificado = null): array
     {
-        return DB::transaction(function () use ($request, $atividade) {
+        return DB::transaction(function () use ($request, $atividade, $participante, $emailIdentificado) {
             // Serializa os envios da mesma atividade antes da conferencia final de vagas.
             $atividade = Atividade::whereKey($atividade->id)->lockForUpdate()->firstOrFail();
 
-            $estado = $this->estado($atividade);
+            $estado = $this->estado($atividade, $participante, $emailIdentificado);
             if (! $estado['aberto']) {
                 return ['sucesso' => false, 'motivo' => $estado['motivo'], 'mensagem' => (string) $estado['mensagem'], 'inscricao_id' => null];
             }
 
-            $resposta = $request->validate($this->regras($atividade), $this->mensagens(), $this->atributos($atividade));
+            $this->normalizarCpfs($request, $atividade, $participante !== null);
+
+            $regras = $this->regras($atividade) + ($participante ? $this->regrasParticipante() : []);
+            $validados = $request->validate($regras, $this->mensagens(), $this->atributos($atividade));
+            $resposta = Arr::except($validados, ['participante']);
 
             // Guarda apenas os arquivos de campos declarados no formulario; qualquer outro upload e descartado.
+            // Disco privado: anexos de inscricao so saem por rota assinada, nunca por URL direta.
             foreach ($this->camposDeArquivo($atividade) as $nome) {
                 $arquivos = $request->file($nome);
                 if ($arquivos === null) continue;
                 $lista = is_array($arquivos) ? $arquivos : [$arquivos];
-                $resposta[$nome] = array_map(fn ($arquivo) => $arquivo->store('inscricoes', 'public'), $lista);
+                $resposta[$nome] = array_map(fn ($arquivo) => $arquivo->store(self::PASTA_ANEXOS, self::DISCO_ANEXOS), $lista);
             }
 
-            $inscricao = InscricaoAtividade::create(['atividade_id' => $atividade->id, 'resposta' => $resposta]);
+            if ($participante) {
+                $participante->fill(Arr::only((array) ($validados['participante'] ?? []), self::CAMPOS_PARTICIPANTE))->save();
+            }
+
+            try {
+                $inscricao = InscricaoAtividade::create([
+                    'atividade_id' => $atividade->id,
+                    'participante_id' => $participante?->id,
+                    'participante_email' => $participante ? ($emailIdentificado ?: $participante->email) : null,
+                    'resposta' => $resposta,
+                    ...$this->dispositivo->capturar($request),
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // Dois envios ao mesmo tempo: o índice único decide qual entra.
+                return ['sucesso' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito(), 'inscricao_id' => null];
+            }
 
             return [
                 'sucesso' => true,

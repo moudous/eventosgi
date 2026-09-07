@@ -4,11 +4,20 @@
 .eventosgi-subtitulo { margin: 0 0 1.25rem; opacity: .8; }
 .eventosgi-conteudo { margin: 0 0 1.25rem; }
 
-.eventosgi-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+/* Doze colunas para o bloco "Seus dados" respeitar a largura que a API sugere por campo. */
+.eventosgi-campos { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1rem; }
 @media (max-width: 640px) { .eventosgi-campos { grid-template-columns: 1fr; } }
 
-.eventosgi-campo { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.eventosgi-campo { display: flex; flex-direction: column; gap: .35rem; min-width: 0; grid-column: span 6; }
 .eventosgi-campo--textarea { grid-column: 1 / -1; }
+.eventosgi-campo--col-3 { grid-column: span 3; }
+.eventosgi-campo--col-4 { grid-column: span 4; }
+.eventosgi-campo--col-6 { grid-column: span 6; }
+.eventosgi-campo--col-8 { grid-column: span 8; }
+@media (max-width: 640px) {
+	.eventosgi-campo, .eventosgi-campo--col-3, .eventosgi-campo--col-4,
+	.eventosgi-campo--col-6, .eventosgi-campo--col-8 { grid-column: 1 / -1; }
+}
 .eventosgi-label { font-weight: 600; }
 .eventosgi-obrigatorio { color: #b3261e; margin-left: .15rem; }
 
@@ -36,6 +45,29 @@
 	background: #1e3a8a; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 .eventosgi-botao:hover { filter: brightness(1.1); }
+.eventosgi-botao--secundario { background: transparent; color: inherit; border: 1px solid rgba(0, 0, 0, .25); }
+
+/* Etapa de identificação: e-mail e código, cada um com o seu botão ao lado. */
+.eventosgi-identificacao .eventosgi-campo { margin-bottom: 1rem; }
+.eventosgi-secao { margin: 1.75rem 0 .35rem; font-size: 1.05rem; }
+.eventosgi-secao:first-child { margin-top: 0; }
+.eventosgi-ajuda-secao { margin: 0 0 1.25rem; opacity: .8; }
+
+.eventosgi-linha { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start; }
+.eventosgi-linha .eventosgi-controle { flex: 1 1 14rem; }
+.eventosgi-linha .eventosgi-botao { margin-top: 0; white-space: nowrap; }
+
+.eventosgi-identificado {
+	display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between;
+	padding: .7rem 1rem; margin: 0 0 1.25rem; border: 1px solid rgba(0, 0, 0, .15); border-radius: 6px;
+}
+.eventosgi-identificado form { margin: 0; }
+.eventosgi-link {
+	padding: 0; border: 0; background: none; color: inherit; font: inherit;
+	text-decoration: underline; cursor: pointer;
+}
+
+.eventosgi-alerta--info { border-color: #1e3a8a; background: rgba(30, 58, 138, .08); }
 
 /* Campo isca antispam: fora da tela, mas não display:none, para que robôs o preencham. */
 .eventosgi-isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
