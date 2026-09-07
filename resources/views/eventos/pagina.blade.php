@@ -8,6 +8,9 @@
         @if(app(\App\Services\GiPermissionService::class)->permite('eventos.pagina.visualizar'))
             <a href="{{ route('eventos.pagina.visualizar', $evento) }}" target="_blank" rel="noopener" class="btn btn-outline-info"><i class="bi bi-box-arrow-up-right me-1"></i>Visualizar página</a>
         @endif
+        @if($evento->templatePagina && app(\App\Services\GiPermissionService::class)->permite('templates.exportar'))
+            <a href="{{ route('templates.exportar', $evento->templatePagina) }}" class="btn btn-outline-success"><i class="bi bi-file-earmark-zip me-1"></i>Exportar template ZIP</a>
+        @endif
         @if(app(\App\Services\GiPermissionService::class)->permite('templates.listar'))
             <a href="{{ route('templates.index') }}" class="btn btn-outline-dark"><i class="bi bi-collection me-1"></i>Templates</a>
         @endif
