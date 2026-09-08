@@ -4,7 +4,7 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
  <div><h1 class="page-title">{{ $apagados?'Atividades apagadas':'Atividades' }}</h1><p class="page-description mb-0">{{ $apagados?'Restaure ou exclua definitivamente as atividades apagadas.':'Cadastre e gerencie as atividades dos eventos.' }}</p></div>
- <div class="d-flex align-items-center gap-3">@if(app(\App\Services\GiPermissionService::class)->permite('configuracao.visualizar'))<a href="{{ route('configuracao.index') }}" class="btn btn-outline-dark" title="Plugin do WordPress, shortcodes e faixas de IP liberadas"><i class="bi bi-gear me-2"></i>Configuração</a>@endif
+ <div class="d-flex align-items-center gap-3">@if(app(\App\Services\GiPermissionService::class)->permite('biblioteca.listar'))<a href="{{ route('biblioteca.index') }}" class="btn btn-outline-primary"><i class="bi bi-images me-2"></i>Biblioteca</a>@endif @if(app(\App\Services\GiPermissionService::class)->permite('configuracao.visualizar'))<a href="{{ route('configuracao.index') }}" class="btn btn-outline-dark" title="Plugin do WordPress, shortcodes e faixas de IP liberadas"><i class="bi bi-gear me-2"></i>Configuração</a>@endif
  <a href="{{ $apagados ? route('atividades.index') : route('atividades.apagados') }}" class="btn btn-outline-secondary">{{ $apagados ? 'Visualizar ativas' : 'Visualizar apagadas' }}</a>
  @if(!$apagados && app(\App\Services\GiPermissionService::class)->permite('atividades.criar'))<a href="{{ route('atividades.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-2"></i>Nova atividade</a>@endif</div>
 </div>

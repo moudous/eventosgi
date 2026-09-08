@@ -171,6 +171,7 @@ class AtividadeController
         return match ((string) $request->input('acao')) {
             'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $servico, $limites),
             'validar_codigo' => $this->validarCodigo($request, $atividade, $identificacao),
+            'validar_senha' => $this->validarSenha($request, $atividade, $identificacao),
             'trocar_email' => $this->trocarEmail($request, $atividade, $identificacao),
             default => $this->registrarInscricao($request, $atividade, $servico, $identificacao),
         };
@@ -246,6 +247,24 @@ class AtividadeController
             : ($resultado['criado']
                 ? 'E-mail confirmado. Complete o seu cadastro abaixo.'
                 : 'E-mail confirmado. Confira e complete os seus dados abaixo.');
+
+        return back()->with('identificado', $aviso);
+    }
+
+    private function validarSenha(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    {
+        $dados = $request->validateWithBag('identificacao', [
+            'email' => ['required', 'email', 'max:150'],
+            'senha' => ['required', 'string', 'max:200'],
+        ], [
+            'email.required' => 'Informe o e-mail.',
+            'senha.required' => 'Informe a senha.',
+        ]);
+        $resultado = $identificacao->validarSenha($request, $atividade, $dados['email'], $dados['senha']);
+
+        $aviso = $resultado['criado']
+            ? 'E-mail confirmado. Complete seus dados para continuar.'
+            : 'Olá, '.$resultado['nome'].'. Sua identificação foi confirmada pela senha.';
 
         return back()->with('identificado', $aviso);
     }
@@ -359,8 +378,8 @@ class AtividadeController
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
-        $campos = ['nome', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim'];
-        $antes = $atividade->only($campos); $atividade->update($this->validar($request));
+        $campos = ['nome', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $antes = $atividade->only($campos); $atividade->update($this->validar($request, $atividade));
         $mudancas = $historico->alteracoes($antes, $atividade->only($campos));
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade atualizada com sucesso.');
@@ -374,5 +393,32 @@ class AtividadeController
         $dados=$query->latest('data_hora')->latest('id')->skip($inicio)->take($tamanho)->get()->values()->map(fn($item,$i)=>['numero'=>$total-$inicio-$i,'historico'=>e($item->historico),'usuario'=>$item->usuario??'—','dados'=>view('partials.historico-dados',['dados'=>$item->dados??[]])->render(),'data_hora'=>$item->data_hora?->format('d/m/Y H:i:s')??'—']);
         return response()->json(['draw'=>(int)$request->input('draw'),'recordsTotal'=>$total,'recordsFiltered'=>$total,'data'=>$dados]);
     }
-    private function validar(Request $request): array { return $request->validate(['nome'=>['required','string','max:255'],'ativo'=>['required','boolean'],'evento_id'=>['required','integer','exists:eventos,id'],'categoria_id'=>['nullable','integer','exists:categorias,id'],'modalidade'=>['nullable','in:ead,presencial'],'data_inicio'=>['nullable','date'],'data_fim'=>['nullable','date']]); }
+    private function validar(Request $request, ?Atividade $atividade = null): array
+    {
+        $dados = $request->validate([
+            'nome' => ['required', 'string', 'max:255'],
+            'ativo' => ['required', 'boolean'],
+            'evento_id' => ['required', 'integer', 'exists:eventos,id'],
+            'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
+            'modalidade' => ['nullable', 'in:ead,presencial'],
+            'data_inicio' => ['nullable', 'date'],
+            'data_fim' => ['nullable', 'date'],
+            'personalizacao' => ['required', 'array:posicao,borda,cor_borda'],
+            'personalizacao.posicao' => ['required', 'in:esquerda,direita'],
+            'personalizacao.borda' => ['required', 'boolean'],
+            'personalizacao.cor_borda' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'imagem_atividade' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+        ]);
+
+        $dados['personalizacao']['imagem'] = $atividade?->estiloImagem()['imagem'];
+        if ($arquivo = $request->file('imagem_atividade')) {
+            $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();
+            \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('app/public/personalizacao'));
+            $arquivo->move(storage_path('app/public/personalizacao'), $nome);
+            $dados['personalizacao']['imagem'] = $nome;
+        }
+        unset($dados['imagem_atividade']);
+
+        return $dados;
+    }
 }

@@ -4,15 +4,29 @@
 @php
     // O estado vem do controller (FormularioInscricaoService::estado), que também conhece
     // o participante identificado e por isso sabe dizer se ele já se inscreveu.
+    $eventoVisual = $atividade->evento ?? new \App\Models\Evento;
+    $imagemVisual = $atividade->estiloImagem();
     $aberto = $estado['aberto'];
     $errosIdentificacao = $errors->identificacao;
     // Mantém o e-mail digitado entre um passo e outro da identificação.
     $emailInformado = old('email', session('codigo_enviado', ''));
 @endphp
 <div class="container py-4" style="max-width: 900px">
-    <div class="mb-4">
-        <h1 class="page-title">{{ $config['titulo'] ?? $atividade->nome }}</h1>
-        <p class="page-description">{{ $config['subtitulo'] ?? '' }}</p>
+    <div class="mb-4 rounded-4 p-4 p-md-5" style="background: {{ $eventoVisual->fundoFormulario('atividade') }}; color: {{ $eventoVisual->estiloFormulario('atividade')['cor_fonte'] }};">
+        <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-4 {{ $imagemVisual['imagem'] && $imagemVisual['posicao'] === 'direita' ? 'flex-sm-row-reverse justify-content-sm-between' : '' }}">
+            @if($imagemVisual['imagem'])
+                <img src="{{ route('eventos.personalizacao.imagem', ['arquivo' => $imagemVisual['imagem']]) }}" alt="Imagem da atividade {{ $atividade->nome }}" width="150" height="108" class="rounded object-fit-cover flex-shrink-0" style="{{ $imagemVisual['borda'] ? 'border: 3px solid '.$imagemVisual['cor_borda'].';' : '' }}">
+            @endif
+            <div>
+                <h1 class="page-title">{{ $config['titulo'] ?? $atividade->nome }}</h1>
+                <p class="page-description" style="color: inherit;">{{ $config['subtitulo'] ?? '' }}</p>
+                <div class="small d-flex flex-wrap column-gap-4 row-gap-2">
+                    <p class="mb-1"><strong>Evento:</strong> {{ $atividade->evento?->nome ?? 'Não informado' }}</p>
+                    <p class="mb-1"><strong>Início:</strong> {{ $atividade->data_inicio?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
+                    <p class="mb-0"><strong>Fim:</strong> {{ $atividade->data_fim?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     @if(session('status'))<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>{{ session('status') }}</div>@endif
@@ -55,18 +69,25 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="email">E-mail *</label>
-                        <div class="input-group">
-                            <input class="form-control @if($errosIdentificacao->has('email')) is-invalid @endif" type="email" id="email" name="email" maxlength="150" required autocomplete="email" placeholder="voce@exemplo.com" value="{{ $emailInformado }}">
-                            <button class="btn btn-outline-primary" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar código</button>
-                        </div>
+                        <input class="form-control @if($errosIdentificacao->has('email')) is-invalid @endif" type="email" id="email" name="email" maxlength="150" required autocomplete="email" placeholder="voce@exemplo.com" value="{{ $emailInformado }}">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="codigo">Código de inscrição *</label>
+                        <label class="form-label" for="senha">Senha de inscrição</label>
+                        <div class="input-group">
+                            <input class="form-control @if($errosIdentificacao->has('senha')) is-invalid @endif" type="password" id="senha" name="senha" maxlength="200" autocomplete="current-password">
+                            <button class="btn btn-primary" type="submit" name="acao" value="validar_senha"><i class="bi bi-key me-1"></i>Entrar com senha</button>
+                        </div>
+                        @if($errosIdentificacao->has('senha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('senha') }}</div>@endif
+                    </div>
+                    <div class="d-flex align-items-center gap-3 my-4"><hr class="flex-grow-1 m-0"><span class="text-muted small text-center">Esqueceu ou ainda não tem uma senha?</span><hr class="flex-grow-1 m-0"></div>
+                    <p class="text-muted small">Receba um código temporário por e-mail. A mensagem também terá um link para você definir uma senha.</p>
+                    <button class="btn btn-outline-primary mb-3" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar código para o e-mail</button>
+                    <div class="mb-3">
+                        <label class="form-label" for="codigo">Código recebido</label>
                         <div class="input-group">
                             <input class="form-control @if($errosIdentificacao->has('codigo')) is-invalid @endif" type="text" id="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
-                            <button class="btn btn-primary" type="submit" name="acao" value="validar_codigo"><i class="bi bi-check2 me-1"></i>Confirmar</button>
+                            <button class="btn btn-outline-primary" type="submit" name="acao" value="validar_codigo"><i class="bi bi-check2 me-1"></i>Confirmar código</button>
                         </div>
-                        <div class="form-text">O código de inscrição foi enviado para seu email.</div>
                     </div>
                 </form>
             </div>

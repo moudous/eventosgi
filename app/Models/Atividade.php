@@ -10,10 +10,11 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario'];
+    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
     protected $casts = [
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
+        'personalizacao' => 'array',
     ];
 
     public const MENSAGEM_VAGAS_ESGOTADAS = 'Todas as vagas para esta atividade foram preenchidas. Agradecemos seu interesse e esperamos você nas próximas oportunidades!';
@@ -21,6 +22,16 @@ class Atividade extends Model
     public const MENSAGEM_JA_INSCRITO = 'Você já está inscrito nesta atividade. Cada participante pode se inscrever uma única vez.';
 
     public const MENSAGEM_IDENTIFICACAO = 'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.';
+
+    public function estiloImagem(): array
+    {
+        return array_replace([
+            'imagem' => null,
+            'posicao' => 'esquerda',
+            'borda' => false,
+            'cor_borda' => '#ffffff',
+        ], $this->personalizacao ?? []);
+    }
 
     public function inscricoes(): \Illuminate\Database\Eloquent\Relations\HasMany
     {

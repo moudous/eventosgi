@@ -13,7 +13,8 @@ body{background:#f3f6fa}.submissao-publica{max-width:1120px;margin:0 auto;paddin
     $podeEditar = $trabalho && $submissao->aberta() && $trabalho->status === 'rascunho';
 @endphp
 <div class="submissao-publica">
-    <header class="submissao-hero mb-4"><div class="small text-uppercase opacity-75 fw-bold mb-2">{{ $submissao->evento?->nome }}</div><h1 class="mb-2">{{ $submissao->titulo }}</h1><div>Período: {{ $submissao->data_inicio?->format('d/m/Y H:i') }} até {{ $submissao->data_fim?->format('d/m/Y H:i') }}</div></header>
+    @php($eventoVisual = $submissao->evento ?? new \App\Models\Evento)
+    <header class="submissao-hero mb-4" style="background: {{ $eventoVisual->fundoFormulario('submissao') }}; color: {{ $eventoVisual->estiloFormulario('submissao')['cor_fonte'] }};"><div class="small text-uppercase opacity-75 fw-bold mb-2">{{ $submissao->evento?->nome }}</div><h1 class="mb-2">{{ $submissao->titulo }}</h1><div>Período: {{ $submissao->data_inicio?->format('d/m/Y H:i') }} até {{ $submissao->data_fim?->format('d/m/Y H:i') }}</div></header>
 
     @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{ session('status') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
     @if(session('recuperacao'))<div class="alert alert-info alert-dismissible fade show">{{ session('recuperacao') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif

@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\Atividade;
 use App\Models\CodigoInscricao;
+use App\Models\CredencialParticipante;
 use App\Models\Participante;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -14,7 +17,7 @@ use Throwable;
 /**
  * Identifica o visitante por e-mail antes de liberar o formulario da atividade.
  *
- * Fluxo: o visitante informa o e-mail, recebe um codigo de uso unico e o digita.
+ * Fluxo: o visitante informa o e-mail, recebe um código global temporário e o digita.
  * Com o codigo conferido, o cadastro em participantes e resolvido (encontrado,
  * unificado quando ha duplicidade, ou criado) e fica gravado na sessao.
  */
@@ -29,6 +32,9 @@ class IdentificacaoParticipanteService
     public const COLUNAS_EMAIL = ['email', 'email2', 'email_institucional'];
 
     public const MINUTOS_VALIDADE = 15;
+
+    /** Validade do link de definição da senha global. */
+    public const MINUTOS_VALIDADE_LINK_SENHA = 15;
 
     /** Tentativas de digitacao aceitas antes de o codigo ser invalidado. */
     public const MAX_TENTATIVAS = 5;
@@ -120,7 +126,7 @@ class IdentificacaoParticipanteService
     }
 
     /**
-     * Gera e envia um novo codigo, invalidando os anteriores da mesma atividade e e-mail.
+     * Gera e envia um novo código global, invalidando os anteriores do mesmo e-mail.
      *
      * @return array{email: string, expira_em: \Illuminate\Support\Carbon}
      */
@@ -134,16 +140,19 @@ class IdentificacaoParticipanteService
 
         $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $expiraEm = now()->addMinutes(self::MINUTOS_VALIDADE);
+        $expiraSenhaEm = now()->addMinutes(self::MINUTOS_VALIDADE_LINK_SENHA);
+        $tokenRedefinicao = Str::random(64);
 
-        $registro = DB::transaction(function () use ($atividade, $email, $codigo, $expiraEm, $request): CodigoInscricao {
-            CodigoInscricao::query()->where('atividade_id', $atividade->id)->where('email', $email)
-                ->whereNull('validado_em')->update(['expira_em' => now()->subSecond()]);
+        $registro = DB::transaction(function () use ($email, $codigo, $expiraEm, $expiraSenhaEm, $tokenRedefinicao, $request): CodigoInscricao {
+            CodigoInscricao::query()->where('email', $email)->where('expira_em', '>', now())
+                ->update(['expira_em' => now()->subSecond(), 'redefinicao_expira_em' => now()->subSecond()]);
 
             return CodigoInscricao::create([
-                'atividade_id' => $atividade->id,
                 'email' => $email,
                 'codigo_hash' => hash('sha256', $codigo),
                 'expira_em' => $expiraEm,
+                'redefinicao_token_hash' => hash('sha256', $tokenRedefinicao),
+                'redefinicao_expira_em' => $expiraSenhaEm,
                 'ip' => $request->ip(),
             ]);
         });
@@ -153,12 +162,15 @@ class IdentificacaoParticipanteService
                 $email,
                 null,
                 'Código de inscrição — '.$atividade->nome,
-                $this->conteudo($atividade, $codigo),
+                $this->conteudo($atividade, $codigo, $tokenRedefinicao),
                 "eventosgi-codigo-{$registro->id}",
             );
         } catch (Throwable $excecao) {
             report($excecao);
-            $registro->update(['expira_em' => now()->subSecond()]);
+            $registro->update([
+                'expira_em' => now()->subSecond(),
+                'redefinicao_expira_em' => now()->subSecond(),
+            ]);
 
             // Falta de configuracao nao se resolve tentando de novo: o aviso precisa dizer isso.
             throw ValidationException::withMessages([
@@ -208,8 +220,48 @@ class IdentificacaoParticipanteService
         ];
     }
 
+    /** Identifica com a senha global definida pelo link recebido por e-mail. */
+    public function validarSenha(Request $request, Atividade $atividade, string $email, string $senha): array
+    {
+        $email = mb_strtolower(trim($email));
+        $chaveLimite = 'senha-atividade:'.sha1($email.'|'.(string) $request->ip());
+        if (RateLimiter::tooManyAttempts($chaveLimite, 5)) {
+            throw ValidationException::withMessages([
+                'senha' => 'Muitas tentativas. Aguarde um minuto para tentar novamente.',
+            ])->errorBag('identificacao');
+        }
+        $credencial = CredencialParticipante::query()->where('email', $email)->first();
+        if (! $credencial || ! Hash::check($senha, $credencial->senha)) {
+            RateLimiter::hit($chaveLimite, 60);
+            throw ValidationException::withMessages([
+                'senha' => 'E-mail ou senha inválidos.',
+            ])->errorBag('identificacao');
+        }
+        RateLimiter::clear($chaveLimite);
+
+        $resolucao = $this->resolverParticipante($email);
+        $participante = $resolucao['participante'];
+        if ((int) $credencial->participante_id !== (int) $participante->id) {
+            $credencial->update(['participante_id' => (int) $participante->id]);
+        }
+        $request->session()->put($this->chaveSessao($atividade), [
+            'participante_id' => (int) $participante->id,
+            'nome' => (string) $participante->nome,
+            'email' => $email,
+            'validado_em' => now()->toIso8601String(),
+        ]);
+
+        return [
+            'id' => (int) $participante->id,
+            'nome' => (string) $participante->nome,
+            'email' => $email,
+            'criado' => $resolucao['criado'],
+            'unificados' => $resolucao['unificados'],
+        ];
+    }
+
     /**
-     * Confere o codigo digitado e o marca como usado. Lanca ValidationException a cada recusa.
+     * Confere o código digitado. Ele pode ser reutilizado em outras atividades até expirar.
      */
     public function conferirCodigo(Atividade $atividade, string $email, string $codigo): CodigoInscricao
     {
@@ -219,7 +271,7 @@ class IdentificacaoParticipanteService
         // Sem transacao: as tentativas erradas precisam ficar gravadas, e a corrida por
         // consumir o mesmo codigo duas vezes e resolvida pelo UPDATE condicional abaixo.
         $registro = CodigoInscricao::query()
-            ->where('atividade_id', $atividade->id)->where('email', $email)->whereNull('validado_em')
+            ->where('email', $email)
             ->where('expira_em', '>', now())->latest('id')->first();
 
         if (! $registro) {
@@ -244,15 +296,10 @@ class IdentificacaoParticipanteService
             ])->errorBag('identificacao');
         }
 
-        $consumido = CodigoInscricao::query()->whereKey($registro->id)
-            ->whereNull('validado_em')->where('expira_em', '>', now())
+        // O código identifica o e-mail em qualquer atividade enquanto estiver válido.
+        // validado_em registra o primeiro uso, sem consumi-lo antes dos 15 minutos.
+        CodigoInscricao::query()->whereKey($registro->id)->whereNull('validado_em')
             ->update(['validado_em' => now()]);
-
-        if ($consumido === 0) {
-            throw ValidationException::withMessages([
-                'codigo' => 'Este código já foi utilizado. Peça um novo código.',
-            ])->errorBag('identificacao');
-        }
 
         return $registro->refresh();
     }
@@ -293,7 +340,7 @@ class IdentificacaoParticipanteService
 
     /**
      * Participante por tras de um token emitido em emitirToken(), ou null se o token
-     * nao existe, expirou ou pertence a outra atividade.
+     * não existe ou expirou. O token também é global entre atividades.
      *
      * @return array{participante: Participante, email: string}|null
      */
@@ -303,7 +350,6 @@ class IdentificacaoParticipanteService
         if ($token === '') return null;
 
         $registro = CodigoInscricao::query()
-            ->where('atividade_id', $atividade->id)
             ->where('token_hash', hash('sha256', $token))
             ->where('token_expira_em', '>', now())
             ->whereNotNull('participante_id')
@@ -322,7 +368,6 @@ class IdentificacaoParticipanteService
         if (trim($token) === '') return;
 
         CodigoInscricao::query()
-            ->where('atividade_id', $atividade->id)
             ->where('token_hash', hash('sha256', $token))
             ->update(['token_hash' => null, 'token_expira_em' => null]);
     }
@@ -416,14 +461,18 @@ class IdentificacaoParticipanteService
         return $nome === '' ? 'Participante' : mb_substr(mb_convert_case($nome, MB_CASE_TITLE, 'UTF-8'), 0, 100);
     }
 
-    private function conteudo(Atividade $atividade, string $codigo): string
+    private function conteudo(Atividade $atividade, string $codigo, string $tokenRedefinicao): string
     {
+        $urlSenha = route('senha-participante.editar', ['token' => $tokenRedefinicao]);
         return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#22303f;line-height:1.6">'
             .'<p>Olá!</p>'
             .'<p>Recebemos um pedido de inscrição em <strong>'.e($atividade->nome).'</strong>.</p>'
             .'<p>Use o código abaixo para continuar o preenchimento do formulário:</p>'
             .'<p style="font-size:30px;font-weight:bold;letter-spacing:8px;margin:24px 0">'.e($codigo).'</p>'
-            .'<p>O código vale por '.self::MINUTOS_VALIDADE.' minutos e só pode ser usado uma vez.</p>'
+            .'<p>O código vale por '.self::MINUTOS_VALIDADE.' minutos e pode ser usado em qualquer atividade ou evento durante esse período.</p>'
+            .'<p>Você também pode definir uma senha para suas próximas inscrições:</p>'
+            .'<p><a href="'.e($urlSenha).'" style="display:inline-block;padding:10px 16px;background:#0d6efd;color:#fff;text-decoration:none;border-radius:6px">Definir nova senha</a></p>'
+            .'<p style="color:#748096;font-size:13px">O link para definir a senha vale por '.self::MINUTOS_VALIDADE_LINK_SENHA.' minutos e funciona uma única vez.</p>'
             .'<p style="color:#748096;font-size:13px">Se você não pediu este código, ignore esta mensagem.</p>'
             .'</div>';
     }

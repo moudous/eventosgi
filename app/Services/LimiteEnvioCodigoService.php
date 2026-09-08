@@ -30,10 +30,10 @@ use Illuminate\Validation\ValidationException;
  */
 class LimiteEnvioCodigoService
 {
-    /** Intervalo minimo, em segundos, entre dois pedidos para o mesmo e-mail e atividade. */
+    /** Intervalo mínimo, em segundos, entre dois pedidos globais para o mesmo e-mail. */
     public const INTERVALO_REENVIO = 60;
 
-    /** Codigos por hora para o mesmo e-mail em uma mesma atividade. */
+    /** Códigos globais por hora para o mesmo e-mail. */
     public const MAX_POR_EMAIL = 5;
 
     /** Codigos por hora aceitos de uma mesma faixa de rede. */
@@ -89,7 +89,7 @@ class LimiteEnvioCodigoService
         if ($request->attributes->get(self::JA_CONFERIDO) === true) return;
 
         $email = mb_strtolower(trim($email));
-        $chaveEmail = 'codigo-inscricao:'.$atividade->id.':'.sha1($email);
+        $chaveEmail = 'codigo-inscricao-global:'.sha1($email);
 
         if (RateLimiter::tooManyAttempts($chaveEmail, 1)) {
             $this->recusar('Aguarde '.RateLimiter::availableIn($chaveEmail).' segundos para pedir um novo código.');
@@ -135,7 +135,7 @@ class LimiteEnvioCodigoService
     public function registrarEnvio(Atividade $atividade, string $email): void
     {
         RateLimiter::hit(
-            'codigo-inscricao:'.$atividade->id.':'.sha1(mb_strtolower(trim($email))),
+            'codigo-inscricao-global:'.sha1(mb_strtolower(trim($email))),
             self::INTERVALO_REENVIO,
         );
     }
@@ -221,7 +221,7 @@ class LimiteEnvioCodigoService
 
     private function contabilizar(Request $request, Atividade $atividade, string $email): void
     {
-        RateLimiter::hit('codigo-inscricao:'.$atividade->id.':'.sha1($email).':hora', 3600);
+        RateLimiter::hit('codigo-inscricao-global:'.sha1($email).':hora', 3600);
         RateLimiter::hit('codigo-inscricao-atividade:'.$atividade->id, 3600);
 
         foreach ($this->origens($request) as [$chave, , $maxEnderecos]) {

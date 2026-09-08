@@ -104,9 +104,9 @@ class EventoController
 
     public function update(Request $request, Evento $evento, HistoricoService $historico): RedirectResponse
     {
-        $antes = $evento->only(['nome', 'ativo']);
+        $antes = $evento->only(['nome', 'ativo', 'personalizacao']);
         $evento->update($this->validar($request, $evento));
-        $alteracoes = $historico->alteracoes($antes, $evento->only(['nome', 'ativo']));
+        $alteracoes = $historico->alteracoes($antes, $evento->only(['nome', 'ativo', 'personalizacao']));
         if ($alteracoes !== []) $historico->evento($evento, 'Evento alterado', $alteracoes, $request);
 
         return redirect()->route('eventos.index')->with('status', 'Evento atualizado com sucesso.');
@@ -156,9 +156,41 @@ class EventoController
 
     private function validar(Request $request, ?Evento $evento = null): array
     {
-        return $request->validate([
+        $regras = [
             'nome' => ['required', 'string', 'max:255'],
             'ativo' => ['required', 'boolean'],
-        ]);
+            'personalizacao' => ['sometimes', 'array:atividade,submissao'],
+        ];
+        foreach (['atividade', 'submissao'] as $tipo) {
+            $prefixo = "personalizacao.$tipo";
+            $regras[$prefixo] = ['required_with:personalizacao', 'array:tipo,degrade_inicio,degrade_fim,cor_solida,cor_fonte'];
+            $regras["$prefixo.tipo"] = ['required_with:personalizacao', 'in:degrade,solida,imagem'];
+            foreach (['degrade_inicio', 'degrade_fim', 'cor_solida', 'cor_fonte'] as $cor) {
+                $regras["$prefixo.$cor"] = ['required_with:personalizacao', 'regex:/^#[0-9a-fA-F]{6}$/'];
+            }
+            $regras["imagem_$tipo"] = ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'];
+        }
+        $dados = $request->validate($regras);
+        if (isset($dados['personalizacao'])) {
+            // Os três fundos permanecem salvos; o seletor apenas define qual será exibido.
+            foreach (['atividade', 'submissao'] as $tipo) {
+                $dados['personalizacao'][$tipo]['imagem'] = $evento?->estiloFormulario($tipo)['imagem'];
+                if ($dados['personalizacao'][$tipo]['tipo'] === 'imagem'
+                    && !$request->hasFile("imagem_$tipo") && !$dados['personalizacao'][$tipo]['imagem']) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "imagem_$tipo" => 'Selecione uma imagem para usar este tipo de fundo.',
+                    ]);
+                }
+            }
+            foreach (['atividade', 'submissao'] as $tipo) {
+                if ($arquivo = $request->file("imagem_$tipo")) {
+                    $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();
+                    $arquivo->move(storage_path('app/public/personalizacao'), $nome);
+                    $dados['personalizacao'][$tipo]['imagem'] = $nome;
+                }
+            }
+        }
+        unset($dados['imagem_atividade'], $dados['imagem_submissao']);
+        return $dados;
     }
 }

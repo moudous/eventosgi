@@ -15,6 +15,8 @@ use App\Http\Controllers\PaginaEventoController;
 use App\Http\Controllers\TemplatePaginaController;
 use App\Http\Controllers\SubmissaoController;
 use App\Http\Controllers\SubmissaoPublicaController;
+use App\Http\Controllers\SenhaParticipanteController;
+use App\Http\Controllers\BibliotecaController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -190,6 +192,22 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
 Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
 Route::post('/inscricoes/{atividade}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
 
+// A posse do token recebido por e-mail autoriza a definição da senha. O servidor guarda
+// somente o hash, limita o link a 15 minutos e o invalida depois do primeiro uso.
+Route::get('/senha/definir/{token}', [SenhaParticipanteController::class, 'edit'])
+    ->where('token', '[A-Za-z0-9]{64}')->name('senha-participante.editar');
+Route::post('/senha/definir/{token}', [SenhaParticipanteController::class, 'update'])
+    ->where('token', '[A-Za-z0-9]{64}')->name('senha-participante.atualizar');
+
+Route::prefix('biblioteca')->name('biblioteca.')->group(function (): void {
+    Route::get('/', [BibliotecaController::class, 'index'])->middleware('gi.permission:biblioteca.listar')->name('index');
+    Route::post('/', [BibliotecaController::class, 'store'])->middleware('gi.permission:biblioteca.enviar')->name('store');
+    Route::post('/recortar', [BibliotecaController::class, 'recortar'])->middleware('gi.permission:biblioteca.recortar')->name('recortar');
+    // O endereço é público para que sites e formulários possam reutilizar estes arquivos.
+    Route::get('/arquivos/{arquivo}', [BibliotecaController::class, 'abrir'])
+        ->where('arquivo', '[a-f0-9-]{36}\.[a-z0-9]{1,15}')->name('abrir');
+});
+
 // Anexos das inscricoes: ficam em disco privado e so saem por aqui, com URL assinada
 // gerada na tela de inscricoes (que exige atividades.visualizar).
 Route::get('/inscricoes/{inscricao}/arquivos/{campo}/{indice}/{modo}', [AtividadeController::class, 'arquivoInscricao'])
@@ -279,3 +297,10 @@ Route::get('/gi/{resource}', function (Request $request, string $resource) {
             $upstreamResponse->header('Content-Type') ?? 'application/json',
         );
 });
+
+// Fundos dos formulários públicos: somente imagens com nomes gerados pelo servidor.
+Route::get('/personalizacao/imagens/{arquivo}', function (string $arquivo) {
+    $caminho = storage_path('app/public/personalizacao/'.$arquivo);
+    abort_unless(is_file($caminho), 404);
+    return response()->file($caminho, ['X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=31536000, immutable']);
+})->where('arquivo', '[a-f0-9-]{36}\.(jpg|jpeg|png|webp)')->name('eventos.personalizacao.imagem');
