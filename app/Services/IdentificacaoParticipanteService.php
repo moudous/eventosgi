@@ -45,15 +45,6 @@ class IdentificacaoParticipanteService
     /** Nome do campo isca. Visitante nao ve; robo que preenche formulario inteiro cai nele. */
     public const CAMPO_ISCA = 'confirmacao_inscricao';
 
-    /** Nome do campo que carrega o selo de quando o formulario foi montado. */
-    public const CAMPO_SELO = 'formulario_aberto_em';
-
-    /** Segundos minimos entre o formulario aparecer e o pedido de codigo chegar. */
-    private const SEGUNDOS_MINIMOS = 3;
-
-    /** Horas que o selo de um formulario continua valendo. */
-    private const HORAS_SELO = 4;
-
     public function __construct(
         private readonly GiEmailService $email,
         private readonly ParticipanteUnificacaoService $unificacao,
@@ -72,71 +63,17 @@ class IdentificacaoParticipanteService
     }
 
     /**
-     * Selo com o momento em que o formulario foi montado.
-     *
-     * Assinado com a chave da aplicacao: sem isso o visitante escolheria o valor. Serve
-     * para saber que o pedido veio de um formulario que alguem realmente abriu -- um
-     * script que dispara POST direto no endpoint nao tem como produzir um selo valido, e
-     * cada tentativa passa a custar tambem uma visita a pagina.
-     */
-    public function selo(): string
-    {
-        $momento = (string) now()->getTimestamp();
-
-        return $momento.'.'.hash_hmac('sha256', $momento, (string) config('app.key'));
-    }
-
-    /** O selo veio no pedido, confere com a assinatura e ainda esta na validade? */
-    public function seloConfere(Request $request): bool
-    {
-        return $this->momentoDoSelo($request) !== null;
-    }
-
-    /**
-     * O pedido chegou rapido demais depois de o formulario aparecer?
-     *
-     * Ninguem le a tela, digita o proprio e-mail e envia em menos de tres segundos.
-     */
-    public function pedidoApressado(Request $request): bool
-    {
-        $momento = $this->momentoDoSelo($request);
-
-        return $momento !== null && (now()->getTimestamp() - $momento) < self::SEGUNDOS_MINIMOS;
-    }
-
-    /** Momento gravado em um selo integro e dentro da validade, ou null. */
-    private function momentoDoSelo(Request $request): ?int
-    {
-        $partes = explode('.', (string) $request->input(self::CAMPO_SELO, ''), 2);
-
-        if (count($partes) !== 2 || ! ctype_digit($partes[0])) return null;
-
-        $esperada = hash_hmac('sha256', $partes[0], (string) config('app.key'));
-
-        if (! hash_equals($esperada, $partes[1])) return null;
-
-        $momento = (int) $partes[0];
-        $agora = now()->getTimestamp();
-
-        // Selo do futuro so aparece com relogio adulterado; selo velho demais e pagina
-        // que ficou aberta a noite toda, e o visitante precisa recarregar.
-        if ($momento > $agora || ($agora - $momento) > self::HORAS_SELO * 3600) return null;
-
-        return $momento;
-    }
-
-    /**
      * Gera e envia um novo código global, invalidando os anteriores do mesmo e-mail.
      *
      * @return array{email: string, expira_em: \Illuminate\Support\Carbon}
      */
-    public function solicitarCodigo(Request $request, Atividade $atividade, string $email): array
+    public function solicitarCodigo(Request $request, Atividade $atividade, string $email, bool $ignorarLimites = false): array
     {
         $email = mb_strtolower(trim($email));
 
         // Todos os limites -- por e-mail, por sessao, por faixa de rede, por atividade --
         // ficam em LimiteEnvioCodigoService, que contabiliza o pedido ao aprova-lo.
-        $this->limites->conferir($request, $atividade, $email);
+        if (! $ignorarLimites) $this->limites->conferir($request, $atividade, $email);
 
         $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $expiraEm = now()->addMinutes(self::MINUTOS_VALIDADE);
@@ -180,7 +117,7 @@ class IdentificacaoParticipanteService
             ])->errorBag('identificacao');
         }
 
-        $this->limites->registrarEnvio($atividade, $email);
+        if (! $ignorarLimites) $this->limites->registrarEnvio($atividade, $email);
 
         return ['email' => $email, 'expira_em' => $expiraEm];
     }

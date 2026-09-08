@@ -17,6 +17,7 @@ use App\Http\Controllers\SubmissaoController;
 use App\Http\Controllers\SubmissaoPublicaController;
 use App\Http\Controllers\SenhaParticipanteController;
 use App\Http\Controllers\BibliotecaController;
+use App\Http\Controllers\CaptchaInscricaoController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -188,9 +189,10 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
 // Inscricao publica em uma atividade. Sem assinatura, ao contrario da previa do
 // construtor: e a pagina para onde o template do evento manda quem clica numa atividade,
 // e a mesma que o visitante de um site abre. Vale para atividade ativa; as protecoes
-// contra abuso (isca, selo e LimiteEnvioCodigoService) sao as mesmas da previa.
+// contra abuso do envio de e-mail é a prova visual exibida junto ao pedido do código.
 Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
 Route::post('/inscricoes/{atividade}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
+Route::get('/inscricoes/{atividade}/captcha', CaptchaInscricaoController::class)->name('inscricoes.captcha');
 
 // A posse do token recebido por e-mail autoriza a definição da senha. O servidor guarda
 // somente o hash, limita o link a 15 minutos e o invalida depois do primeiro uso.

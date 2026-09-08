@@ -10,11 +10,11 @@ use App\Models\InscricaoAtividade;
 use App\Models\Participante;
 use App\Rules\EmailValido;
 use App\Services\ArmazemService;
+use App\Services\CaptchaInscricaoService;
 use App\Services\FormularioInscricaoService;
 use App\Services\IdentificacaoParticipanteService;
 use App\Services\GiPermissionService;
 use App\Services\HistoricoService;
-use App\Services\LimiteEnvioCodigoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -133,9 +133,6 @@ class AtividadeController
             'identificacao' => $sessao,
             'participante' => $participante,
             'estado' => $servico->estado($atividade, $participante, $sessao['email'] ?? null),
-            // Selo novo a cada exibicao: e ele que prova, no pedido de codigo, que houve
-            // um formulario aberto antes.
-            'selo' => $identificacao->selo(),
         ]);
     }
     /**
@@ -163,13 +160,13 @@ class AtividadeController
      * identificacao (pedir codigo, conferir codigo, trocar de e-mail) reaproveitam a
      * mesma assinatura e se distinguem pelo campo "acao".
      */
-    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, LimiteEnvioCodigoService $limites): RedirectResponse
+    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, CaptchaInscricaoService $captcha): RedirectResponse
     {
         abort_unless($atividade->formulario, 404);
         if ($request->routeIs('inscricoes.publica.enviar')) abort_unless($atividade->ativo, 404);
 
         return match ((string) $request->input('acao')) {
-            'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $servico, $limites),
+            'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $captcha),
             'validar_codigo' => $this->validarCodigo($request, $atividade, $identificacao),
             'validar_senha' => $this->validarSenha($request, $atividade, $identificacao),
             'trocar_email' => $this->trocarEmail($request, $atividade, $identificacao),
@@ -184,45 +181,20 @@ class AtividadeController
         return back();
     }
 
-    private function solicitarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico, LimiteEnvioCodigoService $limites): RedirectResponse
+    private function solicitarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, CaptchaInscricaoService $captcha): RedirectResponse
     {
-        // validateWithBag: a etapa de identificacao exibe apenas o bag "identificacao".
         $dados = Validator::make(
             $request->all(),
-            ['email' => ['required', 'max:150', new EmailValido]],
-            ['required' => 'Informe o seu e-mail.'],
-            ['email' => 'e-mail'],
+            ['email' => ['required', 'max:150', new EmailValido], 'captcha' => ['required', 'string', 'size:6']],
+            ['email.required' => 'Informe o seu e-mail.', 'captcha.required' => 'Digite o texto exibido na imagem.', 'captcha.size' => 'Digite os 6 caracteres exibidos na imagem.'],
+            ['email' => 'e-mail', 'captcha' => 'texto da imagem'],
         )->validateWithBag('identificacao');
         $email = mb_strtolower(trim($dados['email']));
+        $captcha->validar($request, $atividade, $dados['captcha']);
 
-        // Robo que caiu na isca, ou que respondeu rapido demais para ter lido a tela,
-        // recebe a mesma resposta de sempre e nenhum disparo.
-        if ($identificacao->pareceRobo($request) || $identificacao->pedidoApressado($request)) {
-            return back()->with('codigo_enviado', $email);
-        }
-
-        // Selo ausente ou adulterado: o pedido nao veio de um formulario aberto aqui. O
-        // aviso e explicito de proposito -- se um dia o campo sumir da tela, o erro
-        // aparece na hora, em vez de todo mundo achar que recebeu um e-mail que nao saiu.
-        if (! $identificacao->seloConfere($request)) {
-            return back()->withInput()->withErrors(
-                ['email' => 'Não foi possível confirmar o envio deste formulário. Recarregue a página e tente novamente.'],
-                'identificacao',
-            );
-        }
-
-        // Limites antes de qualquer resposta que dependa do e-mail digitado. A conferencia
-        // de duplicidade logo abaixo diz se um endereco esta inscrito, e de graca ela viraria
-        // um jeito de descobrir quem participa da atividade, um endereco por vez.
-        $limites->conferir($request, $atividade, $email);
-
-        // Duplicidade antes do envio: quem ja se inscreveu recebe o aviso, nao um codigo.
-        if ($servico->jaInscritoPorEmail($atividade, $email)) {
-            return back()->withInput()->with('ja_inscrito', $atividade->mensagemJaInscrito());
-        }
-
-        // conferir() ja rodou: a chamada equivalente dentro de solicitarCodigo() nao conta de novo.
-        $identificacao->solicitarCodigo($request, $atividade, $email);
+        // A prova visual substitui o selo, a isca, o tempo mínimo, os limites de frequência
+        // e a recusa por inscrição já existente neste fluxo público.
+        $identificacao->solicitarCodigo($request, $atividade, $email, ignorarLimites: true);
 
         return back()->with('codigo_enviado', $email);
     }

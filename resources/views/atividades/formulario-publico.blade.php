@@ -58,15 +58,6 @@
 
                 <form method="POST" action="{{ request()->fullUrl() }}">
                     @csrf
-                    {{-- Selo do momento em que esta tela foi montada: assinado, então
-                         quem faz POST direto no endereço não consegue produzir um. --}}
-                    <input type="hidden" name="{{ \App\Services\IdentificacaoParticipanteService::CAMPO_SELO }}" value="{{ $selo }}">
-                    {{-- Campo isca: fica fora da tela, então só um robô o preenche. --}}
-                    <div class="campo-isca" aria-hidden="true">
-                        <label>Deixe este campo em branco
-                            <input type="text" name="{{ \App\Services\IdentificacaoParticipanteService::CAMPO_ISCA }}" value="" tabindex="-1" autocomplete="off">
-                        </label>
-                    </div>
                     <div class="mb-3">
                         <label class="form-label" for="email">E-mail *</label>
                         <input class="form-control @if($errosIdentificacao->has('email')) is-invalid @endif" type="email" id="email" name="email" maxlength="150" required autocomplete="email" placeholder="voce@exemplo.com" value="{{ $emailInformado }}">
@@ -81,6 +72,15 @@
                     </div>
                     <div class="d-flex align-items-center gap-3 my-4"><hr class="flex-grow-1 m-0"><span class="text-muted small text-center">Esqueceu ou ainda não tem uma senha?</span><hr class="flex-grow-1 m-0"></div>
                     <p class="text-muted small">Receba um código temporário por e-mail. A mensagem também terá um link para você definir uma senha.</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="captcha">Digite o texto da imagem</label>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                            <img id="captchaImagem" src="{{ route('inscricoes.captcha', $atividade) }}" width="220" height="70" class="border rounded" alt="Imagem com seis caracteres para confirmação">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" id="renovarCaptcha"><i class="bi bi-arrow-clockwise me-1"></i>Nova imagem</button>
+                        </div>
+                        <input class="form-control @if($errosIdentificacao->has('captcha')) is-invalid @endif" style="max-width:220px;text-transform:uppercase;letter-spacing:.2em" type="text" id="captcha" name="captcha" maxlength="6" autocomplete="off" autocapitalize="characters">
+                        @if($errosIdentificacao->has('captcha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('captcha') }}</div>@endif
+                    </div>
                     <button class="btn btn-outline-primary mb-3" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar código para o e-mail</button>
                     <div class="mb-3">
                         <label class="form-label" for="codigo">Código recebido</label>
@@ -210,12 +210,17 @@
 @push('styles')
 <style>
     /* Fora da tela em vez de display:none, para o robô continuar preenchendo. */
-    .campo-isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 </style>
 @endpush
 
 @push('scripts')
 <script>
+const captchaImagem = document.getElementById('captchaImagem');
+document.getElementById('renovarCaptcha')?.addEventListener('click', () => {
+    captchaImagem.src = @json(route('inscricoes.captcha', $atividade)) + '?novo=1&t=' + Date.now();
+    document.getElementById('captcha').value = '';
+});
+
 // Conferencia imediata no navegador. O servidor revalida tudo (App\Rules\Cpf e App\Rules\EmailValido),
 // entao aqui o objetivo e so evitar que o visitante envie e volte com erro.
 const digitosDoCpf = valor => valor.replace(/\D/g, '');
