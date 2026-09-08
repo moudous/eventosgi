@@ -133,6 +133,8 @@ class SubmissaoController
     public function inscritosDados(Request $request, Submissao $submissao, ArmazemService $armazem): JsonResponse
     {
         $submissao->atualizarStatusDoPrazo();
+        $permissoes = app(GiPermissionService::class);
+        $podeAlterarStatus = $permissoes->permite('submissoes.trabalhos.alterar_status');
         $query = $submissao->trabalhos()->withTrashed()->with(['autores', 'inscricao']);
         $total = (clone $query)->count();
         $busca = trim((string) $request->input('search.value', ''));
@@ -178,14 +180,14 @@ class SubmissaoController
                 'autores' => e($trabalho->autores->pluck('nome')->implode(', ')),
                 'status' => $trabalho->trashed()
                     ? '<span class="badge text-bg-danger">Apagado</span>'
-                    : $this->rotuloStatus($trabalho->status),
+                    : $this->rotuloStatus($trabalho->status, $podeAlterarStatus, $submissao, $trabalho),
                 'nota' => $trabalho->nota ?? '—',
                 'situacao' => e($trabalho->situacao ?: '—'),
                 'updated_at' => $trabalho->updated_at?->format('d/m/Y H:i') ?? '—',
                 'acoes' => view('submissoes.partials.acoes-trabalho', [
                     'submissao' => $submissao,
                     'trabalho' => $trabalho,
-                    'permissoes' => app(GiPermissionService::class),
+                    'permissoes' => $permissoes,
                 ])->render(),
             ]);
 
@@ -195,6 +197,17 @@ class SubmissaoController
             'recordsFiltered' => $filtrados,
             'data' => $dados,
         ]);
+    }
+
+    public function alterarStatus(Request $request, Submissao $submissao, int $trabalho): JsonResponse
+    {
+        $status = $request->validate([
+            'status' => ['required', 'string', 'in:rascunho,submetido,avaliado'],
+        ])['status'];
+        $registro = $submissao->trabalhos()->whereKey($trabalho)->firstOrFail();
+        $registro->update(['status' => $status]);
+
+        return response()->json(['message' => 'Status alterado para '.$this->nomeStatus($status).'.']);
     }
 
     public function restaurar(Submissao $submissao, int $trabalho): JsonResponse
@@ -257,11 +270,27 @@ class SubmissaoController
         }, $html));
     }
 
-    private function rotuloStatus(string $status): string
+    private function rotuloStatus(string $status, bool $podeAlterar = false, ?Submissao $submissao = null, ?InscricaoSubmissaoTrabalho $trabalho = null): string
     {
-        $rotulos = ['rascunho' => ['Rascunho', 'warning'], 'submetido' => ['Submetido', 'info'], 'avaliado' => ['Avaliado', 'success']];
+        $rotulos = $this->statusDisponiveis();
         [$texto, $cor] = $rotulos[$status] ?? [ucfirst($status), 'secondary'];
 
+        if ($podeAlterar && $submissao && $trabalho) {
+            $opcoes = collect($rotulos)->map(fn (array $dados, string $valor): string => '<option value="'.e($valor).'"'.($valor === $status ? ' selected' : '').'>'.e($dados[0]).'</option>')->implode('');
+
+            return '<select class="form-select form-select-sm status-trabalho-select" style="min-width:130px" data-status-url="'.e(route('submissoes.inscritos.alterar-status', [$submissao, $trabalho])).'" data-status-atual="'.e($status).'">'.$opcoes.'</select>';
+        }
+
         return '<span class="badge text-bg-'.$cor.'">'.e($texto).'</span>';
+    }
+
+    private function statusDisponiveis(): array
+    {
+        return ['rascunho' => ['Rascunho', 'warning'], 'submetido' => ['Submetido', 'info'], 'avaliado' => ['Avaliado', 'success']];
+    }
+
+    private function nomeStatus(string $status): string
+    {
+        return $this->statusDisponiveis()[$status][0] ?? ucfirst($status);
     }
 }

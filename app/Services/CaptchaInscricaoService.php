@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Atividade;
+use App\Models\Submissao;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
@@ -14,7 +15,26 @@ class CaptchaInscricaoService
 
     public function imagem(Request $request, Atividade $atividade, bool $renovar = false): Response
     {
-        $chave = $this->chave($atividade);
+        return $this->imagemPorChave($request, $this->chave($atividade), $renovar);
+    }
+
+    public function validar(Request $request, Atividade $atividade, string $resposta): void
+    {
+        $this->validarChave($request, $this->chave($atividade), $resposta, true);
+    }
+
+    public function imagemSubmissao(Request $request, Submissao $submissao, bool $renovar = false): Response
+    {
+        return $this->imagemPorChave($request, $this->chaveSubmissao($submissao), $renovar);
+    }
+
+    public function validarSubmissao(Request $request, Submissao $submissao, string $resposta): void
+    {
+        $this->validarChave($request, $this->chaveSubmissao($submissao), $resposta, false);
+    }
+
+    private function imagemPorChave(Request $request, string $chave, bool $renovar): Response
+    {
         $desafio = $request->session()->get($chave);
         if ($renovar || ! is_array($desafio) || empty($desafio['texto'])
             || (int) ($desafio['expira_em'] ?? 0) < now()->timestamp) {
@@ -31,9 +51,8 @@ class CaptchaInscricaoService
         ]);
     }
 
-    public function validar(Request $request, Atividade $atividade, string $resposta): void
+    private function validarChave(Request $request, string $chave, string $resposta, bool $bagNomeada): void
     {
-        $chave = $this->chave($atividade);
         $desafio = $request->session()->pull($chave);
         $informado = mb_strtoupper(preg_replace('/\s+/', '', trim($resposta)) ?? '');
         $valido = is_array($desafio)
@@ -41,9 +60,8 @@ class CaptchaInscricaoService
             && hash_equals((string) ($desafio['texto'] ?? ''), $informado);
 
         if (! $valido) {
-            throw ValidationException::withMessages([
-                'captcha' => 'O texto da imagem está incorreto ou expirou. Veja a nova imagem e tente novamente.',
-            ])->errorBag('identificacao');
+            $excecao = ValidationException::withMessages(['captcha' => 'O texto da imagem está incorreto ou expirou. Veja a nova imagem e tente novamente.']);
+            throw $bagNomeada ? $excecao->errorBag('identificacao') : $excecao;
         }
     }
 
@@ -58,6 +76,11 @@ class CaptchaInscricaoService
     private function chave(Atividade $atividade): string
     {
         return 'captcha_inscricao.'.$atividade->id;
+    }
+
+    private function chaveSubmissao(Submissao $submissao): string
+    {
+        return 'captcha_submissao.'.$submissao->id;
     }
 
     private function png(string $texto): string

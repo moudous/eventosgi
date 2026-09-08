@@ -10,7 +10,7 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nome', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
+    protected $fillable = ['nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
     protected $casts = [
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',

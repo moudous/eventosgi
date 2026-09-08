@@ -6,6 +6,7 @@ use App\Models\InscricaoSubmissao;
 use App\Models\InscricaoSubmissaoTrabalho;
 use App\Models\Submissao;
 use App\Services\GiEmailService;
+use App\Services\CaptchaInscricaoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -274,13 +275,15 @@ class SubmissaoPublicaController
         return redirect()->route('submissoes.publicas.formulario', $submissao)->with('status', 'Senha alterada com sucesso.');
     }
 
-    public function esqueciSenha(Request $request, Submissao $submissao, GiEmailService $emailService): RedirectResponse
+    public function esqueciSenha(Request $request, Submissao $submissao, GiEmailService $emailService, CaptchaInscricaoService $captcha): RedirectResponse
     {
         abort_unless($submissao->ativo && (bool) $submissao->evento?->ativo, 404);
         $dados = $request->validate([
             'email_recuperacao' => ['required', 'email', 'max:150'],
+            'captcha' => ['required', 'string', 'size:6'],
             'website' => ['nullable', 'max:0'],
-        ], ['email_recuperacao.required' => 'Informe o e-mail.', 'website.max' => 'Não foi possível processar a solicitação.']);
+        ], ['email_recuperacao.required' => 'Informe o e-mail.', 'captcha.required' => 'Digite o texto exibido na imagem.', 'captcha.size' => 'Digite os 6 caracteres exibidos na imagem.', 'website.max' => 'Não foi possível processar a solicitação.']);
+        $captcha->validarSubmissao($request, $submissao, $dados['captcha']);
         $email = mb_strtolower(trim($dados['email_recuperacao']));
         $this->limitarRecuperacao($request, $submissao, $email);
         $inscricao = $submissao->inscricoes()->with('trabalhos.autores')->where('email', $email)->first();

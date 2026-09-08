@@ -26,7 +26,7 @@
         <div class="col-12 col-lg-6">
             <label class="form-label fw-semibold" for="template_pagina_id">Template</label>
             <select class="form-select @error('template_pagina_id') is-invalid @enderror" id="template_pagina_id" name="template_pagina_id" onchange="this.form.submit()">
-                <option value="">Sem página</option>
+                <option value="">Página Padrão do Sistema (Não utilizar template)</option>
                 @foreach($templates as $template)
                     <option value="{{ $template->id }}" @selected((int) old('template_pagina_id', $evento->template_pagina_id) === $template->id)>{{ $template->nome }}@if($template->versao) (v{{ $template->versao }})@endif</option>
                 @endforeach
@@ -60,6 +60,10 @@
 </div></div>
 @elseif($evento->template_pagina_id)
 <div class="alert alert-light border">Este template não declara variáveis.</div>
+@endif
+
+@if(!$evento->template_pagina_id)
+    @include('eventos.partials.pagina-padrao')
 @endif
 
 <div class="d-flex justify-content-end gap-2"><button class="btn btn-primary"><i class="bi bi-check-lg me-2"></i>Salvar</button></div>

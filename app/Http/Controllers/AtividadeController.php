@@ -350,7 +350,7 @@ class AtividadeController
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
-        $campos = ['nome', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $campos = ['nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
         $antes = $atividade->only($campos); $atividade->update($this->validar($request, $atividade));
         $mudancas = $historico->alteracoes($antes, $atividade->only($campos));
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
@@ -369,6 +369,7 @@ class AtividadeController
     {
         $dados = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
+            'palestrante' => ['nullable', 'string', 'max:255'],
             'ativo' => ['required', 'boolean'],
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],

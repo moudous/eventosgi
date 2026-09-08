@@ -51,6 +51,7 @@ submissoes.inscritos
 submissoes.avaliar
 submissoes.trabalhos.restaurar
 submissoes.trabalhos.excluir_definitivamente
+submissoes.trabalhos.alterar_status
 templates.listar
 templates.importar
 templates.exportar

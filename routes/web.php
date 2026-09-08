@@ -18,6 +18,7 @@ use App\Http\Controllers\SubmissaoPublicaController;
 use App\Http\Controllers\SenhaParticipanteController;
 use App\Http\Controllers\BibliotecaController;
 use App\Http\Controllers\CaptchaInscricaoController;
+use App\Http\Controllers\CaptchaSubmissaoController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -256,11 +257,13 @@ Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     Route::delete('/{submissao}', [SubmissaoController::class, 'destroy'])->middleware('gi.permission:submissoes.excluir')->name('destroy');
     Route::get('/{submissao}/inscritos', [SubmissaoController::class, 'inscritos'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos');
     Route::get('/{submissao}/inscritos/dados', [SubmissaoController::class, 'inscritosDados'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos.dados');
+    Route::patch('/{submissao}/inscritos/{trabalho}/status', [SubmissaoController::class, 'alterarStatus'])->middleware('gi.permission:submissoes.trabalhos.alterar_status')->name('inscritos.alterar-status');
     Route::patch('/{submissao}/inscritos/{trabalho}/restaurar', [SubmissaoController::class, 'restaurar'])->middleware('gi.permission:submissoes.trabalhos.restaurar')->name('inscritos.restaurar');
     Route::delete('/{submissao}/inscritos/{trabalho}/definitivo', [SubmissaoController::class, 'excluirDefinitivamente'])->middleware('gi.permission:submissoes.trabalhos.excluir_definitivamente')->name('inscritos.excluir-definitivamente');
 
     // Portal público: criação, autenticação e edição dos trabalhos. Nenhuma permissão GI.
     Route::get('/{submissao}/formulario', [SubmissaoPublicaController::class, 'formulario'])->name('publicas.formulario');
+    Route::get('/{submissao}/captcha', CaptchaSubmissaoController::class)->name('publicas.captcha');
     Route::post('/{submissao}/formulario/trabalhos', [SubmissaoPublicaController::class, 'criar'])->name('publicas.criar');
     Route::post('/{submissao}/formulario/entrar', [SubmissaoPublicaController::class, 'entrar'])->name('publicas.entrar');
     Route::post('/{submissao}/formulario/selecionar', [SubmissaoPublicaController::class, 'selecionar'])->name('publicas.selecionar');

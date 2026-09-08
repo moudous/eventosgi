@@ -53,4 +53,9 @@ class Evento extends Model
     {
         return $this->hasMany(Submissao::class);
     }
+
+    public function paginaPadrao(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PaginaPadraoEvento::class);
+    }
 }
