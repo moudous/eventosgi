@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', $apagados ? 'Atividades apagadas' : 'Atividades')
-@push('styles')<link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet">@endpush
+@push('styles')<link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet"><style>#atividadesTable_wrapper .dt-layout-end{display:flex;align-items:end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}.filtro-evento-dt{min-width:260px}.filtro-evento-dt label{display:block;margin-bottom:.25rem;font-size:.875rem;font-weight:600}</style>@endpush
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
  <div><h1 class="page-title">{{ $apagados?'Atividades apagadas':'Atividades' }}</h1><p class="page-description mb-0">{{ $apagados?'Restaure ou exclua definitivamente as atividades apagadas.':'Cadastre e gerencie as atividades dos eventos.' }}</p></div>
@@ -10,6 +10,7 @@
 </div>
 @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{session('status')}}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 <div id="actionFeedback" class="alert alert-dismissible fade d-none"><span></span><button class="btn-close" data-bs-dismiss="alert"></button></div>
+<div id="filtroEventoAtividades" class="filtro-evento-dt d-none"><label for="filtro_evento">Evento</label><select id="filtro_evento" class="form-select form-select-sm"><option value="0">Todos os eventos</option>@foreach($eventosFiltro as $evento)<option value="{{ $evento->id }}" @selected((int)($estadoTabela['filtro_evento']??0)===$evento->id)>{{ $evento->nome }}</option>@endforeach</select></div>
 <div class="card content-card"><div class="card-header"><h2 class="h5 fw-bold mb-0">{{ $apagados?'Registros apagados':'Atividades cadastradas' }}</h2></div><div class="card-body p-0"><div class="table-responsive">
 <table id="atividadesTable" class="table table-hover align-middle w-100 mb-0"><thead><tr><th>ID</th><th>Nome</th><th>Evento</th><th>Modalidade</th><th>Início</th><th>Fim</th><th>Nº inscrições</th><th>Status</th><th>Criado por</th><th>Criação</th><th>Alteração</th>@if($apagados)<th>Exclusão</th>@endif<th data-dt-order="disable">Ações</th></tr></thead></table>
 </div></div></div>
@@ -20,7 +21,8 @@
 <script>
 document.addEventListener('DOMContentLoaded',()=>{const apagados=@json($apagados);
 const cols=[{data:'id'},{data:'nome'},{data:'evento'},{data:'modalidade'},{data:'data_inicio'},{data:'data_fim'},{data:'inscricoes_count'},{data:'ativo'},{data:'criado_por'},{data:'created_at'},{data:'updated_at'},...(apagados?[{data:'deleted_at'}]:[]),{data:'acoes',orderable:false,searchable:false}];
-const table=new DataTable('#atividadesTable',{processing:true,serverSide:true,order:[[0,'desc']],pageLength:@json($estadoTabela['por_pagina']),displayStart:@json(($estadoTabela['page']-1)*$estadoTabela['por_pagina']),search:{search:@json($estadoTabela['pesquisar'])},ajax:{url:@json(route('atividades.dados',[],false)),data:d=>d.apagados=apagados?1:0},columns:cols,language:{processing:'Carregando...',emptyTable:'Nenhuma atividade cadastrada.',info:'Exibindo _START_ a _END_ de _TOTAL_ atividades',infoEmpty:'Nenhuma atividade encontrada',lengthMenu:'Exibir _MENU_ registros',search:'Pesquisar:',zeroRecords:'Nenhuma atividade encontrada.',paginate:{next:'Próxima',previous:'Anterior'}}});
+const table=new DataTable('#atividadesTable',{processing:true,serverSide:true,order:[[0,'desc']],pageLength:@json($estadoTabela['por_pagina']),displayStart:@json(($estadoTabela['page']-1)*$estadoTabela['por_pagina']),search:{search:@json($estadoTabela['pesquisar'])},ajax:{url:@json(route('atividades.dados',[],false)),data:d=>{d.apagados=apagados?1:0;d.filtro_evento=document.getElementById('filtro_evento').value}},columns:cols,language:{processing:'Carregando...',emptyTable:'Nenhuma atividade cadastrada.',info:'Exibindo _START_ a _END_ de _TOTAL_ atividades',infoEmpty:'Nenhuma atividade encontrada',lengthMenu:'Exibir _MENU_ registros',search:'Pesquisar:',zeroRecords:'Nenhuma atividade encontrada.',paginate:{next:'Próxima',previous:'Anterior'}}});
+const filtroEvento=document.getElementById('filtroEventoAtividades'),areaPesquisa=document.querySelector('#atividadesTable_wrapper .dt-search');if(areaPesquisa){areaPesquisa.parentElement.insertBefore(filtroEvento,areaPesquisa);filtroEvento.classList.remove('d-none')}document.getElementById('filtro_evento').addEventListener('change',()=>table.ajax.reload(null,true));
 const feedback=document.getElementById('actionFeedback');let historyTable=null;const modal=new bootstrap.Modal('#historicoModal');
 // Copiar shortcode. Dentro do iframe do GI a API de area de transferencia pode estar
 // bloqueada, entao a reserva e o textarea temporario com execCommand.

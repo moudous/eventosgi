@@ -198,18 +198,16 @@ class TemplatePaginaService
                 $manifesto = json_decode((string) File::get($caminho.'/'.self::MANIFESTO), true) ?: [];
             }
 
-            // Templates que vieram versionados com a aplicação podem evoluir sem
-            // exigir uma nova importação. Templates importados por usuários não são
-            // sobrescritos por este sincronismo.
+            // O manifesto é a fonte dos metadados do pacote. Assim, se os arquivos de
+            // um template já instalado forem atualizados, a nova versão e suas
+            // variáveis aparecem no editor sem exigir outra importação.
             if (isset($registradas[$pasta])) {
-                if ($registradas[$pasta]->importado_por === null) {
-                    $registradas[$pasta]->update([
-                        'nome' => mb_substr((string) ($manifesto['nome'] ?? $pasta), 0, 150),
-                        'descricao' => isset($manifesto['descricao']) ? mb_substr((string) $manifesto['descricao'], 0, 500) : null,
-                        'versao' => isset($manifesto['versao']) ? mb_substr((string) $manifesto['versao'], 0, 20) : null,
-                        'variaveis' => $this->variaveis($manifesto),
-                    ]);
-                }
+                $registradas[$pasta]->update([
+                    'nome' => mb_substr((string) ($manifesto['nome'] ?? $pasta), 0, 150),
+                    'descricao' => isset($manifesto['descricao']) ? mb_substr((string) $manifesto['descricao'], 0, 500) : null,
+                    'versao' => isset($manifesto['versao']) ? mb_substr((string) $manifesto['versao'], 0, 20) : null,
+                    'variaveis' => $this->variaveis($manifesto),
+                ]);
                 continue;
             }
 
@@ -289,11 +287,14 @@ class TemplatePaginaService
             if (! preg_match('/^[a-z_][a-z0-9_]*$/i', $nome)) continue;
             if (in_array($nome, PaginaEventoRenderer::RESERVADOS, true)) continue;
 
+            $tipo = is_array($declarada) ? (string) ($declarada['tipo'] ?? 'text') : 'text';
+            if (! in_array($tipo, ['text', 'textarea', 'url', 'color'], true)) $tipo = 'text';
+
             $variaveis[$nome] = [
                 'nome' => $nome,
                 'rotulo' => trim((string) (is_array($declarada) ? ($declarada['rotulo'] ?? $nome) : $nome)),
                 'padrao' => (string) (is_array($declarada) ? ($declarada['padrao'] ?? '') : ''),
-                'tipo' => is_array($declarada) && ($declarada['tipo'] ?? '') === 'color' ? 'color' : 'text',
+                'tipo' => $tipo,
             ];
         }
 

@@ -26,7 +26,13 @@ class ArmazemService
         array $filtros = [],
     ): array
     {
-        $estado = array_merge($filtros, [
+        // Ao salvar o estado da rota-pai (ex.: atividades), preserve estados de
+        // subtelas (ex.: atividades.inscricoes.39) já guardados nesse mesmo armazém.
+        $subrotas = array_filter(
+            (array) $request->session()->get("armazem.{$recurso}", []),
+            'is_array',
+        );
+        $estado = array_merge($subrotas, $filtros, [
             'page' => max(1, $pagina),
             'pesquisar' => trim($pesquisar),
             'por_pagina' => min(100, max(1, $porPagina)),

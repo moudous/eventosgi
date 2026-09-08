@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ evento.nome }}</title>
+<link rel="stylesheet" href="{{ asset('assets/estilo.css') }}">
+<style>:root {
+    --destaque: {{ cor_destaque }};
+    --titulo: {{ cor_titulo }};
+    --tinta: {{ cor_texto }};
+    --suave: {{ cor_texto_suave }};
+    --fundo: {{ cor_fundo }};
+    --cartao: {{ cor_cartao }};
+}</style>
+</head>
+<body>
+<main class="evento">
+    <h1 class="somente-leitor">{{ evento.nome }}</h1>
+
+    <section class="arte" aria-label="Apresentação do evento">
+        {% if imagem_fundo %}<img src="{{ imagem_fundo }}" alt="{{ evento.nome }}">{% else %}<img src="{{ asset('assets/arte_jornada5_3.jpg') }}" alt="{{ evento.nome }}">{% endif %}
+    </section>
+
+    <section class="sobre secao-faixa" id="sobre">
+        <div class="limite">
+            <p class="chamada">{% if chamada %}{{ chamada }}{% else %}Conheça o evento{% endif %}</p>
+            <h2>Sobre o evento</h2>
+            {% if subtitulo %}<p class="sobre-introducao">{{ subtitulo }}</p>{% endif %}
+            <div class="sobre-colunas">
+                {% if sobre_coluna_1 %}<p>{{ sobre_coluna_1 }}</p>{% endif %}
+                {% if sobre_coluna_2 %}<p>{{ sobre_coluna_2 }}</p>{% endif %}
+                {% if sobre_coluna_3 %}<p>{{ sobre_coluna_3 }}</p>{% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="data-evento secao-clara" aria-label="Data do evento">
+        <div class="limite">
+            <img src="{{ asset('assets/data_evento.png') }}" alt="Data do evento">
+            {% if periodo %}<p class="periodo">{{ periodo }}</p>{% endif %}
+            {% if local %}<p class="local-evento">{{ local }}</p>{% endif %}
+        </div>
+    </section>
+
+    <section class="publico secao-clara">
+        <div class="limite limite-estreito">
+            <h2>Quem pode participar</h2>
+            <p>{% if publico %}{{ publico }}{% else %}Acadêmicos, profissionais e pessoas interessadas nas atividades do evento.{% endif %}</p>
+            {% if url_inscricao_geral %}<a class="botao-principal" href="{{ url_inscricao_geral }}">{% if texto_botao_inscricao %}{{ texto_botao_inscricao }}{% else %}Quero me inscrever{% endif %}</a>{% endif %}
+        </div>
+    </section>
+
+    <section class="formato secao-escura" id="formato">
+        <div class="limite">
+            <h2>Formato</h2>
+            <div class="formatos">
+                <article><img src="{{ asset('assets/icone_palestras_online-v1.png') }}" alt=""><h3>Palestras online</h3></article>
+                <article><img src="{{ asset('assets/icone_palestras_presenciais-v1.png') }}" alt=""><h3>Palestras presenciais</h3></article>
+                <article><img src="{{ asset('assets/icone-hans-on-v1.png') }}" alt=""><h3>Hands on e minicursos</h3></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="palestrantes secao-escura" id="convidados">
+        <div class="limite">
+            <p class="chamada">Convidados</p>
+            <h2>Palestrantes</h2>
+            {% if convidados %}
+            <div class="grade-palestrantes">
+                {% for convidado in convidados %}
+                <article class="palestrante">
+                    <div class="foto-palestrante">{% if convidado.foto %}<img src="{{ convidado.foto }}" alt="Foto de {{ convidado.nome }}">{% else %}<span aria-hidden="true">✦</span>{% endif %}</div>
+                    <h3>{{ convidado.nome }}</h3>
+                    {% if convidado.titulacao %}<p class="titulacao">{{ convidado.titulacao }}</p>{% endif %}
+                    {% if convidado.descricao %}<p class="curriculo">{{ convidado.descricao }}</p>{% endif %}
+                    {% if convidado.local %}<p class="instituicao">{{ convidado.local }}</p>{% endif %}
+                    {% if convidado.redes_sociais %}<div class="redes">{% for rede in convidado.redes_sociais %}<a href="{{ rede.url }}" target="_blank" rel="noopener noreferrer">{{ rede.rede }}</a>{% endfor %}</div>{% endif %}
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}<p class="mensagem-vazia mensagem-vazia--escura">Os palestrantes serão anunciados em breve.</p>{% endif %}
+        </div>
+    </section>
+
+    <section class="programacao secao-clara" id="programacao">
+        <div class="limite">
+            <p class="chamada chamada--escura">Agenda</p>
+            <h2>Programação científica</h2>
+            {% if dias %}
+            <div class="grade-dias">
+                {% for dia in dias %}
+                <article class="dia">
+                    <header><div><span class="dia-semana">{{ dia.dia_semana }}</span><h3>{{ dia.data }}</h3></div><span class="dia-total">{{ dia.total }}</span></header>
+                    <div class="agenda">
+                        {% for atividade in dia.atividades %}
+                        <a class="agenda-item" href="{{ atividade.url_inscricao }}"><time>{{ atividade.hora }}</time><span><strong>{{ atividade.nome }}</strong>{% if atividade.categoria %}<small>{{ atividade.categoria }}</small>{% endif %}</span></a>
+                        {% endfor %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}<p class="mensagem-vazia">A programação será publicada em breve.</p>{% endif %}
+        </div>
+    </section>
+
+    <section class="atividades secao-clara" id="atividades">
+        <div class="limite">
+            <p class="chamada chamada--escura">Participe</p>
+            <h2>Atividades e inscrições</h2>
+            {% if menu %}
+                {% for grupo in menu %}
+                <section class="grupo-atividade">
+                    <div class="grupo-cabecalho"><h3>{{ grupo.nome }}</h3><span>{{ grupo.total }}</span></div>
+                    <div class="grade-atividades">
+                        {% for atividade in grupo.atividades %}
+                        <article class="atividade">
+                            <span class="modalidade">{% if atividade.modalidade %}{{ atividade.modalidade }}{% else %}Atividade{% endif %}</span>
+                            <h4>{{ atividade.nome }}</h4>
+                            <dl>
+                                {% if atividade.data_inicio %}<div><dt>Início</dt><dd>{{ atividade.data_inicio }}</dd></div>{% endif %}
+                                {% if atividade.data_fim %}<div><dt>Fim</dt><dd>{{ atividade.data_fim }}</dd></div>{% endif %}
+                            </dl>
+                            <a href="{{ atividade.url_inscricao }}">Quero me inscrever</a>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endfor %}
+            {% else %}<p class="mensagem-vazia">Nenhuma atividade publicada até o momento.</p>{% endif %}
+        </div>
+    </section>
+</main>
+</body>
+</html>

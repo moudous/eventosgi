@@ -1,0 +1,24 @@
+{
+    "nome": "Institucional 1",
+    "descricao": "Página em blocos inspirada na Jornada Odontológica FCO, com arte, apresentação, formatos, palestrantes, programação e inscrições.",
+    "versao": "2.0.0",
+    "variaveis": [
+        { "nome": "chamada", "rotulo": "Chamada da apresentação", "padrao": "Conheça o evento" },
+        { "nome": "subtitulo", "rotulo": "Introdução do evento", "padrao": "", "tipo": "textarea" },
+        { "nome": "sobre_coluna_1", "rotulo": "Sobre o evento — coluna 1", "padrao": "", "tipo": "textarea" },
+        { "nome": "sobre_coluna_2", "rotulo": "Sobre o evento — coluna 2", "padrao": "", "tipo": "textarea" },
+        { "nome": "sobre_coluna_3", "rotulo": "Sobre o evento — coluna 3", "padrao": "", "tipo": "textarea" },
+        { "nome": "publico", "rotulo": "Quem pode participar", "padrao": "Acadêmicos, profissionais de odontologia e áreas afins.", "tipo": "textarea" },
+        { "nome": "imagem_fundo", "rotulo": "Arte principal alternativa (URL)", "padrao": "", "tipo": "url" },
+        { "nome": "url_inscricao_geral", "rotulo": "URL da inscrição geral", "padrao": "", "tipo": "url" },
+        { "nome": "texto_botao_inscricao", "rotulo": "Texto do botão de inscrição", "padrao": "Quero me inscrever — inscrição geral" },
+        { "nome": "cor_destaque", "rotulo": "Cor de destaque", "padrao": "#34c0d0", "tipo": "color" },
+        { "nome": "cor_titulo", "rotulo": "Cor dos títulos", "padrao": "#01061a", "tipo": "color" },
+        { "nome": "cor_texto", "rotulo": "Cor dos textos", "padrao": "#20242c", "tipo": "color" },
+        { "nome": "cor_texto_suave", "rotulo": "Cor dos textos secundários", "padrao": "#667085", "tipo": "color" },
+        { "nome": "cor_fundo", "rotulo": "Cor de fundo", "padrao": "#eef1f5", "tipo": "color" },
+        { "nome": "cor_cartao", "rotulo": "Cor dos cartões", "padrao": "#ffffff", "tipo": "color" },
+        { "nome": "local", "rotulo": "Local do evento", "padrao": "" },
+        { "nome": "periodo", "rotulo": "Período do evento", "padrao": "" }
+    ]
+}

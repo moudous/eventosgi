@@ -1,0 +1,113 @@
+/* Institucional 1 — inspirado na página da V Jornada Odontológica da FCO. */
+:root { --destaque:#34c0d0; --titulo:#01061a; --tinta:#20242c; --suave:#6b7280; --fundo:#eef1f5; --cartao:#fff; --escuro:#01061a; --linha:#d9dee6; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin:0; background:var(--fundo); color:var(--tinta); font-family:Arial,Helvetica,sans-serif; line-height:1.55; }
+img { display:block; max-width:100%; }
+a { color:inherit; }
+.somente-leitor { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.evento { width:min(1180px,100%); margin:0 auto; background:var(--cartao); box-shadow:0 12px 45px rgba(1,6,26,.16); overflow:hidden; }
+.limite { width:min(1060px,calc(100% - 40px)); margin:0 auto; }
+.limite-estreito { max-width:800px; }
+.secao-faixa,.secao-clara,.secao-escura { padding:58px 0; }
+h2 { margin:0 0 28px; color:var(--titulo); text-align:center; font-size:clamp(1.7rem,3vw,2.35rem); line-height:1.15; }
+.chamada { margin:0 0 7px; color:var(--escuro); text-align:center; text-transform:uppercase; letter-spacing:.18em; font-size:.72rem; font-weight:800; }
+.chamada--escura { color:var(--destaque); }
+
+.arte { background:var(--escuro); }
+.arte img { width:100%; height:auto; }
+.sobre { padding-top:38px; padding-bottom:46px; background:var(--destaque); color:#061326; }
+.sobre h2 { margin-bottom:22px; color:var(--escuro); font-size:1.35rem; }
+.sobre-introducao { max-width:850px; margin:0 auto 28px; text-align:center; font-size:1.05rem; }
+.sobre-colunas { display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+.sobre-colunas p { margin:0; padding:0 28px; text-align:center; font-size:.95rem; }
+.sobre-colunas p + p { border-left:1px solid rgba(1,6,26,.28); }
+
+.data-evento { padding-top:28px; padding-bottom:12px; }
+.data-evento img { width:min(760px,88%); margin:0 auto; }
+.periodo,.local-evento { margin:12px 0 0; text-align:center; color:var(--titulo); font-weight:700; }
+.local-evento { margin-top:2px; color:var(--suave); font-weight:400; }
+.publico { padding-top:28px; text-align:center; }
+.publico h2 { margin-bottom:12px; }
+.publico p { margin:0 auto 28px; font-size:1.03rem; }
+.botao-principal { display:inline-flex; justify-content:center; padding:13px 28px; border:1px solid var(--destaque); border-radius:999px; background:var(--escuro); color:var(--destaque); text-decoration:none; font-weight:800; transition:transform .2s,box-shadow .2s; }
+.botao-principal:hover { transform:translateY(-2px); box-shadow:0 9px 22px rgba(1,6,26,.22); }
+
+.secao-escura { background:var(--escuro); color:#fff; }
+.secao-escura h2 { color:#fff; }
+.formato { padding-bottom:45px; }
+.formatos { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; }
+.formatos article { text-align:center; }
+.formatos article + article { border-left:1px solid rgba(255,255,255,.28); }
+.formatos img { width:min(220px,72%); aspect-ratio:1000/742; object-fit:contain; margin:0 auto 12px; }
+.formatos h3 { margin:0; color:#fff; font-size:1rem; }
+
+.palestrantes { padding-top:42px; border-top:1px solid rgba(255,255,255,.2); }
+.palestrantes .chamada { color:var(--destaque); }
+.grade-palestrantes { display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+.palestrante { min-width:0; padding:22px 34px 28px; text-align:center; }
+.palestrante + .palestrante { border-left:1px solid rgba(255,255,255,.3); }
+.palestrante:nth-child(3n + 1) { border-left:0; }
+.palestrante:nth-child(n + 4) { border-top:1px solid rgba(255,255,255,.3); }
+.foto-palestrante { width:176px; height:176px; margin:0 auto 16px; border:4px solid var(--destaque); border-radius:50%; background:#0d1c40; overflow:hidden; }
+.foto-palestrante img { width:100%; height:100%; object-fit:cover; }
+.foto-palestrante span { display:grid; height:100%; place-items:center; color:var(--destaque); font-size:3.6rem; }
+.palestrante h3 { margin:0; color:#fff; font-size:1rem; line-height:1.3; }
+.titulacao { margin:6px 0; color:var(--destaque); font-size:.82rem; font-weight:800; }
+.curriculo { margin:8px 0; color:#eef4ff; text-align:left; font-size:.83rem; }
+.instituicao { margin:8px 0 0; color:#aeb9ce; font-size:.8rem; }
+.redes { display:flex; flex-wrap:wrap; justify-content:center; gap:5px 12px; margin-top:12px; }
+.redes a { color:var(--destaque); font-size:.75rem; font-weight:700; text-decoration:none; }
+
+.programacao { background:#fff; }
+.grade-dias { display:grid; grid-template-columns:repeat(2,1fr); gap:24px; align-items:start; }
+.dia { border:1px solid var(--linha); background:var(--cartao); box-shadow:0 3px 12px rgba(1,6,26,.08); }
+.dia > header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:4px solid var(--destaque); background:var(--escuro); color:#fff; }
+.dia-semana { color:var(--destaque); text-transform:uppercase; letter-spacing:.1em; font-size:.68rem; font-weight:800; }
+.dia h3 { margin:2px 0 0; font-size:1.16rem; }
+.dia-total { display:grid; min-width:34px; height:34px; place-items:center; border-radius:50%; background:var(--destaque); color:var(--escuro); font-weight:800; }
+.agenda { padding:8px 22px; }
+.agenda-item { display:grid; grid-template-columns:58px 1fr; gap:14px; padding:16px 0; text-decoration:none; }
+.agenda-item + .agenda-item { border-top:1px solid var(--linha); }
+.agenda-item time { color:var(--destaque); font-weight:800; }
+.agenda-item strong { display:block; color:var(--titulo); font-size:.92rem; }
+.agenda-item small { display:block; margin-top:3px; color:var(--suave); }
+
+.atividades { padding-top:18px; background:#f7f8fa; }
+.grupo-atividade + .grupo-atividade { margin-top:42px; }
+.grupo-cabecalho { display:flex; align-items:center; gap:12px; margin-bottom:15px; }
+.grupo-cabecalho h3 { margin:0; color:var(--titulo); font-size:1.25rem; }
+.grupo-cabecalho span { padding:2px 9px; border-radius:999px; background:var(--destaque); color:var(--escuro); font-size:.72rem; font-weight:800; }
+.grade-atividades { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; }
+.atividade { display:flex; min-height:225px; flex-direction:column; padding:22px; border:1px solid var(--linha); background:var(--cartao); box-shadow:0 3px 12px rgba(1,6,26,.06); }
+.modalidade { align-self:flex-start; padding:4px 9px; background:var(--destaque); color:var(--escuro); text-transform:uppercase; letter-spacing:.06em; font-size:.67rem; font-weight:800; }
+.atividade h4 { margin:15px 0 12px; color:var(--titulo); font-size:1.02rem; }
+.atividade dl { margin:0 0 18px; color:var(--suave); font-size:.82rem; }
+.atividade dl div { display:flex; gap:6px; }
+.atividade dt { font-weight:700; }
+.atividade dt::after { content:":"; }
+.atividade dd { margin:0; }
+.atividade > a { margin-top:auto; align-self:flex-start; padding:8px 15px; border-radius:999px; background:var(--escuro); color:var(--destaque); text-decoration:none; font-size:.78rem; font-weight:800; }
+.mensagem-vazia { padding:24px; border:1px dashed var(--linha); text-align:center; color:var(--suave); }
+.mensagem-vazia--escura { border-color:rgba(255,255,255,.35); color:#d6deeb; }
+
+@media (max-width:760px) {
+    .evento { box-shadow:none; }
+    .limite { width:min(100% - 28px,1060px); }
+    .secao-faixa,.secao-clara,.secao-escura { padding:42px 0; }
+    .sobre-colunas,.formatos,.grade-palestrantes,.grade-dias,.grade-atividades { grid-template-columns:1fr; }
+    .sobre-colunas p { padding:18px 0; }
+    .sobre-colunas p + p { border-top:1px solid rgba(1,6,26,.28); border-left:0; }
+    .formatos article { padding:12px 0 25px; }
+    .formatos article + article { border-top:1px solid rgba(255,255,255,.28); border-left:0; padding-top:30px; }
+    .formatos img { width:min(190px,58%); }
+    .palestrante,.palestrante:nth-child(n + 4) { border-top:1px solid rgba(255,255,255,.3); border-left:0; }
+    .palestrante:first-child { border-top:0; }
+    .data-evento img { width:100%; }
+}
+@media (min-width:761px) and (max-width:980px) {
+    .grade-palestrantes { grid-template-columns:repeat(2,1fr); }
+    .palestrante:nth-child(3n + 1) { border-left:1px solid rgba(255,255,255,.3); }
+    .palestrante:nth-child(2n + 1) { border-left:0; }
+    .palestrante:nth-child(n + 3) { border-top:1px solid rgba(255,255,255,.3); }
+}

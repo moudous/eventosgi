@@ -80,12 +80,31 @@ class PaginaEventoController
         abort_unless($evento->ativo, 404, 'Este evento não está ativo.');
 
         if ($evento->template_pagina_id === null) {
-            return response(view('eventos.pagina-sem-template', ['evento' => $evento])->render(), 200)
-                ->header('Content-Type', 'text/html; charset=UTF-8');
+            return $this->respostaIncorporavel(
+                view('eventos.pagina-sem-template', ['evento' => $evento])->render(),
+            );
         }
 
-        return response($this->renderer->renderizar($evento), 200)
-            ->header('Content-Type', 'text/html; charset=UTF-8')
-            ->header('X-Content-Type-Options', 'nosniff');
+        return $this->respostaIncorporavel($this->renderer->renderizar($evento));
+    }
+
+    /**
+     * A página publicada é feita para incorporação por qualquer site, inclusive
+     * WordPress em outro domínio. Estes cabeçalhos ficam também no controller para
+     * que a rota continue incorporável mesmo se o middleware geral mudar no futuro.
+     */
+    private function respostaIncorporavel(string $html): Response
+    {
+        $resposta = response($html, 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Security-Policy' => "frame-ancestors *; object-src 'none'; base-uri 'self'",
+            'Cross-Origin-Resource-Policy' => 'cross-origin',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+
+        // SAMEORIGIN e DENY impediriam o carregamento em WordPress de outro domínio.
+        $resposta->headers->remove('X-Frame-Options');
+
+        return $resposta;
     }
 }

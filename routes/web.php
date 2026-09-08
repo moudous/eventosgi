@@ -13,6 +13,8 @@ use App\Http\Controllers\ConfiguracaoController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\PaginaEventoController;
 use App\Http\Controllers\TemplatePaginaController;
+use App\Http\Controllers\SubmissaoController;
+use App\Http\Controllers\SubmissaoPublicaController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -220,6 +222,34 @@ Route::prefix('convidados')->name('convidados.')->group(function (): void {
     Route::get('/{convidado}/editar', [ConvidadoController::class, 'edit'])->middleware('gi.permission:convidados.editar')->name('edit');
     Route::put('/{convidado}', [ConvidadoController::class, 'update'])->middleware('gi.permission:convidados.editar')->name('update');
     Route::delete('/{convidado}', [ConvidadoController::class, 'destroy'])->middleware('gi.permission:convidados.excluir')->name('destroy');
+});
+
+Route::prefix('submissao')->name('submissoes.')->group(function (): void {
+    // Administração das chamadas de submissão.
+    Route::get('/', [SubmissaoController::class, 'index'])->middleware('gi.permission:submissoes.listar')->name('index');
+    Route::get('/dados', [SubmissaoController::class, 'dados'])->middleware('gi.permission:submissoes.listar')->name('dados');
+    Route::get('/criar', [SubmissaoController::class, 'create'])->middleware('gi.permission:submissoes.criar')->name('create');
+    Route::post('/', [SubmissaoController::class, 'store'])->middleware('gi.permission:submissoes.criar')->name('store');
+    Route::get('/{submissao}/editar', [SubmissaoController::class, 'edit'])->middleware('gi.permission:submissoes.editar')->name('edit');
+    Route::put('/{submissao}', [SubmissaoController::class, 'update'])->middleware('gi.permission:submissoes.editar')->name('update');
+    Route::patch('/{submissao}/alternar', [SubmissaoController::class, 'alternar'])->middleware('gi.permission:submissoes.ativar_desativar')->name('alternar');
+    Route::delete('/{submissao}', [SubmissaoController::class, 'destroy'])->middleware('gi.permission:submissoes.excluir')->name('destroy');
+    Route::get('/{submissao}/inscritos', [SubmissaoController::class, 'inscritos'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos');
+    Route::get('/{submissao}/inscritos/dados', [SubmissaoController::class, 'inscritosDados'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos.dados');
+    Route::patch('/{submissao}/inscritos/{trabalho}/restaurar', [SubmissaoController::class, 'restaurar'])->middleware('gi.permission:submissoes.trabalhos.restaurar')->name('inscritos.restaurar');
+    Route::delete('/{submissao}/inscritos/{trabalho}/definitivo', [SubmissaoController::class, 'excluirDefinitivamente'])->middleware('gi.permission:submissoes.trabalhos.excluir_definitivamente')->name('inscritos.excluir-definitivamente');
+
+    // Portal público: criação, autenticação e edição dos trabalhos. Nenhuma permissão GI.
+    Route::get('/{submissao}/formulario', [SubmissaoPublicaController::class, 'formulario'])->name('publicas.formulario');
+    Route::post('/{submissao}/formulario/trabalhos', [SubmissaoPublicaController::class, 'criar'])->name('publicas.criar');
+    Route::post('/{submissao}/formulario/entrar', [SubmissaoPublicaController::class, 'entrar'])->name('publicas.entrar');
+    Route::post('/{submissao}/formulario/selecionar', [SubmissaoPublicaController::class, 'selecionar'])->name('publicas.selecionar');
+    Route::put('/{submissao}/formulario/trabalhos/{trabalho}', [SubmissaoPublicaController::class, 'atualizar'])->name('publicas.atualizar');
+    Route::get('/{submissao}/formulario/trabalhos/{trabalho}/exportar-doc', [SubmissaoPublicaController::class, 'exportarDocumento'])->name('publicas.exportar-documento');
+    Route::delete('/{submissao}/formulario/trabalhos/{trabalho}', [SubmissaoPublicaController::class, 'excluir'])->name('publicas.excluir');
+    Route::patch('/{submissao}/formulario/trabalhos/{trabalho}/senha', [SubmissaoPublicaController::class, 'alterarSenha'])->name('publicas.senha');
+    Route::post('/{submissao}/formulario/esqueci-senha', [SubmissaoPublicaController::class, 'esqueciSenha'])->name('publicas.esqueci-senha');
+    Route::post('/{submissao}/formulario/sair', [SubmissaoPublicaController::class, 'sair'])->name('publicas.sair');
 });
 
 Route::post('/manutencao/{acao}', function (Request $request, string $acao) {

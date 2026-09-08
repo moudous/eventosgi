@@ -23,4 +23,9 @@ class Evento extends Model
     {
         return $this->belongsTo(TemplatePagina::class, 'template_pagina_id');
     }
+
+    public function submissoes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Submissao::class);
+    }
 }

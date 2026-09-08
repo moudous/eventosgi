@@ -7,6 +7,7 @@ use App\Models\Categoria;
 use App\Models\Evento;
 use App\Models\HistoricoAtividade;
 use App\Models\InscricaoAtividade;
+use App\Models\Participante;
 use App\Rules\EmailValido;
 use App\Services\ArmazemService;
 use App\Services\FormularioInscricaoService;
@@ -25,14 +26,16 @@ use Illuminate\Support\Facades\Validator;
 
 class AtividadeController
 {
-    public function index(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => false, 'estadoTabela' => $armazem->recuperar('atividades', $request)]); }
-    public function apagados(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => true, 'estadoTabela' => $armazem->recuperar('atividades', $request)]); }
+    public function index(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => false, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderBy('nome')->get(['id', 'nome'])]); }
+    public function apagados(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => true, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderBy('nome')->get(['id', 'nome'])]); }
 
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
         $apagados = $request->boolean('apagados');
         $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with(['evento', 'criador:id,nome'])->withCount('inscricoes');
         $total = (clone $query)->count();
+        $filtroEvento = max(0, (int) $request->input('filtro_evento', 0));
+        if ($filtroEvento > 0) $query->where('evento_id', $filtroEvento);
         $busca = trim((string) $request->input('search.value', ''));
         if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%"))->orWhereHas('criador', fn ($u) => $u->where('nome', 'like', "%{$busca}%")));
         $filtrados = (clone $query)->count();
@@ -42,7 +45,7 @@ class AtividadeController
         $direcao = $request->input('order.0.dir') === 'asc' ? 'asc' : 'desc';
         $inicio = max(0, (int) $request->input('start', 0));
         $tamanho = min(100, max(1, (int) $request->input('length', 10)));
-        $armazem->salvar('atividades', $request, intdiv($inicio, $tamanho) + 1, $busca, $tamanho);
+        $armazem->salvar('atividades', $request, intdiv($inicio, $tamanho) + 1, $busca, $tamanho, ['filtro_evento' => $filtroEvento]);
         $permissoes = app(GiPermissionService::class);
         $dados = $query->orderBy($coluna, $direcao)->skip($inicio)->take($tamanho)->get()->map(fn (Atividade $atividade) => [
             'inscricoes_count' => $atividade->inscricoes_count, 'id' => $atividade->id, 'nome' => e($atividade->nome), 'evento' => e($atividade->evento?->nome ?? '—'),
@@ -267,7 +270,37 @@ class AtividadeController
         if ($resultado['motivo'] === 'esgotado') return back()->with('vagas_esgotadas', $resultado['mensagem']);
         abort(403, $resultado['mensagem']);
     }
-    public function inscricoes(Atividade $atividade): View { return view('atividades.inscricoes', ['atividade' => $atividade, 'inscricoes' => InscricaoAtividade::where('atividade_id', $atividade->id)->latest()->paginate(20)]); }
+    public function inscricoes(Request $request, Atividade $atividade, ArmazemService $armazem): View
+    {
+        $recurso = 'atividades.inscricoes.'.$atividade->id;
+        $estado = $armazem->recuperar($recurso, $request);
+        $pesquisar = $request->exists('pesquisar')
+            ? trim((string) $request->query('pesquisar'))
+            : $estado['pesquisar'];
+        $pagina = $request->exists('page')
+            ? max(1, $request->integer('page'))
+            : ($request->exists('pesquisar') ? 1 : $estado['page']);
+        $porPagina = 20;
+        $query = InscricaoAtividade::query()->where('atividade_id', $atividade->id);
+
+        if ($pesquisar !== '') {
+            $participantes = Participante::query()->where('nome', 'like', "%{$pesquisar}%")
+                ->limit(500)->pluck('id')->all();
+            $query->where(function ($consulta) use ($pesquisar, $participantes): void {
+                $consulta->where('participante_email', 'like', "%{$pesquisar}%")
+                    ->orWhere('ip', 'like', "%{$pesquisar}%")
+                    ->orWhere('resposta', 'like', "%{$pesquisar}%");
+                if ($participantes !== []) $consulta->orWhereIn('participante_id', $participantes);
+                if (ctype_digit($pesquisar)) $consulta->orWhere('id', (int) $pesquisar);
+            });
+        }
+
+        $inscricoes = $query->latest()->paginate($porPagina, ['*'], 'page', $pagina)
+            ->appends(['pesquisar' => $pesquisar]);
+        $armazem->salvar($recurso, $request, $inscricoes->currentPage(), $pesquisar, $porPagina);
+
+        return view('atividades.inscricoes', compact('atividade', 'inscricoes', 'pesquisar'));
+    }
 
     /**
      * URL assinada e temporaria da planilha de respostas.

@@ -1,0 +1,8 @@
+<div class="d-inline-flex flex-wrap gap-1">
+@if($permissoes->permite('submissoes.editar'))<a href="{{ route('submissoes.edit', $submissao) }}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="bi bi-pencil-fill"></i></a>@endif
+<a href="{{ route('submissoes.publicas.formulario', $submissao) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark" title="Abrir formulário público"><i class="bi bi-link-45deg"></i></a>
+@if($permissoes->permite('submissoes.inscritos'))<a href="{{ route('submissoes.inscritos', $submissao) }}" class="btn btn-sm btn-outline-info" title="Ver inscritos"><i class="bi bi-people-fill"></i></a>@endif
+@if($permissoes->permite('submissoes.ativar_desativar'))<button type="button" class="btn btn-sm {{ $submissao->ativo ? 'btn-outline-secondary' : 'btn-outline-success' }}" title="{{ $submissao->ativo ? 'Desativar' : 'Ativar' }}" data-action="toggle" data-method="PATCH" data-action-url="{{ route('submissoes.alternar', $submissao) }}"><i class="bi {{ $submissao->ativo ? 'bi-pause-fill' : 'bi-play-fill' }}"></i></button>@endif
+@if($permissoes->permite('submissoes.avaliar'))<button type="button" class="btn btn-sm btn-outline-warning" title="Avaliação (em breve)" disabled><i class="bi bi-clipboard-check"></i></button>@endif
+@if($permissoes->permite('submissoes.excluir'))<button type="button" class="btn btn-sm btn-outline-danger" title="Excluir" data-action="delete" data-method="DELETE" data-action-url="{{ route('submissoes.destroy', $submissao) }}"><i class="bi bi-trash-fill"></i></button>@endif
+</div>
