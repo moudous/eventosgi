@@ -11,7 +11,11 @@ use App\Models\Participante;
 use App\Rules\EmailValido;
 use App\Services\ArmazemService;
 use App\Services\CaptchaInscricaoService;
+use App\Services\ComprovanteInscricaoService;
+use App\Services\ConteudoEditorFormularioService;
+use App\Services\DistribuicaoVagasService;
 use App\Services\FormularioInscricaoService;
+use App\Services\GiEmailService;
 use App\Services\IdentificacaoParticipanteService;
 use App\Services\GiPermissionService;
 use App\Services\HistoricoService;
@@ -20,9 +24,17 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class AtividadeController
 {
@@ -81,24 +93,37 @@ class AtividadeController
             ->when($atividade?->categoria_id, fn ($consulta, $id) => $consulta->orWhereKey($id))
             ->orderBy('nome')->get();
     }
-    public function formulario(Atividade $atividade, GiPermissionService $permissoes): View { return view('atividades.formulario', ['atividade' => $atividade, 'permissoes' => $permissoes]); }
-    public function salvarFormulario(Request $request, Atividade $atividade): RedirectResponse
+    public function formulario(Atividade $atividade, GiPermissionService $permissoes, DistribuicaoVagasService $distribuicao): View { $distribuicao->recalcular($atividade); return view('atividades.formulario', ['atividade' => $atividade->refresh(), 'permissoes' => $permissoes]); }
+    public function salvarFormulario(Request $request, Atividade $atividade, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao): RedirectResponse
     {
         $dados = $request->validate(['formulario' => ['required', 'json']]);
-        $config = json_decode($dados['formulario'], true);
+        $config = $distribuicao->prepararConfiguracao(json_decode($dados['formulario'], true));
         $validator = validator(['config' => $config], [
             'config' => ['required', 'array'],
+            'config.campos' => ['sometimes', 'array'],
+            'config.campos.*.nome' => ['required', 'string', 'max:150', 'distinct'],
+            'config.campos.*.label' => ['required', 'string', 'max:255'],
+            'config.campos.*.grid' => ['sometimes', 'integer', 'in:12,6,4'],
+            'config.campos.*.opcoes' => ['sometimes', 'array'],
+            'config.campos.*.opcoes.*.valor' => ['required_with:config.campos.*.opcoes.*.texto', 'string', 'max:255'],
+            'config.campos.*.opcoes.*.texto' => ['required_with:config.campos.*.opcoes.*.valor', 'string', 'max:255'],
+            'config.campos.*.opcoes.*.percentual_vagas' => ['nullable', 'numeric', 'between:0,100'],
+            'config.criterios_vagas' => ['sometimes', 'array'],
+            'config.criterios_vagas.*' => ['required', 'string', 'distinct'],
             'config.limitar_inscricoes' => ['sometimes', 'boolean'],
             'config.limite_inscricoes' => ['required_if:config.limitar_inscricoes,true', 'nullable', 'integer', 'min:1'],
             'config.mensagem_vagas_esgotadas' => ['nullable', 'string', 'max:2000'],
             'config.mensagem_ja_inscrito' => ['nullable', 'string', 'max:2000'],
             'config.mensagem_identificacao' => ['nullable', 'string', 'max:2000'],
+            'config.editor.exibir' => ['sometimes', 'boolean'],
+            'config.editor.conteudo' => ['nullable', 'string', 'max:500000'],
         ], [
             'config.limite_inscricoes.required_if' => 'Informe a quantidade de inscrições disponíveis ao ativar o limite.',
             'config.limite_inscricoes.integer' => 'A quantidade de inscrições deve ser um número inteiro.',
             'config.limite_inscricoes.min' => 'A quantidade de inscrições deve ser pelo menos 1.',
         ]);
         if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
+        $distribuicao->validarConfiguracao($config);
 
         // Sem atividades.formulario.estrutura o bloco Estrutura nem e exibido, entao o
         // JSON chega sem campo nenhum. Mantemos o que ja estava gravado: salvar a
@@ -111,10 +136,44 @@ class AtividadeController
         $config['mensagem_vagas_esgotadas'] = trim($config['mensagem_vagas_esgotadas'] ?? '') ?: Atividade::MENSAGEM_VAGAS_ESGOTADAS;
         $config['mensagem_ja_inscrito'] = trim($config['mensagem_ja_inscrito'] ?? '') ?: Atividade::MENSAGEM_JA_INSCRITO;
         $config['mensagem_identificacao'] = trim($config['mensagem_identificacao'] ?? '') ?: Atividade::MENSAGEM_IDENTIFICACAO;
-        $atividade->update(['formulario' => $config]);
+        $config['editor']['exibir'] = (bool) ($config['editor']['exibir'] ?? false);
+        $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');
+        $distribuicao->recalcular($atividade, $config);
+        $editor->sincronizarImagens($atividade, $config['editor']['conteudo']);
         return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
     }
-    public function preview(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico): View
+
+    public function enviarImagemEditor(Request $request, Atividade $atividade, ConteudoEditorFormularioService $editor): JsonResponse
+    {
+        $dados = $request->validate(['imagem' => ['required', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120']], [
+            'imagem.required' => 'Selecione uma imagem.',
+            'imagem.image' => 'O arquivo selecionado não é uma imagem válida.',
+            'imagem.mimes' => 'Use uma imagem JPG, PNG, GIF ou WebP.',
+            'imagem.max' => 'A imagem deve ter no máximo 5 MB.',
+        ]);
+        $arquivo = $dados['imagem'];
+        $nome = Str::uuid().'.'.mb_strtolower($arquivo->getClientOriginalExtension());
+        File::ensureDirectoryExists($editor->pasta($atividade));
+        $arquivo->move($editor->pasta($atividade), $nome);
+
+        return response()->json(['url' => route('inscricoes.editor.imagem', [
+            'atividade' => $atividade->hash_publica,
+            'arquivo' => $nome,
+        ])]);
+    }
+
+    public function imagemEditor(Atividade $atividade, string $arquivo, ConteudoEditorFormularioService $editor): BinaryFileResponse
+    {
+        $caminho = $editor->pasta($atividade).'/'.$arquivo;
+        abort_unless(is_file($caminho), 404);
+
+        return response()->file($caminho, [
+            'Cache-Control' => 'public, max-age=31536000, immutable',
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+        ]);
+    }
+    public function preview(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico, ComprovanteInscricaoService $comprovante, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao): View
     {
         abort_unless($atividade->formulario, 404);
 
@@ -127,12 +186,20 @@ class AtividadeController
             $sessao = null;
         }
 
+        $inscricao = $sessao ? $servico->inscricaoDoParticipante($atividade, $participante, $sessao['email']) : null;
+
+        $config = $distribuicao->recalcular($atividade);
+        $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');
+
         return view('atividades.formulario-publico', [
             'atividade' => $atividade,
-            'config' => $atividade->formulario,
+            'config' => $config,
             'identificacao' => $sessao,
             'participante' => $participante,
             'estado' => $servico->estado($atividade, $participante, $sessao['email'] ?? null),
+            'inscricao' => $inscricao,
+            'dadosComprovante' => $inscricao ? $comprovante->participante($inscricao) : [],
+            'respostasComprovante' => $inscricao ? $comprovante->respostas($inscricao) : [],
         ]);
     }
     /**
@@ -143,22 +210,20 @@ class AtividadeController
      * com formulario publicado; as protecoes contra abuso sao as mesmas da previa, porque
      * o POST cai no mesmo inscrever().
      */
-    public function inscricaoPublica(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico): View
+    public function inscricaoPublica(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico, ComprovanteInscricaoService $comprovante, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao): View
     {
         abort_unless($atividade->ativo, 404);
 
-        return $this->preview($request, $atividade, $identificacao, $servico);
+        return $this->preview($request, $atividade, $identificacao, $servico, $comprovante, $editor, $distribuicao);
     }
 
     public function previewRedirect(Atividade $atividade): RedirectResponse
     {
-        return redirect()->to(URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade));
+        return redirect()->to(route('inscricoes.publica', ['atividade' => $atividade->hash_publica]));
     }
 
     /**
-     * Unico destino POST do formulario publico. A URL e assinada, entao as etapas de
-     * identificacao (pedir codigo, conferir codigo, trocar de e-mail) reaproveitam a
-     * mesma assinatura e se distinguem pelo campo "acao".
+     * As etapas de identificação e inscrição compartilham o endereço permanente por hash.
      */
     public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, CaptchaInscricaoService $captcha): RedirectResponse
     {
@@ -254,12 +319,114 @@ class AtividadeController
 
         $resultado = $servico->inscrever($request, $atividade, $participante, $sessao['email']);
         if ($resultado['sucesso']) {
-            $identificacao->esquecer($request, $atividade);
-
             return back()->with('status', $resultado['mensagem']);
         }
         if ($resultado['motivo'] === 'esgotado') return back()->with('vagas_esgotadas', $resultado['mensagem']);
         abort(403, $resultado['mensagem']);
+    }
+
+    public function comprovantePdf(InscricaoAtividade $inscricao, ComprovanteInscricaoService $comprovante): Response
+    {
+        $inscricao->load('atividade.evento');
+        $opcoes = new Options;
+        $opcoes->set('isRemoteEnabled', false);
+        $pdf = new Dompdf($opcoes);
+        $pdf->loadHtml(view('atividades.comprovante-pdf', [
+            'inscricao' => $inscricao,
+            'dadosParticipante' => $comprovante->participante($inscricao),
+            'respostas' => $comprovante->respostas($inscricao),
+        ])->render(), 'UTF-8');
+        $pdf->setPaper('A4');
+        $pdf->render();
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$comprovante->nomeArquivo($inscricao).'"',
+            'Cache-Control' => 'no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function enviarComprovante(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, ComprovanteInscricaoService $comprovante, GiEmailService $email): RedirectResponse
+    {
+        [$inscricao, $sessao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
+        $limite = 'email-comprovante:'.$inscricao->id.'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($limite, 3)) {
+            return back()->with('comprovante_erro', 'Aguarde um minuto antes de enviar o comprovante novamente.');
+        }
+        RateLimiter::hit($limite, 60);
+        $inscricao->load('atividade.evento');
+        try {
+            $email->enviar(
+                $sessao['email'],
+                $sessao['nome'] ?? null,
+                'Comprovante de inscrição — '.$atividade->nome,
+                view('atividades.comprovante-email', [
+                    'inscricao' => $inscricao,
+                    'dadosParticipante' => $comprovante->participante($inscricao),
+                    'respostas' => $comprovante->respostas($inscricao),
+                    'urlPdf' => route('inscricoes.comprovante.pdf', $inscricao->comprovante_hash),
+                ])->render(),
+                'comprovante-inscricao-'.$inscricao->id.'-'.bin2hex(random_bytes(8)),
+            );
+        } catch (Throwable $excecao) {
+            report($excecao);
+            return back()->with('comprovante_erro', 'Não foi possível enviar as respostas agora. Tente novamente em alguns instantes.');
+        }
+
+        return back()->with('status', 'As respostas foram enviadas para '.$sessao['email'].'.');
+    }
+
+    public function apagarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, GiEmailService $email, DistribuicaoVagasService $distribuicao): RedirectResponse
+    {
+        if ($request->input('confirmacao') !== 'APAGAR') {
+            return back()->with('comprovante_erro', 'Marque a confirmação antes de apagar a inscrição.');
+        }
+        [$inscricao, $sessao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
+        $atividade->load('evento');
+        $apagadaEm = now();
+        try {
+            $email->enviar(
+                $sessao['email'],
+                $sessao['nome'] ?? null,
+                'Inscrição apagada — '.$atividade->nome,
+                '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#22303f">'
+                    .'<p>Olá!</p><p>Sua inscrição foi apagada definitivamente.</p>'
+                    .'<p><strong>Atividade:</strong> '.e($atividade->nome).'<br>'
+                    .'<strong>Evento:</strong> '.e($atividade->evento?->nome ?? 'Não informado').'<br>'
+                    .'<strong>Data e hora:</strong> '.$apagadaEm->format('d/m/Y \à\s H:i:s').'</p>'
+                    .'<p>Esta inscrição e suas respostas não podem ser recuperadas.</p></div>',
+                'inscricao-apagada-'.$inscricao->id.'-'.bin2hex(random_bytes(8)),
+            );
+        } catch (Throwable $excecao) {
+            report($excecao);
+            return back()->with('comprovante_erro', 'A inscrição não foi apagada porque não foi possível enviar o aviso por e-mail. Tente novamente.');
+        }
+
+        foreach ($formularios->camposDeArquivo($atividade) as $campo) {
+            foreach ((array) data_get($inscricao->resposta, $campo, []) as $arquivo) {
+                if (is_string($arquivo) && str_starts_with($arquivo, FormularioInscricaoService::PASTA_ANEXOS.'/')) {
+                    Storage::disk(FormularioInscricaoService::DISCO_ANEXOS)->delete($arquivo);
+                }
+            }
+        }
+        $inscricao->delete();
+        $distribuicao->recalcular($atividade->refresh());
+
+        return back()->with('status', 'Sua inscrição foi apagada. Enviamos a confirmação para '.$sessao['email'].'.');
+    }
+
+    /** @return array{InscricaoAtividade, array<string, mixed>} */
+    private function inscricaoAutorizada(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao): array
+    {
+        abort_unless($atividade->ativo && $atividade->formulario, 404);
+        $sessao = $identificacao->daSessao($request, $atividade);
+        $participante = $sessao ? $identificacao->participanteDaSessao($request, $atividade) : null;
+        abort_unless($sessao && $participante, 403, 'Sua sessão expirou. Entre novamente para acessar a inscrição.');
+        $inscricao = $formularios->inscricaoDoParticipante($atividade, $participante, $sessao['email']);
+        abort_unless($inscricao, 404);
+
+        return [$inscricao, $sessao];
     }
     public function inscricoes(Request $request, Atividade $atividade, ArmazemService $armazem): View
     {
@@ -347,7 +514,7 @@ class AtividadeController
             'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; media-src 'self'; object-src 'self'; style-src 'unsafe-inline'; sandbox",
         ], ($modo === 'baixar' || ! $podeExibir) ? 'attachment' : 'inline');
     }
-    public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => URL::temporarySignedRoute('atividades.formulario.preview', now()->addMinutes(30), $atividade)]); }
+    public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica])]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
         $campos = ['nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];

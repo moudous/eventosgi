@@ -17,7 +17,7 @@ class EventosGI_Shortcode {
 	const SESSAO_COOKIE = 'eventosgi_sessao_';
 
 	/** Campos de participantes aceitos no bloco "Seus dados". */
-	const CAMPOS_PARTICIPANTE = array( 'nome', 'cpf', 'sexo', 'instituicao_ensino', 'email2', 'email_institucional', 'grupo' );
+	const CAMPOS_PARTICIPANTE = array( 'nome', 'cpf', 'sexo', 'instituicao_ensino', 'email2', 'email_institucional' );
 
 	public function registrar() {
 		add_shortcode( 'eventosgi_formulario', array( $this, 'renderizar' ) );
@@ -516,8 +516,7 @@ class EventosGI_Shortcode {
 		$resultado = $this->resultado( $atividade_id );
 		$erros     = ( $resultado && ! empty( $resultado['erros'] ) ) ? $resultado['erros'] : array();
 		$valores   = ( $resultado && ! empty( $resultado['valores'] ) ) ? $resultado['valores'] : array();
-		$posicao   = $estrutura['editor']['posicao'];
-		$conteudo  = 'sim' === $atributos['conteudo'] ? $estrutura['editor']['conteudo'] : '';
+		$conteudo  = 'sim' === $atributos['conteudo'] && ! empty( $estrutura['editor']['exibir'] ) ? $estrutura['editor']['conteudo'] : '';
 		$aberto    = ! empty( $estrutura['estado']['aberto'] );
 
 		// Depois de uma inscricao concluida so resta a mensagem de sucesso; o formulario sai da tela.
@@ -545,6 +544,10 @@ class EventosGI_Shortcode {
 				<?php if ( '' !== $estrutura['subtitulo'] ) : ?>
 					<p class="eventosgi-subtitulo"><?php echo esc_html( $estrutura['subtitulo'] ); ?></p>
 				<?php endif; ?>
+			<?php endif; ?>
+
+			<?php if ( $conteudo ) : ?>
+				<div class="eventosgi-conteudo"><?php echo wp_kses_post( $conteudo ); ?></div>
 			<?php endif; ?>
 
 			<?php if ( $resultado ) : ?>
@@ -686,10 +689,6 @@ class EventosGI_Shortcode {
 					</div>
 				<?php endif; ?>
 
-				<?php if ( $conteudo && in_array( $posicao, array( 'acima', 'esquerda' ), true ) ) : ?>
-					<div class="eventosgi-conteudo"><?php echo wp_kses_post( $conteudo ); ?></div>
-				<?php endif; ?>
-
 				<?php if ( $bloco_pessoal && $estrutura['campos'] ) : ?>
 					<h3 class="eventosgi-secao"><?php esc_html_e( 'Inscrição', 'eventosgi-formularios' ); ?></h3>
 				<?php endif; ?>
@@ -699,10 +698,6 @@ class EventosGI_Shortcode {
 						<?php $this->campo( $campo, isset( $valores[ $campo['nome'] ] ) ? $valores[ $campo['nome'] ] : null, isset( $erros[ $campo['nome'] ] ) ? $erros[ $campo['nome'] ] : array() ); ?>
 					<?php endforeach; ?>
 				</div>
-
-				<?php if ( $conteudo && in_array( $posicao, array( 'abaixo', 'direita' ), true ) ) : ?>
-					<div class="eventosgi-conteudo"><?php echo wp_kses_post( $conteudo ); ?></div>
-				<?php endif; ?>
 
 				<button type="submit" class="eventosgi-botao"><?php esc_html_e( 'Enviar inscrição', 'eventosgi-formularios' ); ?></button>
 			</form>
@@ -719,7 +714,7 @@ class EventosGI_Shortcode {
 		$tipo        = $campo['tipo'];
 		$multiplo    = 'file' === $tipo && $campo['max_arquivos'] > 1;
 		$nome        = $campo['nome'] . ( ( $multiplo || 'multiselect' === $tipo || 'checkbox' === $tipo ) ? '[]' : '' );
-		$classe      = 'eventosgi-campo eventosgi-campo--' . sanitize_html_class( $tipo ) . ( $erros ? ' eventosgi-campo--erro' : '' );
+		$classe      = 'eventosgi-campo eventosgi-campo--col-' . ( in_array( (int) ($campo['grid'] ?? 6), array(12, 6, 4), true ) ? (int) ($campo['grid'] ?? 6) : 6 ) . ' eventosgi-campo--' . sanitize_html_class( $tipo ) . ( $erros ? ' eventosgi-campo--erro' : '' );
 		?>
 		<div class="<?php echo esc_attr( $classe ); ?>">
 			<label class="eventosgi-label" for="<?php echo esc_attr( $id ); ?>">
@@ -737,20 +732,24 @@ class EventosGI_Shortcode {
 					<?php if ( 'select' === $tipo ) : ?>
 						<option value=""><?php echo esc_html( $campo['placeholder'] ? $campo['placeholder'] : __( 'Selecione…', 'eventosgi-formularios' ) ); ?></option>
 					<?php endif; ?>
-					<?php foreach ( $campo['opcoes'] as $opcao ) : ?>
-						<option value="<?php echo esc_attr( $opcao ); ?>" <?php selected( $this->marcado( $valor, $opcao ) ); ?>><?php echo esc_html( $opcao ); ?></option>
+					<?php foreach ( $campo['opcoes'] as $opcao ) :
+                        $texto_opcao = is_array($opcao) ? $opcao['texto'] : $opcao;
+                        $opcao = is_array($opcao) ? $opcao['valor'] : $opcao; ?>
+						<option value="<?php echo esc_attr( $opcao ); ?>" <?php selected( $this->marcado( $valor, $opcao ) ); ?>><?php echo esc_html( $texto_opcao ); ?></option>
 					<?php endforeach; ?>
 				</select>
 
 			<?php elseif ( in_array( $tipo, array( 'radio', 'checkbox' ), true ) ) : ?>
 				<div class="eventosgi-opcoes" role="group">
-					<?php foreach ( $campo['opcoes'] as $indice => $opcao ) : ?>
+					<?php foreach ( $campo['opcoes'] as $indice => $opcao ) :
+                        $texto_opcao = is_array($opcao) ? $opcao['texto'] : $opcao;
+                        $opcao = is_array($opcao) ? $opcao['valor'] : $opcao; ?>
 						<label class="eventosgi-opcao">
 							<input type="<?php echo esc_attr( $tipo ); ?>" name="<?php echo esc_attr( $nome ); ?>" value="<?php echo esc_attr( $opcao ); ?>"
 								<?php checked( $this->marcado( $valor, $opcao ) ); ?>
 								<?php echo ( $obrigatorio && 'radio' === $tipo ) ? 'required' : ''; ?>
 								id="<?php echo esc_attr( $id . '-' . $indice ); ?>">
-							<span><?php echo esc_html( $opcao ); ?></span>
+							<span><?php echo esc_html( $texto_opcao ); ?></span>
 						</label>
 					<?php endforeach; ?>
 				</div>

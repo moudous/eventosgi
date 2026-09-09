@@ -88,7 +88,7 @@ class PaginaEventoRenderer
                 'categoria' => (string) ($atividade->categoria?->nome ?? ''),
                 'categoria_id' => (int) ($atividade->categoria_id ?? 0),
                 // Página pública de inscrição da atividade, para o template linkar direto.
-                'url_inscricao' => route('inscricoes.publica', $atividade),
+                'url_inscricao' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica]),
                 // Pronto para o shortcode do WordPress apontar o formulario da atividade.
                 'shortcode' => '[eventosgi_formulario id="'.$atividade->id.'"]',
             ])->all(),

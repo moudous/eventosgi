@@ -29,13 +29,66 @@
         </div>
     </div>
 
+    @if(($config['editor']['exibir'] ?? !empty($config['editor']['conteudo'])) && !empty($config['editor']['conteudo']))
+        <div class="editor-publico mb-4">{!! $config['editor']['conteudo'] !!}</div>
+    @endif
+
+    @if(!empty($config['limitar_inscricoes']))
+        @php($totalVagas = $config['distribuicao_vagas']['total'] ?? ['usadas' => $atividade->inscricoes()->count(), 'disponiveis' => (int) ($config['limite_inscricoes'] ?? 0), 'restantes' => 0])
+        <div class="d-flex justify-content-end mb-3"><span class="badge text-bg-light border fs-6" title="{{ $totalVagas['usadas'] }} inscrição(ões) de {{ $totalVagas['disponiveis'] }} vagas; restam {{ $totalVagas['restantes'] }}">Vagas: {{ $totalVagas['usadas'] }}/{{ $totalVagas['disponiveis'] }}</span></div>
+    @endif
+
     @if(session('status'))<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>{{ session('status') }}</div>@endif
     @if(session('vagas_esgotadas'))<div class="alert alert-warning">{{ session('vagas_esgotadas') }}</div>@endif
     @if(session('identificacao_expirada'))<div class="alert alert-warning">{{ session('identificacao_expirada') }}</div>@endif
+    @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
+
+    @if($identificacao)
+        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between alert alert-light border">
+            <span><i class="bi bi-envelope-check me-1"></i>Você já entrou com <strong>{{ $identificacao['email'] }}</strong></span>
+            <form method="POST" action="{{ request()->fullUrl() }}" class="m-0">
+                @csrf<input type="hidden" name="acao" value="trocar_email">
+                <button class="btn btn-link btn-sm" type="submit">Entrar com outro e-mail</button>
+            </form>
+        </div>
+    @endif
 
     @if(! $aberto)
         <div class="alert {{ $estado['motivo'] === 'antes' ? 'alert-info' : 'alert-warning' }}">
             @if($estado['motivo'] === 'duplicada')<i class="bi bi-person-check me-1"></i>@endif{{ $estado['mensagem'] }}
+        </div>
+    @endif
+
+    @if($estado['motivo'] === 'duplicada' && $inscricao)
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#comprovanteModal"><i class="bi bi-printer me-1"></i>Imprimir comprovante</button>
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#apagarInscricaoModal"><i class="bi bi-trash me-1"></i>Apagar inscrição</button>
+        </div>
+
+        <div id="comprovanteRespostas" class="card content-card">
+            <div class="card-header"><h2 class="h5 fw-bold mb-0">Respostas da inscrição</h2></div>
+            <div class="card-body p-4">
+                @include('atividades.partials.comprovante-respostas', ['dadosParticipante' => $dadosComprovante, 'respostas' => $respostasComprovante])
+            </div>
+        </div>
+
+        <div class="modal fade" id="comprovanteModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+                <div class="modal-header"><h2 class="modal-title fs-5">Comprovante da inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+                <div class="modal-body"><p>Escolha como deseja guardar ou compartilhar suas respostas.</p><div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary" id="imprimirComprovante"><i class="bi bi-printer me-1"></i>Imprimir</button>
+                    <a class="btn btn-outline-primary" target="_blank" rel="noopener" href="{{ route('inscricoes.comprovante.pdf', $inscricao->comprovante_hash) }}"><i class="bi bi-file-earmark-pdf me-1"></i>Abrir ou exportar PDF</a>
+                    <form method="POST" action="{{ route('inscricoes.comprovante.email', ['atividade' => $atividade->hash_publica]) }}">@csrf<button class="btn btn-outline-primary w-100"><i class="bi bi-envelope me-1"></i>Enviar respostas por e-mail</button></form>
+                </div></div>
+            </div></div>
+        </div>
+
+        <div class="modal fade" id="apagarInscricaoModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="POST" action="{{ route('inscricoes.apagar', ['atividade' => $atividade->hash_publica]) }}">@csrf @method('DELETE')
+                <div class="modal-header"><h2 class="modal-title fs-5">Apagar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+                <div class="modal-body"><div class="alert alert-danger mb-3"><strong>Esta ação é definitiva.</strong> A inscrição, as respostas e os arquivos enviados serão apagados e não será possível recuperá-los.</div><label class="form-check"><input class="form-check-input" type="checkbox" name="confirmacao" value="APAGAR" required><span class="form-check-label">Confirmo que desejo apagar esta inscrição.</span></label></div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger"><i class="bi bi-trash me-1"></i>Apagar definitivamente</button></div>
+            </form></div></div>
         </div>
     @endif
 
@@ -75,7 +128,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold" for="captcha">Digite o texto da imagem</label>
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                            <img id="captchaImagem" src="{{ route('inscricoes.captcha', $atividade) }}" width="220" height="70" class="border rounded" alt="Imagem com seis caracteres para confirmação">
+                            <img id="captchaImagem" src="{{ route('inscricoes.captcha', ['atividade' => $atividade->hash_publica]) }}" width="220" height="70" class="border rounded" alt="Imagem com seis caracteres para confirmação">
                             <button class="btn btn-sm btn-outline-secondary" type="button" id="renovarCaptcha"><i class="bi bi-arrow-clockwise me-1"></i>Nova imagem</button>
                         </div>
                         <input class="form-control @if($errosIdentificacao->has('captcha')) is-invalid @endif" style="max-width:220px;text-transform:uppercase;letter-spacing:.2em" type="text" id="captcha" name="captcha" maxlength="6" autocomplete="off" autocapitalize="characters">
@@ -99,13 +152,7 @@
             <div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach($errors->getBag('default')->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>
         @endif
 
-        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between alert alert-light border">
-            <span><i class="bi bi-envelope-check me-1"></i>Inscrevendo com <strong>{{ $identificacao['email'] }}</strong></span>
-            <form method="POST" action="{{ request()->fullUrl() }}" class="m-0">
-                @csrf<input type="hidden" name="acao" value="trocar_email">
-                <button class="btn btn-sm btn-outline-secondary" type="submit">Usar outro e-mail</button>
-            </form>
-        </div>
+
 
         <form method="POST" action="{{ request()->fullUrl() }}" enctype="multipart/form-data">
             @csrf
@@ -125,6 +172,7 @@
                             <label class="form-label" for="participante_cpf">CPF *</label>
                             <input class="form-control" id="participante_cpf" name="participante[cpf]" maxlength="14" inputmode="numeric" autocomplete="off" required placeholder="000.000.000-00" value="{{ old('participante.cpf', $participante->cpf) }}">
                             <div class="invalid-feedback">CPF inválido: confira os números digitados.</div>
+                            <div class="form-text">solicitado para a emissão de certificado quando for o caso.</div>
                         </div>
                         <div class="col-12 col-md-4">
                             <label class="form-label">E-mail</label>
@@ -146,16 +194,13 @@
                         </div>
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="participante_sexo">Sexo</label>
-                            @php $sexo = old('participante.sexo', $participante->sexo); @endphp
+                            @php($sexo = old('participante.sexo', $participante->sexo))
                             <select class="form-select" id="participante_sexo" name="participante[sexo]">
                                 <option value="">Não informado</option>
                                 <option value="M" @selected($sexo === 'M')>Masculino</option>
                                 <option value="F" @selected($sexo === 'F')>Feminino</option>
                             </select>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label" for="participante_grupo">Grupo</label>
-                            <input class="form-control text-uppercase" id="participante_grupo" name="participante[grupo]" maxlength="1" value="{{ old('participante.grupo', $participante->grupo) }}">
+                            <div class="form-text">Solicitado para emissão automatizada de certificado com o pronome correto, quando for o caso.</div>
                         </div>
                     </div>
                 </div>
@@ -163,10 +208,6 @@
 
             <div class="card content-card">
                 <div class="card-body p-4">
-                    @if(!empty($config['editor']['conteudo']) && in_array($config['editor']['posicao'] ?? '', ['acima', 'esquerda']))
-                        <div class="mb-3">{!! $config['editor']['conteudo'] !!}</div>
-                    @endif
-
                     <div class="row g-3">
                         @foreach($config['campos'] ?? [] as $campo)
                             @php
@@ -174,13 +215,21 @@
                                 $tipo = $campo['tipo'] ?? 'text';
                                 $multiplo = $tipo === 'multiselect';
                                 $anterior = old($nome);
+                                $criterioVagas = !empty($campo['criterio_vagas']);
+                                $nivelVagas = collect($config['distribuicao_vagas']['niveis'] ?? [])->firstWhere('campo', $nome);
                             @endphp
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-{{ in_array((int) ($campo['grid'] ?? 6), [12, 6, 4]) ? (int) ($campo['grid'] ?? 6) : 6 }}">
                                 <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
                                 @if(in_array($tipo, ['select', 'radio', 'checkbox', 'multiselect']))
-                                    <select class="form-select" id="campo_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" @if(!empty($campo['obrigatorio'])) required @endif @if($multiplo) multiple @endif>
+                                    <select class="form-select" id="campo_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" data-nome-campo="{{ $nome }}" @if($criterioVagas) data-criterio-vagas="1" @endif @if(!empty($campo['obrigatorio']) || $criterioVagas) required @endif @if($multiplo) multiple @endif>
                                         @foreach($campo['opcoes'] ?? [] as $opcao)
-                                            <option value="{{ $opcao }}" @selected(is_array($anterior) ? in_array($opcao, $anterior) : $anterior === $opcao)>{{ $opcao }}</option>
+                                            @php
+                                                $valorOpcao = is_array($opcao) ? (string) $opcao['valor'] : (string) $opcao;
+                                                $textoOpcao = is_array($opcao) ? $opcao['texto'] : $opcao;
+                                                $cotasOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['usadas'] ?? 0));
+                                                $restantesOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['restantes'] ?? 0));
+                                            @endphp
+                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}@if($criterioVagas) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
                                         @endforeach
                                     </select>
                                 @elseif($tipo === 'textarea')
@@ -195,10 +244,6 @@
                         @endforeach
                     </div>
 
-                    @if(!empty($config['editor']['conteudo']) && in_array($config['editor']['posicao'] ?? '', ['abaixo', 'direita']))
-                        <div class="mt-3">{!! $config['editor']['conteudo'] !!}</div>
-                    @endif
-
                     <button class="btn btn-primary mt-4"><i class="bi bi-send me-1"></i>Enviar inscrição</button>
                 </div>
             </div>
@@ -209,6 +254,19 @@
 
 @push('styles')
 <style>
+    .editor-publico { width: 100%; max-width: 100%; overflow: visible; overflow-wrap: anywhere; }
+    .editor-publico img { display: inline-block; max-width: 100%; height: auto; vertical-align: middle; }
+    .editor-publico .ql-align-center { text-align: center; }
+    .editor-publico .ql-align-right { text-align: right; }
+    .editor-publico .ql-align-justify { text-align: justify; }
+    .editor-publico .ql-font-serif { font-family: Georgia, serif; }
+    .editor-publico .ql-font-monospace { font-family: Monaco, Consolas, monospace; }
+    .editor-publico .ql-size-small { font-size: .75em; }
+    .editor-publico .ql-size-large { font-size: 1.5em; }
+    .editor-publico .ql-size-huge { font-size: 2.5em; }
+    .editor-publico li[data-list="bullet"] { list-style-type: disc; }
+    .editor-publico li[data-list="ordered"] { list-style-type: decimal; }
+    .editor-publico pre { white-space: pre-wrap; overflow: visible; }
     /* Fora da tela em vez de display:none, para o robô continuar preenchendo. */
 </style>
 @endpush
@@ -217,7 +275,7 @@
 <script>
 const captchaImagem = document.getElementById('captchaImagem');
 document.getElementById('renovarCaptcha')?.addEventListener('click', () => {
-    captchaImagem.src = @json(route('inscricoes.captcha', $atividade)) + '?novo=1&t=' + Date.now();
+    captchaImagem.src = @json(route('inscricoes.captcha', ['atividade' => $atividade->hash_publica])) + '?novo=1&t=' + Date.now();
     document.getElementById('captcha').value = '';
 });
 
@@ -293,5 +351,52 @@ document.querySelectorAll('form').forEach(formulario => formulario.addEventListe
     invalidos.forEach(campo => campo.classList.add('is-invalid'));
     invalidos[0].focus();
 }));
+
+document.getElementById('imprimirComprovante')?.addEventListener('click', () => window.print());
+const distribuicaoVagas = {{ Illuminate\Support\Js::from($config['distribuicao_vagas'] ?? []) }};
+const selectsCriterio = [...document.querySelectorAll('select[data-criterio-vagas]')];
+const atualizarCotas = () => {
+    const anteriores = [];
+    (distribuicaoVagas.criterios || []).forEach((nome, indice) => {
+        const select = selectsCriterio.find(item => item.dataset.nomeCampo === nome);
+        const nivel = (distribuicaoVagas.niveis || []).find(item => item.campo === nome);
+        if (!select || !nivel) return;
+        const contexto = nivel.contextos?.[JSON.stringify(anteriores)];
+        [...select.options].forEach(option => {
+            if (!option.value) return;
+            const cotas = contexto?.opcoes?.[option.value]
+                ? [contexto.opcoes[option.value]]
+                : Object.values(nivel.contextos || {}).map(item => item.opcoes?.[option.value]).filter(Boolean);
+            const usadas = cotas.reduce((total, cota) => total + Number(cota.usadas || 0), 0);
+            const restantes = cotas.reduce((total, cota) => total + Number(cota.restantes || 0), 0);
+            const disponiveis = cotas.reduce((total, cota) => total + Number(cota.disponiveis || 0), 0);
+            option.textContent = `${option.dataset.texto} — ${usadas}/${restantes}`;
+            option.title = `${usadas} vaga(s) preenchida(s) de ${disponiveis}; restam ${restantes}`;
+            option.disabled = restantes < 1 && !option.selected;
+        });
+        if (select.value) anteriores.push(select.value);
+    });
+};
+selectsCriterio.forEach(select => select.addEventListener('change', atualizarCotas));
+atualizarCotas();
+if (window.parent !== window && window.ResizeObserver) {
+    const avisarAltura = () => {
+        const altura = document.documentElement.scrollHeight;
+        if (window.frameElement) window.frameElement.style.height = `${altura}px`;
+        window.parent.postMessage({tipo: 'eventosgi-formulario-altura', altura}, '*');
+    };
+    new ResizeObserver(avisarAltura).observe(document.body);
+    window.addEventListener('load', avisarAltura);
+}
 </script>
+@endpush
+
+@push('styles')
+<style>
+@media print {
+    body * { visibility: hidden !important; }
+    #comprovanteRespostas, #comprovanteRespostas * { visibility: visible !important; }
+    #comprovanteRespostas { position: absolute; inset: 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+}
+</style>
 @endpush

@@ -140,12 +140,14 @@ class IdentificacaoParticipanteService
 
         $registro->update(['participante_id' => (int) $participante->id]);
 
+        $request->session()->regenerate();
         $request->session()->put($this->chaveSessao($atividade), [
             'participante_id' => (int) $participante->id,
             'nome' => (string) $participante->nome,
             'email' => $email,
             'codigo_id' => $registro->id,
             'validado_em' => now()->toIso8601String(),
+            'ultimo_acesso' => now()->timestamp,
         ]);
 
         return [
@@ -181,11 +183,13 @@ class IdentificacaoParticipanteService
         if ((int) $credencial->participante_id !== (int) $participante->id) {
             $credencial->update(['participante_id' => (int) $participante->id]);
         }
+        $request->session()->regenerate();
         $request->session()->put($this->chaveSessao($atividade), [
             'participante_id' => (int) $participante->id,
             'nome' => (string) $participante->nome,
             'email' => $email,
             'validado_em' => now()->toIso8601String(),
+            'ultimo_acesso' => now()->timestamp,
         ]);
 
         return [
@@ -352,7 +356,17 @@ class IdentificacaoParticipanteService
     {
         $dados = $request->session()->get($this->chaveSessao($atividade));
 
-        return is_array($dados) && ! empty($dados['participante_id']) && ! empty($dados['email']) ? $dados : null;
+        if (! is_array($dados) || empty($dados['participante_id']) || empty($dados['email'])) return null;
+
+        if (now()->timestamp - (int) ($dados['ultimo_acesso'] ?? 0) >= 30 * 60) {
+            $this->esquecer($request, $atividade);
+            $request->session()->flash('identificacao_expirada', 'Sua sessão expirou após 30 minutos de inatividade. Entre novamente com seu e-mail e senha.');
+            return null;
+        }
+
+        $dados['ultimo_acesso'] = now()->timestamp;
+        $request->session()->put($this->chaveSessao($atividade), $dados);
+        return $dados;
     }
 
     /** Cadastro identificado, recarregado do banco para refletir alteracoes feitas depois da validacao. */
@@ -370,7 +384,7 @@ class IdentificacaoParticipanteService
 
     private function chaveSessao(Atividade $atividade): string
     {
-        return 'identificacao_inscricao.'.$atividade->id;
+        return 'identificacao_formularios';
     }
 
     private function criar(string $email): Participante

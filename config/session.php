@@ -8,7 +8,8 @@ return [
     'cookie' => 'gi_external_session',
     'path' => '/',
     'domain' => null,
-    'secure' => false,
+    'secure' => env('SESSION_SECURE_COOKIE', str_starts_with((string) env('APP_URL', ''), 'https://')),
     'http_only' => true,
-    'same_site' => 'lax',
+    // Iframes de outros sites precisam de SameSite=None e cookies seguros em HTTPS.
+    'same_site' => env('SESSION_SAME_SITE', str_starts_with((string) env('APP_URL', ''), 'https://') ? 'none' : 'lax'),
 ];

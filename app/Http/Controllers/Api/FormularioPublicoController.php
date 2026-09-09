@@ -6,6 +6,8 @@ use App\Models\Atividade;
 use App\Models\Participante;
 use App\Rules\EmailValido;
 use App\Services\FormularioInscricaoService;
+use App\Services\ConteudoEditorFormularioService;
+use App\Services\DistribuicaoVagasService;
 use App\Services\IdentificacaoParticipanteService;
 use App\Services\LimiteEnvioCodigoService;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +20,8 @@ class FormularioPublicoController
         private readonly FormularioInscricaoService $inscricoes,
         private readonly IdentificacaoParticipanteService $identificacao,
         private readonly LimiteEnvioCodigoService $limites,
+        private readonly ConteudoEditorFormularioService $editor,
+        private readonly DistribuicaoVagasService $distribuicao,
     ) {}
 
     /**
@@ -27,7 +31,7 @@ class FormularioPublicoController
     {
         $this->conferirAtividade($atividade);
 
-        $config = $atividade->formulario;
+        $config = $this->distribuicao->recalcular($atividade);
         $estado = $this->inscricoes->estado($atividade);
         $identificado = $this->identificado($request, $atividade);
 
@@ -42,16 +46,19 @@ class FormularioPublicoController
             'titulo' => $config['titulo'] ?? $atividade->nome,
             'subtitulo' => $config['subtitulo'] ?? '',
             'editor' => [
-                'posicao' => $config['editor']['posicao'] ?? '',
-                'conteudo' => $config['editor']['conteudo'] ?? '',
+                'exibir' => (bool) ($config['editor']['exibir'] ?? ! empty($config['editor']['conteudo'])),
+                'conteudo' => $this->editor->sanitizar($config['editor']['conteudo'] ?? ''),
             ],
+            'distribuicao_vagas' => $config['distribuicao_vagas'] ?? null,
             'campos' => array_values(array_map(fn (array $campo) => [
                 'nome' => $campo['nome'] ?? '',
                 'label' => $campo['label'] ?? ($campo['nome'] ?? ''),
                 'tipo' => $campo['tipo'] ?? 'text',
                 'placeholder' => $campo['placeholder'] ?? '',
                 'obrigatorio' => (bool) ($campo['obrigatorio'] ?? false),
+                'criterio_vagas' => (bool) ($campo['criterio_vagas'] ?? false),
                 'opcoes' => array_values($campo['opcoes'] ?? []),
+                'grid' => (int) ($campo['grid'] ?? 6),
                 'aceitos' => array_values($campo['aceitos'] ?? []),
                 'max_arquivos' => min(10, max(1, (int) ($campo['max_arquivos'] ?? 1))),
                 'validacao' => $campo['validacao'] ?? '',

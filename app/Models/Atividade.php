@@ -17,11 +17,18 @@ class Atividade extends Model
         'personalizacao' => 'array',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Atividade $atividade): void {
+            $atividade->hash_publica = bin2hex(random_bytes(32));
+        });
+    }
+
     public const MENSAGEM_VAGAS_ESGOTADAS = 'Todas as vagas para esta atividade foram preenchidas. Agradecemos seu interesse e esperamos você nas próximas oportunidades!';
 
     public const MENSAGEM_JA_INSCRITO = 'Você já está inscrito nesta atividade. Cada participante pode se inscrever uma única vez.';
 
-    public const MENSAGEM_IDENTIFICACAO = 'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.';
+    public const MENSAGEM_IDENTIFICACAO = 'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite um código temporário por e-mail.';
 
     public function estiloImagem(): array
     {

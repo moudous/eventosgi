@@ -1,0 +1,2 @@
+
+em http://localhost:8006/atividades/ no icone de wordpress ao clicar nele deve abir um modal pequeno com um editor de codigo já preenchido com um codigo para iframe com o link da atividade e abaixo do editor um explicativo de alguns passos de como adicionar este iframe no wordpress. No modal adcione alguns parametros que podem ser inseridos e que mudam o codigo do editor dinamicamente como largura 100% ou altura fixa ou definida ou  bordas ou nao etc.. os parametros para montar um iframe. e um botao para copiar o codigo do iframe.

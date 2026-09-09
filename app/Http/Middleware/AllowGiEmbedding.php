@@ -31,7 +31,7 @@ class AllowGiEmbedding
 
         // Estas páginas foram feitas para visitantes e podem ser incorporadas em sites
         // externos. As demais continuam limitadas às origens configuradas para o GI.
-        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*', 'submissoes.publicas.*')) {
+        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*', 'inscricoes.captcha', 'inscricoes.legado', 'inscricoes.editor.imagem', 'inscricoes.comprovante.*', 'inscricoes.apagar', 'senha-participante.*', 'submissoes.publicas.*')) {
             $response->headers->set(
                 'Content-Security-Policy',
                 "frame-ancestors *; object-src 'none'; base-uri 'self'",
@@ -62,7 +62,7 @@ class AllowGiEmbedding
             return true;
         }
 
-        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*', 'submissoes.publicas.*')) {
+        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*', 'inscricoes.captcha', 'inscricoes.legado', 'inscricoes.editor.imagem', 'inscricoes.comprovante.*', 'inscricoes.apagar', 'senha-participante.*', 'submissoes.publicas.*')) {
             return true;
         }
 

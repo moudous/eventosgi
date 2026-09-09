@@ -3,7 +3,19 @@
 .eventosgi-evento { display: block; width: 100%; max-width: 100%; border: 0; }
 .eventosgi-titulo { margin: 0 0 .25rem; }
 .eventosgi-subtitulo { margin: 0 0 1.25rem; opacity: .8; }
-.eventosgi-conteudo { margin: 0 0 1.25rem; }
+.eventosgi-conteudo { margin: 0 0 1.25rem; width: 100%; max-width: 100%; overflow: visible; overflow-wrap: anywhere; }
+.eventosgi-conteudo img { display: inline-block; max-width: 100%; height: auto; vertical-align: middle; }
+.eventosgi-conteudo .ql-align-center { text-align: center; }
+.eventosgi-conteudo .ql-align-right { text-align: right; }
+.eventosgi-conteudo .ql-align-justify { text-align: justify; }
+.eventosgi-conteudo .ql-font-serif { font-family: Georgia, serif; }
+.eventosgi-conteudo .ql-font-monospace { font-family: Monaco, Consolas, monospace; }
+.eventosgi-conteudo .ql-size-small { font-size: .75em; }
+.eventosgi-conteudo .ql-size-large { font-size: 1.5em; }
+.eventosgi-conteudo .ql-size-huge { font-size: 2.5em; }
+.eventosgi-conteudo li[data-list="bullet"] { list-style-type: disc; }
+.eventosgi-conteudo li[data-list="ordered"] { list-style-type: decimal; }
+.eventosgi-conteudo pre { white-space: pre-wrap; overflow: visible; }
 
 /* Doze colunas para o bloco "Seus dados" respeitar a largura que a API sugere por campo. */
 .eventosgi-campos { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1rem; }
@@ -72,3 +84,10 @@
 
 /* Campo isca antispam: fora da tela, mas não display:none, para que robôs o preencham. */
 .eventosgi-isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* Largura definida no construtor de campos da atividade. */
+@media (min-width: 641px) {
+    .eventosgi-campo--col-12 { grid-column: span 12; }
+    .eventosgi-campo--col-6 { grid-column: span 6; }
+    .eventosgi-campo--col-4 { grid-column: span 4; }
+}

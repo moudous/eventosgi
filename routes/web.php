@@ -168,9 +168,10 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     // nos campos ja publicados. Ver salvarFormulario().
     Route::get('/{atividade}/formulario', [AtividadeController::class, 'formulario'])->middleware('gi.permission:atividades.formulario')->name('formulario');
     Route::post('/{atividade}/formulario', [AtividadeController::class, 'salvarFormulario'])->middleware('gi.permission:atividades.formulario')->name('formulario.salvar');
+    Route::post('/{atividade}/formulario/editor-imagem', [AtividadeController::class, 'enviarImagemEditor'])->middleware('gi.permission:atividades.formulario')->name('formulario.editor-imagem');
     Route::get('/{atividade}/formulario/visualizar', [AtividadeController::class, 'previewRedirect'])->middleware('gi.permission:atividades.visualizar_formulario')->name('formulario.visualizar');
     Route::get('/{atividade}/formulario/preview-link', [AtividadeController::class, 'previewLink'])->middleware('gi.permission:atividades.visualizar_formulario')->name('formulario.preview-link');
-    Route::get('/{atividade}/formulario/preview', [AtividadeController::class, 'preview'])->middleware('signed')->name('formulario.preview');
+    Route::get('/{atividade}/formulario/preview', [AtividadeController::class, 'previewRedirect'])->middleware('signed')->name('formulario.preview');
     Route::post('/{atividade}/formulario/preview', [AtividadeController::class, 'inscrever'])->middleware('signed')->name('formulario.inscrever');
     Route::get('/{atividade}/inscricoes/exportar-link/{formato}', [AtividadeController::class, 'exportarLink'])->middleware('gi.permission:atividades.inscritos')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar-link');
     // Assinada em vez de protegida por permissao: o download roda dentro do iframe do GI,
@@ -187,13 +188,17 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');
 });
 
-// Inscricao publica em uma atividade. Sem assinatura, ao contrario da previa do
-// construtor: e a pagina para onde o template do evento manda quem clica numa atividade,
-// e a mesma que o visitante de um site abre. Vale para atividade ativa; as protecoes
-// contra abuso do envio de e-mail é a prova visual exibida junto ao pedido do código.
-Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
-Route::post('/inscricoes/{atividade}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
-Route::get('/inscricoes/{atividade}/captcha', CaptchaInscricaoController::class)->name('inscricoes.captcha');
+// Endereço permanente por hash. A disponibilidade segue as datas do formulário.
+Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'previewRedirect'])->whereNumber('atividade')->name('inscricoes.legado');
+Route::get('/formularios/{atividade:hash_publica}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
+Route::post('/formularios/{atividade:hash_publica}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
+Route::get('/formularios/{atividade:hash_publica}/captcha', CaptchaInscricaoController::class)->name('inscricoes.captcha');
+Route::get('/formularios/{atividade:hash_publica}/editor/imagens/{arquivo}', [AtividadeController::class, 'imagemEditor'])
+    ->where('arquivo', '[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp)')->name('inscricoes.editor.imagem');
+Route::post('/formularios/{atividade:hash_publica}/comprovante/email', [AtividadeController::class, 'enviarComprovante'])->name('inscricoes.comprovante.email');
+Route::delete('/formularios/{atividade:hash_publica}/inscricao', [AtividadeController::class, 'apagarInscricao'])->name('inscricoes.apagar');
+Route::get('/comprovantes/{inscricao:comprovante_hash}.pdf', [AtividadeController::class, 'comprovantePdf'])
+    ->where('inscricao', '[a-f0-9]{64}')->name('inscricoes.comprovante.pdf');
 
 // A posse do token recebido por e-mail autoriza a definição da senha. O servidor guarda
 // somente o hash, limita o link a 15 minutos e o invalida depois do primeiro uso.

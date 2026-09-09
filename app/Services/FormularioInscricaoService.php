@@ -12,10 +12,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class FormularioInscricaoService
 {
-    public function __construct(private readonly DispositivoVisitanteService $dispositivo) {}
+    public function __construct(
+        private readonly DispositivoVisitanteService $dispositivo,
+        private readonly DistribuicaoVagasService $distribuicao,
+    ) {}
 
     /** Disco privado dos anexos: fora de public/, para nao serem servidos direto pelo servidor web. */
     public const DISCO_ANEXOS = 'local';
@@ -24,7 +28,7 @@ class FormularioInscricaoService
     public const PASTA_ANEXOS = 'inscricoes';
 
     /** Campos de participantes que o visitante completa antes dos campos da atividade. */
-    public const CAMPOS_PARTICIPANTE = ['nome', 'cpf', 'sexo', 'instituicao_ensino', 'email2', 'email_institucional', 'grupo'];
+    public const CAMPOS_PARTICIPANTE = ['nome', 'cpf', 'sexo', 'instituicao_ensino', 'email2', 'email_institucional'];
 
     /**
      * Estado atual do formulario: se aceita inscricoes e, se nao aceitar, o motivo
@@ -72,6 +76,13 @@ class FormularioInscricaoService
 
             $regras[$campo['nome']] = ! empty($campo['obrigatorio']) ? ['required'] : ['nullable'];
 
+            if (! empty($campo['criterio_vagas'])) {
+                $regras[$campo['nome']] = ['required', Rule::in(array_map(
+                    fn ($opcao) => (string) (is_array($opcao) ? ($opcao['valor'] ?? '') : $opcao),
+                    $campo['opcoes'] ?? [],
+                ))];
+            }
+
             if (($campo['tipo'] ?? '') === 'file') {
                 $maxArquivos = min(10, max(1, (int) ($campo['max_arquivos'] ?? 1)));
                 $destino = $campo['nome'];
@@ -103,6 +114,19 @@ class FormularioInscricaoService
         $email = trim((string) ($email ?: $participante?->email));
 
         return $this->existeInscricao($atividade, $participante ? [$participante->id] : [], $email);
+    }
+
+    public function inscricaoDoParticipante(Atividade $atividade, ?Participante $participante, ?string $email = null): ?InscricaoAtividade
+    {
+        $email = mb_strtolower(trim((string) ($email ?: $participante?->email)));
+        if (! $participante && $email === '') return null;
+
+        return InscricaoAtividade::query()
+            ->where('atividade_id', $atividade->id)
+            ->where(function ($consulta) use ($participante, $email): void {
+                if ($participante) $consulta->orWhere('participante_id', $participante->id);
+                if ($email !== '') $consulta->orWhere('participante_email', $email);
+            })->latest('id')->first();
     }
 
     /**
@@ -161,7 +185,7 @@ class FormularioInscricaoService
             ['nome' => 'nome', 'label' => 'Nome completo', 'tipo' => 'text', 'obrigatorio' => true, 'colunas' => 8,
                 'maxlength' => 100, 'placeholder' => 'Nome e sobrenome', 'ajuda' => '', 'opcoes' => []],
             ['nome' => 'cpf', 'label' => 'CPF', 'tipo' => 'text', 'obrigatorio' => true, 'colunas' => 4,
-                'maxlength' => 14, 'placeholder' => '000.000.000-00', 'ajuda' => '', 'opcoes' => []],
+                'maxlength' => 14, 'placeholder' => '000.000.000-00', 'ajuda' => 'solicitado para a emissão de certificado quando for o caso.', 'opcoes' => []],
             ['nome' => 'email2', 'label' => 'E-mail alternativo', 'tipo' => 'email', 'obrigatorio' => false, 'colunas' => 4,
                 'maxlength' => 150, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
             ['nome' => 'email_institucional', 'label' => 'E-mail institucional', 'tipo' => 'email', 'obrigatorio' => false, 'colunas' => 4,
@@ -169,9 +193,7 @@ class FormularioInscricaoService
             ['nome' => 'instituicao_ensino', 'label' => 'Instituição de ensino', 'tipo' => 'text', 'obrigatorio' => false, 'colunas' => 6,
                 'maxlength' => 80, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
             ['nome' => 'sexo', 'label' => 'Sexo', 'tipo' => 'select', 'obrigatorio' => false, 'colunas' => 3,
-                'maxlength' => 1, 'placeholder' => 'Não informado', 'ajuda' => '', 'opcoes' => ['M' => 'Masculino', 'F' => 'Feminino']],
-            ['nome' => 'grupo', 'label' => 'Grupo', 'tipo' => 'text', 'obrigatorio' => false, 'colunas' => 3,
-                'maxlength' => 1, 'placeholder' => '', 'ajuda' => '', 'opcoes' => []],
+                'maxlength' => 1, 'placeholder' => 'Não informado', 'ajuda' => 'Solicitado para emissão automatizada de certificado com o pronome correto, quando for o caso.', 'opcoes' => ['M' => 'Masculino', 'F' => 'Feminino']],
         ];
     }
 
@@ -187,7 +209,6 @@ class FormularioInscricaoService
             'participante.instituicao_ensino' => ['nullable', 'string', 'max:80'],
             'participante.email2' => ['nullable', 'max:150', new EmailValido],
             'participante.email_institucional' => ['nullable', 'max:150', new EmailValido],
-            'participante.grupo' => ['nullable', 'string', 'max:1'],
         ];
     }
 
@@ -223,6 +244,7 @@ class FormularioInscricaoService
             'max.array' => 'O campo :attribute aceita no máximo :max arquivos.',
             'max.file' => 'O arquivo em :attribute não pode ser maior que :max kilobytes.',
             'regex' => 'O campo :attribute está em um formato inválido.',
+            'in' => 'Selecione uma opção válida em :attribute.',
         ];
     }
 
@@ -247,7 +269,6 @@ class FormularioInscricaoService
             'participante.instituicao_ensino' => 'instituição de ensino',
             'participante.email2' => 'e-mail alternativo',
             'participante.email_institucional' => 'e-mail institucional',
-            'participante.grupo' => 'grupo',
         ];
     }
 
@@ -306,6 +327,7 @@ class FormularioInscricaoService
             $regras = $this->regras($atividade) + ($participante ? $this->regrasParticipante() : []);
             $validados = $request->validate($regras, $this->mensagens(), $this->atributos($atividade));
             $resposta = Arr::except($validados, ['participante']);
+            $this->distribuicao->conferirDisponibilidade($atividade, $resposta);
 
             // Guarda apenas os arquivos de campos declarados no formulario; qualquer outro upload e descartado.
             // Disco privado: anexos de inscricao so saem por rota assinada, nunca por URL direta.
@@ -332,6 +354,8 @@ class FormularioInscricaoService
                 // Dois envios ao mesmo tempo: o índice único decide qual entra.
                 return ['sucesso' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito(), 'inscricao_id' => null];
             }
+
+            $this->distribuicao->recalcular($atividade->refresh());
 
             return [
                 'sucesso' => true,
