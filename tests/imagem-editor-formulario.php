@@ -25,10 +25,10 @@ $editor = new ConteudoEditorFormularioService;
 try {
     $resposta = (new AtividadeController)->enviarImagemEditor($request, $atividade, $editor);
     $url = $resposta->getData(true)['url'] ?? '';
-    if (! preg_match('#/formularios/b{64}/editor/imagens/[a-f0-9-]{36}\.png$#', $url)) {
+    if (! preg_match('#/formularios/b{64}/editor/imagens/[a-f0-9-]{36}\.png/visualizar$#', $url)) {
         throw new RuntimeException('A URL pública da imagem não foi gerada corretamente.');
     }
-    $nome = basename(parse_url($url, PHP_URL_PATH));
+    $nome = basename(dirname(parse_url($url, PHP_URL_PATH)));
     if (! is_file($editor->pasta($atividade).'/'.$nome)) throw new RuntimeException('A imagem não foi salva na pasta do editor.');
     $arquivo = (new AtividadeController)->imagemEditor($atividade, $nome, $editor);
     $cache = $arquivo->headers->get('Cache-Control');

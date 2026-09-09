@@ -43,6 +43,9 @@ class AllowGiEmbedding
         $response = $next($request);
 
         $response->headers->remove('X-Frame-Options');
+        if ($request->routeIs('atividades.validador-presenca*')) {
+            $response->headers->set('Permissions-Policy', 'camera=(self)');
+        }
 
         // Estas páginas foram feitas para visitantes e podem ser incorporadas em sites
         // externos. As demais continuam limitadas às origens configuradas para o GI.

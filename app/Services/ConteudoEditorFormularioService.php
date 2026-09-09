@@ -83,6 +83,7 @@ class ConteudoEditorFormularioService
                 default => false,
             };
             if (! $manter) $elemento->removeAttribute($atributo->name);
+            elseif ($nome === 'src') $elemento->setAttribute($atributo->name, $this->normalizarUrlImagem($valor));
         }
         if ($elemento->tagName === 'a' && $elemento->getAttribute('target') === '_blank') {
             $elemento->setAttribute('rel', 'noopener noreferrer');
@@ -110,5 +111,14 @@ class ConteudoEditorFormularioService
     private function urlSegura(string $url): bool
     {
         return preg_match('#^(?:https?://|/)[^\s<>]+$#i', $url) === 1;
+    }
+
+    private function normalizarUrlImagem(string $url): string
+    {
+        return (string) preg_replace(
+            '~(/formularios/[a-f0-9]{64}/editor/imagens/[a-f0-9-]{36}\.(?:jpg|jpeg|png|gif|webp))(?=[?#]|$)~i',
+            '$1/visualizar',
+            $url,
+        );
     }
 }

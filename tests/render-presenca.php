@@ -71,6 +71,9 @@ $validador = view('atividades.validador-presenca')->render();
 if (! str_contains($validador, 'Pessoa Teste') || ! str_contains($validador, 'Validar presença') || ! str_contains($validador, 'Não validar')) {
     throw new RuntimeException('A etapa de confirmação da presença não foi renderizada.');
 }
+if (! str_contains($validador, 'id="cameraErro"') || ! str_contains($validador, 'window.isSecureContext') || ! str_contains($validador, 'areaCamera.classList.remove')) {
+    throw new RuntimeException('O diagnóstico e a inicialização móvel da câmera não foram renderizados.');
+}
 $request->session()->forget('presenca_confirmacao');
 $request->session()->flash('presenca_resultado', [...$dadosConfirmacao, 'mensagem' => 'Validação de presença cancelada.', 'status' => 'cancelada']);
 $resultadoCancelado = view('atividades.validador-presenca')->render();

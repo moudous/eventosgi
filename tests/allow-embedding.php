@@ -14,8 +14,8 @@ config(['gi.allow_outside_iframe' => false]);
 $middleware = new AllowGiEmbedding;
 $publicas = [
     '/formularios/'.str_repeat('a', 64),
-    '/biblioteca/arquivos/'.str_repeat('a', 36).'.png',
-    '/personalizacao/imagens/'.str_repeat('b', 36).'.jpg',
+    '/biblioteca/arquivos/'.str_repeat('a', 36).'.png/visualizar',
+    '/personalizacao/imagens/'.str_repeat('b', 36).'.jpg/visualizar',
     '/inscricoes/1/arquivos/documento/0/visualizar',
 ];
 
@@ -35,6 +35,16 @@ foreach ($publicas as $url) {
     }
 }
 
+config(['gi.allow_outside_iframe' => true]);
+$validador = Request::create('/atividades/validador-presenca');
+$rotaValidador = Route::getRoutes()->match($validador);
+$validador->setRouteResolver(fn () => $rotaValidador);
+$respostaValidador = $middleware->handle($validador, fn () => new Response('ok'));
+if ($respostaValidador->headers->get('Permissions-Policy') !== 'camera=(self)') {
+    throw new RuntimeException('A rota do validador não liberou a câmera para a própria origem.');
+}
+
+config(['gi.allow_outside_iframe' => false]);
 $privada = Request::create('/atividades');
 $privada->headers->set('Sec-Fetch-Dest', 'document');
 $rota = Route::getRoutes()->match($privada);

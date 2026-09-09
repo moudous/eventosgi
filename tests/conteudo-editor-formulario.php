@@ -15,6 +15,7 @@ $editor = new ConteudoEditorFormularioService;
 $html = $editor->sanitizar('<p class="ql-align-center" style="color: rgb(10, 20, 30)">Texto <strong>forte</strong></p>'
     .'<ol><li data-list="bullet"><span class="ql-ui"></span>Item</li></ol>'
     .'<script>alert(1)</script><img src="javascript:alert(1)" onerror="alert(2)">'
+    .'<img src="https://eventosgi.test/formularios/'.str_repeat('a', 64).'/editor/imagens/11111111-1111-4111-8111-111111111111.png">'
     .'<a href="https://example.com" target="_blank" onclick="alert(3)">Link</a>');
 
 conferirEditor(str_contains($html, 'ql-align-center'), 'O alinhamento produzido pelo editor deve ser preservado.');
@@ -25,5 +26,6 @@ conferirEditor(! str_contains($html, '<script'), 'Scripts não podem chegar ao f
 conferirEditor(! str_contains($html, 'javascript:'), 'URLs executáveis não podem chegar ao formulário público.');
 conferirEditor(! str_contains($html, 'onerror') && ! str_contains($html, 'onclick'), 'Eventos HTML devem ser removidos.');
 conferirEditor(str_contains($html, 'rel="noopener noreferrer"'), 'Links em nova aba devem ser isolados.');
+conferirEditor(str_contains($html, '.png/visualizar'), 'URLs antigas das imagens do editor devem receber o sufixo de visualização.');
 
 echo "OK: formatação preservada e HTML perigoso removido.\n";

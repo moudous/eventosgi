@@ -46,8 +46,9 @@
             </form>
 
             <button class="btn btn-outline-primary mt-3" type="button" id="abrirCamera"><i class="bi bi-camera me-1"></i>Usar câmera</button>
+            <div class="alert alert-danger mt-3 mb-0 d-none" id="cameraErro" role="alert"></div>
             <div class="mt-3 d-none" id="areaCamera">
-                <video class="w-100 rounded border bg-dark" id="cameraQr" playsinline muted style="max-height:420px"></video>
+                <video class="w-100 rounded border bg-dark" id="cameraQr" autoplay playsinline muted style="max-height:420px"></video>
                 <div class="small text-muted mt-1" id="cameraStatus">Aponte a câmera para o QR Code.</div>
                 <button class="btn btn-sm btn-outline-secondary mt-2" type="button" id="fecharCamera">Fechar câmera</button>
             </div>
@@ -58,11 +59,35 @@
 
 @push('scripts')
 <script>
-const botaoCamera=document.getElementById('abrirCamera'),areaCamera=document.getElementById('areaCamera'),video=document.getElementById('cameraQr'),statusCamera=document.getElementById('cameraStatus'),campoCodigo=document.getElementById('codigo_qr'),formularioQr=document.getElementById('formValidarQr');
+const botaoCamera=document.getElementById('abrirCamera'),areaCamera=document.getElementById('areaCamera'),video=document.getElementById('cameraQr'),statusCamera=document.getElementById('cameraStatus'),cameraErro=document.getElementById('cameraErro'),campoCodigo=document.getElementById('codigo_qr'),formularioQr=document.getElementById('formValidarQr');
 let fluxoCamera=null,detectando=false,ultimoQuadro=0;
 const pararCamera=()=>{detectando=false;if(fluxoCamera){fluxoCamera.getTracks().forEach(trilha=>trilha.stop());fluxoCamera=null}video.srcObject=null;areaCamera.classList.add('d-none');botaoCamera.classList.remove('d-none')};
 async function detectar(tempo){if(!detectando)return;if(tempo-ultimoQuadro>250){ultimoQuadro=tempo;try{const codigos=await window.validadorQr.detect(video);const valor=codigos[0]?.rawValue?.trim();if(valor){campoCodigo.value=valor;pararCamera();formularioQr.requestSubmit();return}}catch(erro){statusCamera.textContent='Não foi possível ler esta imagem. Continue apontando para o código.'}}requestAnimationFrame(detectar)}
-botaoCamera.addEventListener('click',async()=>{if(!('BarcodeDetector' in window)){alert('Este navegador não possui leitura de QR Code pela câmera. Use um leitor USB ou digite o código.');return}try{window.validadorQr=new BarcodeDetector({formats:['qr_code']});fluxoCamera=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=fluxoCamera;await video.play();areaCamera.classList.remove('d-none');botaoCamera.classList.add('d-none');statusCamera.textContent='Aponte a câmera para o QR Code.';detectando=true;requestAnimationFrame(detectar)}catch(erro){pararCamera();alert('Não foi possível acessar a câmera. Confira a permissão do navegador.')}});
+const exibirErroCamera=mensagem=>{cameraErro.textContent=mensagem;cameraErro.classList.remove('d-none')};
+const mensagemErroCamera=erro=>{
+    if(erro?.name==='NotAllowedError'||erro?.name==='SecurityError')return 'O acesso à câmera foi negado. No Chrome, toque no cadeado da barra de endereço, permita a câmera para este site e tente novamente.';
+    if(erro?.name==='NotFoundError'||erro?.name==='DevicesNotFoundError')return 'Nenhuma câmera foi encontrada neste aparelho.';
+    if(erro?.name==='NotReadableError'||erro?.name==='TrackStartError')return 'A câmera está sendo usada por outro aplicativo. Feche-o e tente novamente.';
+    if(erro?.name==='OverconstrainedError')return 'A câmera traseira não pôde ser iniciada. Verifique as configurações de câmera do aparelho.';
+    if(erro?.name==='AbortError')return 'O Chrome interrompeu a abertura da câmera. Feche outros aplicativos com câmera e tente novamente.';
+    return 'Não foi possível iniciar a câmera neste aparelho. Atualize o Chrome e confira a permissão de câmera do site.';
+};
+botaoCamera.addEventListener('click',async()=>{
+    cameraErro.classList.add('d-none');
+    if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){exibirErroCamera('A câmera só pode ser usada em uma conexão segura HTTPS. Abra esta página pelo endereço HTTPS oficial, e não por HTTP ou pelo endereço IP do servidor.');return}
+    if(!('BarcodeDetector' in window)){exibirErroCamera('Esta versão do navegador não possui leitor de QR Code. Atualize o Chrome ou digite o código abaixo do QR Code.');return}
+    try{
+        if(BarcodeDetector.getSupportedFormats){const formatos=await BarcodeDetector.getSupportedFormats();if(!formatos.includes('qr_code'))throw new DOMException('QR Code não suportado','NotSupportedError')}
+        window.validadorQr=new BarcodeDetector({formats:['qr_code']});
+        // O vídeo precisa estar visível antes de play(); o Chrome móvel pode rejeitar
+        // a reprodução quando o elemento ainda está dentro de display:none.
+        areaCamera.classList.remove('d-none');botaoCamera.classList.add('d-none');statusCamera.textContent='Solicitando acesso à câmera…';
+        fluxoCamera=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+        video.srcObject=fluxoCamera;
+        await video.play();
+        statusCamera.textContent='Aponte a câmera para o QR Code.';detectando=true;requestAnimationFrame(detectar);
+    }catch(erro){pararCamera();exibirErroCamera(erro?.name==='NotSupportedError'?'Este navegador não oferece leitura de QR Code pela câmera. Atualize o Chrome ou digite o código manualmente.':mensagemErroCamera(erro))}
+});
 document.getElementById('fecharCamera').addEventListener('click',pararCamera);window.addEventListener('pagehide',pararCamera);
 </script>
 @endpush

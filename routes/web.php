@@ -125,7 +125,7 @@ Route::prefix('templates')->name('templates.')->group(function (): void {
     Route::delete('/{template}', [TemplatePaginaController::class, 'destroy'])->middleware('gi.permission:templates.excluir')->name('destroy');
     // Sem permissao: a pagina do evento e publica e o navegador de quem a abre precisa
     // dos arquivos. O servico so entrega extensoes de uma lista fechada.
-    Route::get('/{template}/assets/{caminho}', [TemplatePaginaController::class, 'asset'])
+    Route::get('/{template}/assets/{caminho}/visualizar', [TemplatePaginaController::class, 'asset'])
         ->where('caminho', '[^?]+')->name('asset');
 });
 
@@ -198,11 +198,11 @@ Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'previewRedir
 Route::get('/formularios/{atividade:hash_publica}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
 Route::post('/formularios/{atividade:hash_publica}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
 Route::get('/formularios/{atividade:hash_publica}/captcha', CaptchaInscricaoController::class)->name('inscricoes.captcha');
-Route::get('/formularios/{atividade:hash_publica}/editor/imagens/{arquivo}', [AtividadeController::class, 'imagemEditor'])
+Route::get('/formularios/{atividade:hash_publica}/editor/imagens/{arquivo}/visualizar', [AtividadeController::class, 'imagemEditor'])
     ->where('arquivo', '[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp)')->name('inscricoes.editor.imagem');
 Route::post('/formularios/{atividade:hash_publica}/comprovante/email', [AtividadeController::class, 'enviarComprovante'])->name('inscricoes.comprovante.email');
 Route::delete('/formularios/{atividade:hash_publica}/inscricao', [AtividadeController::class, 'apagarInscricao'])->name('inscricoes.apagar');
-Route::get('/comprovantes/{inscricao:comprovante_hash}.pdf', [AtividadeController::class, 'comprovantePdf'])
+Route::get('/comprovantes/{inscricao:comprovante_hash}.pdf/visualizar', [AtividadeController::class, 'comprovantePdf'])
     ->where('inscricao', '[a-f0-9]{64}')->name('inscricoes.comprovante.pdf');
 
 // A posse do token recebido por e-mail autoriza a definição da senha. O servidor guarda
@@ -217,7 +217,7 @@ Route::prefix('biblioteca')->name('biblioteca.')->group(function (): void {
     Route::post('/', [BibliotecaController::class, 'store'])->middleware('gi.permission:biblioteca.enviar')->name('store');
     Route::post('/recortar', [BibliotecaController::class, 'recortar'])->middleware('gi.permission:biblioteca.recortar')->name('recortar');
     // O endereço é público para que sites e formulários possam reutilizar estes arquivos.
-    Route::get('/arquivos/{arquivo}', [BibliotecaController::class, 'abrir'])
+    Route::get('/arquivos/{arquivo}/visualizar', [BibliotecaController::class, 'abrir'])
         ->where('arquivo', '[a-f0-9-]{36}\.[a-z0-9]{1,15}')->name('abrir');
 });
 
@@ -244,7 +244,7 @@ Route::prefix('participantes')->name('participantes.')->group(function (): void 
 });
 
 Route::prefix('convidados')->name('convidados.')->group(function (): void {
-    Route::get('/foto/{codigo}', [ConvidadoController::class, 'foto'])->where('codigo', '[a-f0-9]{40}\.jpg')->name('foto');
+    Route::get('/foto/{codigo}/visualizar', [ConvidadoController::class, 'foto'])->where('codigo', '[a-f0-9]{40}\.jpg')->name('foto');
     Route::get('/', [ConvidadoController::class, 'index'])->middleware('gi.permission:convidados.listar')->name('index');
     Route::get('/dados', [ConvidadoController::class, 'dados'])->middleware('gi.permission:convidados.listar')->name('dados');
     Route::get('/criar', [ConvidadoController::class, 'create'])->middleware('gi.permission:convidados.criar')->name('create');
@@ -314,7 +314,7 @@ Route::get('/gi/{resource}', function (Request $request, string $resource) {
 });
 
 // Fundos dos formulários públicos: somente imagens com nomes gerados pelo servidor.
-Route::get('/personalizacao/imagens/{arquivo}', function (string $arquivo) {
+Route::get('/personalizacao/imagens/{arquivo}/visualizar', function (string $arquivo) {
     $caminho = storage_path('app/public/personalizacao/'.$arquivo);
     abort_unless(is_file($caminho), 404);
     return response()->file($caminho, ['X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'public, max-age=31536000, immutable']);
