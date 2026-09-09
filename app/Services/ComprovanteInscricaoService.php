@@ -23,10 +23,12 @@ class ComprovanteInscricaoService
                     : [(string) $opcao => (string) $opcao];
             });
             $valores = is_array($valor) ? $valor : [$valor];
-            $texto = collect($valores)->map(function ($item) use ($opcoes): string {
+            $checkboxSimples = ($campo['tipo'] ?? '') === 'checkbox' && $opcoes->isEmpty();
+            $texto = collect($valores)->map(function ($item) use ($opcoes, $checkboxSimples): string {
                 if (is_string($item) && str_starts_with($item, FormularioInscricaoService::PASTA_ANEXOS.'/')) {
                     return 'Arquivo enviado: '.basename($item);
                 }
+                if ($checkboxSimples && (string) $item === '1') return 'Sim';
                 return $opcoes->get((string) $item, is_scalar($item) ? (string) $item : '');
             })->filter(fn ($item) => $item !== '')->implode(', ');
 
@@ -52,5 +54,11 @@ class ComprovanteInscricaoService
     public function nomeArquivo(InscricaoAtividade $inscricao): string
     {
         return 'comprovante-'.(Str::slug($inscricao->atividade->nome) ?: 'inscricao').'.pdf';
+    }
+
+    /** @return array{codigo: string, imagem: string}|null */
+    public function qrPresenca(InscricaoAtividade $inscricao): ?array
+    {
+        return app(PresencaQrService::class)->dados($inscricao);
     }
 }

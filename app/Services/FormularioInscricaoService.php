@@ -19,6 +19,7 @@ class FormularioInscricaoService
     public function __construct(
         private readonly DispositivoVisitanteService $dispositivo,
         private readonly DistribuicaoVagasService $distribuicao,
+        private readonly PresencaQrService $presencaQr,
     ) {}
 
     /** Disco privado dos anexos: fora de public/, para nao serem servidos direto pelo servidor web. */
@@ -74,18 +75,34 @@ class FormularioInscricaoService
         foreach (($atividade->formulario['campos'] ?? []) as $campo) {
             if (empty($campo['nome'])) continue;
 
-            $regras[$campo['nome']] = ! empty($campo['obrigatorio']) ? ['required'] : ['nullable'];
+            $nome = $campo['nome'];
+            $tipo = $campo['tipo'] ?? 'text';
+            $opcoes = array_map(
+                fn ($opcao) => (string) (is_array($opcao) ? ($opcao['valor'] ?? '') : $opcao),
+                $campo['opcoes'] ?? [],
+            );
+            $checkboxSimples = $tipo === 'checkbox' && $opcoes === [];
+            $multiplo = $tipo === 'multiselect' || ($tipo === 'checkbox' && ! $checkboxSimples);
 
-            if (! empty($campo['criterio_vagas'])) {
-                $regras[$campo['nome']] = ['required', Rule::in(array_map(
-                    fn ($opcao) => (string) (is_array($opcao) ? ($opcao['valor'] ?? '') : $opcao),
-                    $campo['opcoes'] ?? [],
-                ))];
+            $regras[$nome] = $multiplo
+                ? (! empty($campo['obrigatorio']) ? ['required', 'array', 'min:1'] : ['nullable', 'array'])
+                : (! empty($campo['obrigatorio']) ? ['required'] : ['nullable']);
+
+            if ($multiplo) {
+                $regras[$nome.'.*'] = [Rule::in($opcoes)];
+            } elseif ($checkboxSimples) {
+                $regras[$nome][] = Rule::in(['1']);
+            } elseif (in_array($tipo, ['select', 'radio'], true)) {
+                $regras[$nome][] = Rule::in($opcoes);
             }
 
-            if (($campo['tipo'] ?? '') === 'file') {
+            if (! empty($campo['criterio_vagas'])) {
+                $regras[$nome] = ['required', Rule::in($opcoes)];
+            }
+
+            if ($tipo === 'file') {
                 $maxArquivos = min(10, max(1, (int) ($campo['max_arquivos'] ?? 1)));
-                $destino = $campo['nome'];
+                $destino = $nome;
                 if ($maxArquivos > 1) {
                     $regras[$destino][] = 'array';
                     $regras[$destino][] = 'max:'.$maxArquivos;
@@ -95,9 +112,9 @@ class FormularioInscricaoService
                 if (! empty($campo['aceitos'])) $regras[$destino][] = 'mimes:'.implode(',', $campo['aceitos']);
             }
 
-            if (($campo['validacao'] ?? '') === 'email') $regras[$campo['nome']][] = new EmailValido;
-            if (($campo['validacao'] ?? '') === 'cpf') $regras[$campo['nome']][] = new Cpf;
-            if (($campo['validacao'] ?? '') === 'telefone') $regras[$campo['nome']][] = 'regex:/^[0-9()+\s-]{8,20}$/';
+            if (($campo['validacao'] ?? '') === 'email') $regras[$nome][] = new EmailValido;
+            if (($campo['validacao'] ?? '') === 'cpf') $regras[$nome][] = new Cpf;
+            if (($campo['validacao'] ?? '') === 'telefone') $regras[$nome][] = 'regex:/^[0-9()+\s-]{8,20}$/';
         }
 
         return $regras;
@@ -348,6 +365,7 @@ class FormularioInscricaoService
                     'participante_id' => $participante?->id,
                     'participante_email' => $participante ? ($emailIdentificado ?: $participante->email) : null,
                     'resposta' => $resposta,
+                    'codigo_qr' => ! empty($atividade->formulario['registrar_presenca_qrcode']) ? $this->presencaQr->novoCodigo() : null,
                     ...$this->dispositivo->capturar($request),
                 ]);
             } catch (UniqueConstraintViolationException) {

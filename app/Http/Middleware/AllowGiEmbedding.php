@@ -8,6 +8,21 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AllowGiEmbedding
 {
+    private const ROTAS_PUBLICAS_INCORPORAVEIS = [
+        'eventos.pagina.visualizar',
+        'eventos.personalizacao.imagem',
+        'biblioteca.abrir',
+        'inscricoes.publica*',
+        'inscricoes.captcha',
+        'inscricoes.legado',
+        'inscricoes.editor.imagem',
+        'inscricoes.comprovante.*',
+        'inscricoes.apagar',
+        'inscricoes.arquivo',
+        'senha-participante.*',
+        'submissoes.publicas.*',
+    ];
+
     public function handle(Request $request, Closure $next): Response
     {
         if (! filter_var(config('gi.allow_outside_iframe'), FILTER_VALIDATE_BOOL)
@@ -31,11 +46,11 @@ class AllowGiEmbedding
 
         // Estas páginas foram feitas para visitantes e podem ser incorporadas em sites
         // externos. As demais continuam limitadas às origens configuradas para o GI.
-        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*', 'inscricoes.captcha', 'inscricoes.legado', 'inscricoes.editor.imagem', 'inscricoes.comprovante.*', 'inscricoes.apagar', 'senha-participante.*', 'submissoes.publicas.*')) {
-            $response->headers->set(
-                'Content-Security-Policy',
-                "frame-ancestors *; object-src 'none'; base-uri 'self'",
-            );
+        if ($this->ehRotaPublicaIncorporavel($request)) {
+            $politica = (string) $response->headers->get('Content-Security-Policy');
+            $politica = preg_replace('/(?:^|;)\s*frame-ancestors\s+[^;]*/i', '', $politica) ?? $politica;
+            $response->headers->set('Content-Security-Policy', trim($politica, " ;")
+                .($politica !== '' ? '; ' : '')."frame-ancestors *; object-src 'none'; base-uri 'self'");
         } elseif (! $response->headers->has('Content-Security-Policy')) {
             $response->headers->set(
                 'Content-Security-Policy',
@@ -62,10 +77,13 @@ class AllowGiEmbedding
             return true;
         }
 
-        if ($request->routeIs('eventos.pagina.visualizar', 'inscricoes.publica*', 'inscricoes.captcha', 'inscricoes.legado', 'inscricoes.editor.imagem', 'inscricoes.comprovante.*', 'inscricoes.apagar', 'senha-participante.*', 'submissoes.publicas.*')) {
-            return true;
-        }
+        if ($this->ehRotaPublicaIncorporavel($request)) return true;
 
         return in_array('signed', $request->route()?->gatherMiddleware() ?? [], true);
+    }
+
+    private function ehRotaPublicaIncorporavel(Request $request): bool
+    {
+        return $request->routeIs(...self::ROTAS_PUBLICAS_INCORPORAVEIS);
     }
 }

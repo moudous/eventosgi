@@ -7,6 +7,8 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 use App\Models\Atividade;
 use App\Models\InscricaoAtividade;
 use App\Services\ComprovanteInscricaoService;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 function conferirComprovante(bool $condicao, string $mensagem): void
 {
@@ -20,12 +22,13 @@ $atividade = new Atividade([
             ['nome' => 'turno', 'label' => 'Turno', 'opcoes' => [['valor' => 'M', 'texto' => 'Manhã']]],
             ['nome' => 'observacao', 'label' => 'Observação'],
             ['nome' => 'arquivo', 'label' => 'Documento', 'tipo' => 'file'],
+            ['nome' => 'declaracao', 'label' => 'Declaração', 'tipo' => 'checkbox', 'opcoes' => []],
         ],
     ],
 ]);
 $inscricao = new InscricaoAtividade([
     'participante_email' => 'pessoa@example.com',
-    'resposta' => ['turno' => 'M', 'observacao' => '', 'arquivo' => ['inscricoes/documento.pdf']],
+    'resposta' => ['turno' => 'M', 'observacao' => '', 'arquivo' => ['inscricoes/documento.pdf'], 'declaracao' => '1'],
 ]);
 $inscricao->setRelation('atividade', $atividade);
 $servico = new ComprovanteInscricaoService;
@@ -34,6 +37,36 @@ $respostas = $servico->respostas($inscricao);
 conferirComprovante($respostas[0]['valor'] === 'Manhã', 'O comprovante deve exibir o texto correspondente ao valor do combo.');
 conferirComprovante($respostas[1]['valor'] === 'Não informado', 'Respostas vazias devem ser apresentadas claramente.');
 conferirComprovante($respostas[2]['valor'] === 'Arquivo enviado: documento.pdf', 'Caminhos privados não podem aparecer no comprovante.');
+conferirComprovante($respostas[3]['valor'] === 'Sim', 'Checkbox de declaração única deve aparecer como Sim no comprovante.');
 conferirComprovante(strlen((new InscricaoAtividade)->forceFill([])->comprovante_hash ?? '') === 0, 'A hash deve ser criada apenas ao gravar a inscrição.');
 
-echo "OK: texto de opções, vazios e anexos do comprovante.\n";
+// Um comprovante com bastante conteúdo deve continuar cabendo em uma página A4,
+// preservando um QR Code grande o suficiente para leitura.
+$configuracao = $atividade->formulario;
+$configuracao['registrar_presenca_qrcode'] = true;
+$atividade->formulario = $configuracao;
+$inscricao->forceFill(['codigo_qr' => 'EVGI-1234567890ABCDEF1234567890ABCDEF', 'created_at' => now()]);
+$dadosPdf = collect(range(1, 6))->map(fn ($numero) => [
+    'label' => 'Dado do participante '.$numero,
+    'valor' => 'Informação cadastral '.$numero,
+])->all();
+$respostasPdf = collect(range(1, 18))->map(fn ($numero) => [
+    'label' => 'Pergunta do formulário '.$numero,
+    'valor' => 'Resposta informada pelo participante número '.$numero.'.',
+])->all();
+$qrPdf = $servico->qrPresenca($inscricao);
+$htmlPdf = view('atividades.comprovante-pdf', [
+    'inscricao' => $inscricao,
+    'dadosParticipante' => $dadosPdf,
+    'respostas' => $respostasPdf,
+    'qrPresenca' => $qrPdf,
+])->render();
+conferirComprovante(str_contains($htmlPdf, 'width:158px') && str_contains($htmlPdf, 'class="ultracompacto"'), 'O PDF extenso deve usar o layout compacto sem reduzir excessivamente o QR Code.');
+$pdf = new Dompdf(new Options(['isRemoteEnabled' => false]));
+$pdf->loadHtml($htmlPdf, 'UTF-8');
+$pdf->setPaper('A4');
+$pdf->render();
+preg_match_all('/\/Type\s*\/Page\b/', $pdf->output(), $paginas);
+conferirComprovante(count($paginas[0]) === 1, 'O comprovante extenso de teste deve ser gerado em uma única página.');
+
+echo "OK: conteúdo do comprovante e PDF compacto de uma página.\n";

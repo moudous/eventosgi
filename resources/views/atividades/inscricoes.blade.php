@@ -9,6 +9,7 @@
         ->whereIn('id', $inscricoes->pluck('participante_id')->filter()->unique()->all())
         ->pluck('nome', 'id');
     $dispositivos = app(App\Services\DispositivoVisitanteService::class);
+    $podeValidarPresenca = app(App\Services\GiPermissionService::class)->permite('atividades.validador_qr');
     // Quantidade de respostas exibidas na linha; o restante fica no modal.
     $visiveis = 4;
     $linhas = [];
@@ -17,7 +18,12 @@
         $resposta = $inscricao->resposta ?? [];
         // Segue a ordem dos campos do formulário para alinhar as colunas entre as linhas;
         // respostas de campos já removidos vão para o fim.
-        $nomes = $campos->keys()->intersect(array_keys($resposta))->all();
+        $checkboxesSimples = $campos->filter(fn ($campo) =>
+            ($campo['tipo'] ?? '') === 'checkbox' && empty($campo['opcoes'])
+        )->keys()->all();
+        $nomes = $campos->keys()->filter(fn ($nome) =>
+            array_key_exists($nome, $resposta) || in_array($nome, $checkboxesSimples, true)
+        )->all();
         $nomes = array_merge($nomes, array_values(array_diff(array_keys($resposta), $nomes)));
 
         $respostas = [];
@@ -26,9 +32,11 @@
         foreach ($nomes as $nome) {
             $campo = $campos->get($nome, []);
             $label = ($campo['label'] ?? '') ?: str_replace('_', ' ', $nome);
-            $valores = is_array($resposta[$nome]) ? Illuminate\Support\Arr::flatten($resposta[$nome]) : [$resposta[$nome]];
+            $valorResposta = $resposta[$nome] ?? null;
+            $valores = is_array($valorResposta) ? Illuminate\Support\Arr::flatten($valorResposta) : [$valorResposta];
             $textos = [];
             $arquivos = [];
+            $checkboxSimples = ($campo['tipo'] ?? '') === 'checkbox' && empty($campo['opcoes']);
 
             $posicao = 0;
             foreach ($valores as $item) {
@@ -46,7 +54,9 @@
                     ];
                     $posicao++;
                 } else {
-                    $textos[] = is_bool($item) ? ($item ? 'Sim' : 'Não') : (string) $item;
+                    $textos[] = $checkboxSimples
+                        ? ((string) $item === '1' || $item === true ? 'Sim' : 'Não')
+                        : (is_bool($item) ? ($item ? 'Sim' : 'Não') : (string) $item);
                 }
             }
 
@@ -76,6 +86,9 @@
             'participante_email' => $inscricao->participante_email,
             'data' => $inscricao->created_at?->format('d/m/Y') ?? '—',
             'hora' => $inscricao->created_at?->format('H:i') ?? '',
+            'presente' => (bool) $inscricao->presente,
+            'data_presenca' => $inscricao->data_presenca?->format('d/m/Y H:i:s'),
+            'presenca_url' => route('atividades.inscricoes.presenca', $inscricao),
             'respostas' => $respostas,
             'anexos' => $anexos,
         ];
@@ -85,7 +98,7 @@
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0 tabela-inscricoes">
-                <thead><tr><th>ID</th><th>Data</th><th>Participante</th><th>Origem</th><th>Respostas</th><th>Anexos</th><th class="text-end">Ações</th></tr></thead>
+                <thead><tr><th>ID</th><th>Data</th><th>Participante</th><th>Presença</th><th>Origem</th><th>Respostas</th><th>Anexos</th><th class="text-end">Ações</th></tr></thead>
                 <tbody>
                 @forelse($linhas as $linha)
                     <tr>
@@ -101,6 +114,7 @@
                                 <span class="text-muted small">Não identificado</span>
                             @endif
                         </td>
+                        <td id="presenca-status-{{ $linha['id'] }}">@if($linha['presente'])<span class="badge text-bg-success" title="Registrada em {{ $linha['data_presenca'] }}">Presente</span>@else<span class="text-muted">—</span>@endif</td>
                         <td>
                             <div class="resposta-item" style="max-width: 190px">
                                 <span class="resposta-valor" title="{{ $linha['ip'] ?? 'IP não registrado' }}">{{ $linha['ip'] ?? '—' }}</span>
@@ -111,7 +125,9 @@
                             @if($linha['respostas'])
                                 <div class="respostas-inline">
                                     @foreach(array_slice($linha['respostas'], 0, $visiveis) as $item)
-                                        @php($texto = implode(', ', array_filter($item['valores'], 'strlen')))
+                                        @php
+                                            $texto = implode(', ', array_filter($item['valores'], 'strlen'));
+                                        @endphp
                                         <div class="resposta-item">
                                             <span class="resposta-rotulo">{{ $item['label'] }}</span>
                                             <span class="resposta-valor {{ $texto === '' ? 'text-muted fst-italic' : '' }}" title="{{ $texto }}">{{ $texto !== '' ? $texto : 'Não informado' }}</span>
@@ -141,13 +157,12 @@
                             @endif
                         </td>
                         <td class="text-end text-nowrap">
-                            <button type="button" class="btn btn-sm btn-outline-dark ver-respostas" data-inscricao="{{ $linha['id'] }}" title="Visualizar respostas">
-                                <i class="bi bi-eye-fill me-1" aria-hidden="true"></i>Visualizar
-                            </button>
+                            @if($podeValidarPresenca)<button type="button" class="btn btn-sm {{ $linha['presente'] ? 'btn-outline-danger' : 'btn-outline-success' }} alternar-presenca" data-inscricao="{{ $linha['id'] }}" title="{{ $linha['presente'] ? 'Remover presença' : 'Marcar presença' }}" aria-label="{{ $linha['presente'] ? 'Remover presença' : 'Marcar presença' }}"><i class="bi {{ $linha['presente'] ? 'bi-person-x-fill' : 'bi-person-check-fill' }}" aria-hidden="true"></i></button>@endif
+                            <button type="button" class="btn btn-sm btn-outline-dark ver-respostas" data-inscricao="{{ $linha['id'] }}" title="Visualizar respostas" aria-label="Visualizar respostas"><i class="bi bi-eye-fill" aria-hidden="true"></i></button>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center py-4">Nenhuma inscrição encontrada.</td></tr>
+                    <tr><td colspan="8" class="text-center py-4">Nenhuma inscrição encontrada.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -157,8 +172,25 @@
 </div>
 
 <div class="modal fade" id="respostaModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-    <div class="modal-header"><div><h2 class="modal-title fs-5">Inscrição <span id="respostaNumero"></span></h2><small class="text-muted" id="respostaData"></small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-header"><div><h2 class="modal-title fs-5">Inscrição <span id="respostaNumero"></span></h2><small class="text-muted d-block" id="respostaData"></small><small class="text-success fw-semibold d-block" id="respostaDataPresenca"></small></div><div class="d-flex align-items-center gap-2">@if($podeValidarPresenca)<button type="button" class="btn btn-sm btn-outline-success alternar-presenca" id="respostaPresenca" title="Marcar presença" aria-label="Marcar presença"><i class="bi bi-person-check-fill" aria-hidden="true"></i></button>@endif<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div></div>
     <div class="modal-body" id="respostaCorpo"></div>
+</div></div></div>
+
+<div class="modal fade" id="exportacaoCamposModal" tabindex="-1" aria-labelledby="exportacaoCamposTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><div><h2 class="modal-title fs-5" id="exportacaoCamposTitulo"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Campos da planilha</h2><small class="text-muted" id="exportacaoFormato"></small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+        <p class="text-muted small">Escolha as colunas que serão incluídas no arquivo.</p>
+        <div class="d-flex flex-wrap gap-2 mb-3"><button type="button" class="btn btn-sm btn-outline-secondary" id="exportacaoMarcarTodos">Marcar todos</button><button type="button" class="btn btn-sm btn-outline-secondary" id="exportacaoRestaurar">Restaurar seleção inicial</button></div>
+        @foreach(collect($camposExportacao)->groupBy('grupo') as $grupo => $camposDoGrupo)
+            <fieldset class="border rounded p-3 mb-3"><legend class="float-none w-auto px-1 h6 mb-1">{{ $grupo }}</legend>
+                @foreach($camposDoGrupo as $campoExportacao)
+                    <div class="form-check mb-1"><input class="form-check-input campo-exportacao" type="checkbox" id="exportar_{{ $loop->parent->index }}_{{ $loop->index }}" value="{{ $campoExportacao['chave'] }}" data-padrao="{{ $campoExportacao['marcado'] ? '1' : '0' }}" @checked($campoExportacao['marcado'])><label class="form-check-label" for="exportar_{{ $loop->parent->index }}_{{ $loop->index }}">{{ $campoExportacao['rotulo'] }}</label></div>
+                @endforeach
+            </fieldset>
+        @endforeach
+        <div class="alert alert-danger py-2 d-none" id="exportacaoErro"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="gerarExportacao"><i class="bi bi-download me-1"></i>Gerar planilha</button></div>
 </div></div></div>
 @endsection
 
@@ -182,6 +214,66 @@
 <script>
 const inscricoes = @json(collect($linhas)->keyBy('id'));
 
+function atualizarBotaoPresenca(botao, inscricao) {
+    if (!botao) return;
+    botao.dataset.inscricao = inscricao.id;
+    botao.classList.toggle('btn-outline-success', !inscricao.presente);
+    botao.classList.toggle('btn-outline-danger', inscricao.presente);
+    const titulo = inscricao.presente ? 'Remover presença' : 'Marcar presença';
+    botao.title = titulo;
+    botao.setAttribute('aria-label', titulo);
+    botao.querySelector('i').className = 'bi ' + (inscricao.presente ? 'bi-person-x-fill' : 'bi-person-check-fill');
+}
+
+function atualizarPresencaNaTela(inscricao) {
+    const status = document.getElementById('presenca-status-' + inscricao.id);
+    if (status) {
+        status.replaceChildren();
+        if (inscricao.presente) {
+            const badge = document.createElement('span');
+            badge.className = 'badge text-bg-success';
+            badge.textContent = 'Presente';
+            badge.title = inscricao.data_presenca ? 'Registrada em ' + inscricao.data_presenca : 'Presença registrada';
+            status.append(badge);
+        } else {
+            const vazio = document.createElement('span');
+            vazio.className = 'text-muted';
+            vazio.textContent = '—';
+            status.append(vazio);
+        }
+    }
+    document.querySelectorAll('.alternar-presenca[data-inscricao="' + inscricao.id + '"]').forEach(botao => atualizarBotaoPresenca(botao, inscricao));
+    const botaoModal = document.getElementById('respostaPresenca');
+    if (botaoModal?.dataset.inscricao === String(inscricao.id)) atualizarDataPresencaModal(inscricao);
+}
+
+function atualizarDataPresencaModal(inscricao) {
+    const elemento = document.getElementById('respostaDataPresenca');
+    elemento.textContent = inscricao.presente && inscricao.data_presenca
+        ? 'Presença registrada em ' + inscricao.data_presenca
+        : '';
+}
+
+document.addEventListener('click', async evento => {
+    const botao = evento.target.closest('.alternar-presenca');
+    if (!botao) return;
+    const inscricao = inscricoes[botao.dataset.inscricao];
+    if (!inscricao || botao.disabled) return;
+    botao.disabled = true;
+    try {
+        const resposta = await fetch(inscricao.presenca_url, {method:'PATCH', credentials:'same-origin', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':@json(csrf_token())}, body:JSON.stringify({presente:!inscricao.presente})});
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.message || 'Não foi possível alterar a presença.');
+        inscricao.presente = dados.presente;
+        inscricao.data_presenca = dados.data_presenca;
+        atualizarPresencaNaTela(inscricao);
+    } catch (erro) {
+        alert(erro.message || 'Não foi possível alterar a presença.');
+    } finally {
+        botao.disabled = false;
+    }
+});
+
 document.querySelectorAll('.ver-respostas').forEach(botao => botao.addEventListener('click', () => {
     const inscricao = inscricoes[botao.dataset.inscricao];
     if (!inscricao) return;
@@ -189,6 +281,8 @@ document.querySelectorAll('.ver-respostas').forEach(botao => botao.addEventListe
     document.getElementById('respostaNumero').textContent = '#' + inscricao.id;
     document.getElementById('respostaData').textContent = 'Enviada em ' + inscricao.data + ' às ' + inscricao.hora
         + (inscricao.participante_id ? ' — ' + (inscricao.participante || 'cadastro removido') + ' (#' + inscricao.participante_id + ')' : '');
+    atualizarBotaoPresenca(document.getElementById('respostaPresenca'), inscricao);
+    atualizarDataPresencaModal(inscricao);
 
     const corpo = document.getElementById('respostaCorpo');
     corpo.replaceChildren();
@@ -263,16 +357,35 @@ document.querySelectorAll('.ver-respostas').forEach(botao => botao.addEventListe
     bootstrap.Modal.getOrCreateInstance(document.getElementById('respostaModal')).show();
 }));
 
-// Baixar por blob não funciona dentro do iframe do GI: o arquivo se perde antes de chegar
-// ao visitante. Aqui o servidor devolve uma URL assinada e um iframe oculto a carrega —
-// como a resposta vem com Content-Disposition: attachment, o navegador baixa sem sair da página.
-document.querySelectorAll('.exportar-respostas').forEach(link => link.addEventListener('click', async event => {
+// A escolha do formato abre primeiro a seleção das colunas. Somente depois de confirmar
+// o servidor prepara uma URL assinada para o arquivo solicitado.
+const exportacaoModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('exportacaoCamposModal'));
+const camposExportacao = [...document.querySelectorAll('.campo-exportacao')];
+let exportacaoLink = null;
+document.querySelectorAll('.exportar-respostas').forEach(link => link.addEventListener('click', event => {
     event.preventDefault();
-    const button = document.querySelector('.dropdown-toggle');
-    if (button.disabled) return;
+    exportacaoLink = link;
+    document.getElementById('exportacaoFormato').textContent = link.textContent.trim();
+    document.getElementById('exportacaoErro').classList.add('d-none');
+    exportacaoModal.show();
+}));
+document.getElementById('exportacaoMarcarTodos').addEventListener('click', () => camposExportacao.forEach(campo => campo.checked = true));
+document.getElementById('exportacaoRestaurar').addEventListener('click', () => camposExportacao.forEach(campo => campo.checked = campo.dataset.padrao === '1'));
+document.getElementById('gerarExportacao').addEventListener('click', async () => {
+    const selecionados = camposExportacao.filter(campo => campo.checked).map(campo => campo.value);
+    const erro = document.getElementById('exportacaoErro');
+    if (!selecionados.length) {
+        erro.textContent = 'Selecione pelo menos um campo para gerar a planilha.';
+        erro.classList.remove('d-none');
+        return;
+    }
+    const button = document.getElementById('gerarExportacao');
+    if (button.disabled || !exportacaoLink) return;
     button.disabled = true;
     try {
-        const response = await fetch(link.dataset.link, {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+        const parametros = new URLSearchParams();
+        selecionados.forEach(campo => parametros.append('campos[]', campo));
+        const response = await fetch(exportacaoLink.dataset.link + '?' + parametros.toString(), {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
         if (!response.ok) throw new Error('A sessão expirou. Reabra a aplicação pelo sistema GI e tente novamente.');
         const {url} = await response.json();
         if (!url) throw new Error('Não foi possível preparar o arquivo. Tente novamente.');
@@ -282,11 +395,13 @@ document.querySelectorAll('.exportar-respostas').forEach(link => link.addEventLi
         oculto.src = url;
         document.body.appendChild(oculto);
         setTimeout(() => oculto.remove(), 120000);
+        exportacaoModal.hide();
     } catch (error) {
-        alert(error.message || 'Não foi possível baixar o arquivo. Tente novamente.');
+        erro.textContent = error.message || 'Não foi possível baixar o arquivo. Tente novamente.';
+        erro.classList.remove('d-none');
     } finally {
         button.disabled = false;
     }
-}));
+});
 </script>
 @endpush

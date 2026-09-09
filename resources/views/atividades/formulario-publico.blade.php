@@ -33,8 +33,14 @@
         <div class="editor-publico mb-4">{!! $config['editor']['conteudo'] !!}</div>
     @endif
 
-    @if(!empty($config['limitar_inscricoes']))
-        @php($totalVagas = $config['distribuicao_vagas']['total'] ?? ['usadas' => $atividade->inscricoes()->count(), 'disponiveis' => (int) ($config['limite_inscricoes'] ?? 0), 'restantes' => 0])
+    @if(!empty($config['limitar_inscricoes']) && !empty($config['mostrar_vagas_restantes']))
+        @php
+            $totalVagas = $config['distribuicao_vagas']['total'] ?? [
+                'usadas' => $atividade->inscricoes()->count(),
+                'disponiveis' => (int) ($config['limite_inscricoes'] ?? 0),
+                'restantes' => 0,
+            ];
+        @endphp
         <div class="d-flex justify-content-end mb-3"><span class="badge text-bg-light border fs-6" title="{{ $totalVagas['usadas'] }} inscrição(ões) de {{ $totalVagas['disponiveis'] }} vagas; restam {{ $totalVagas['restantes'] }}">Vagas: {{ $totalVagas['usadas'] }}/{{ $totalVagas['disponiveis'] }}</span></div>
     @endif
 
@@ -44,7 +50,7 @@
     @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
 
     @if($identificacao)
-        <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between alert alert-light border">
+        <div id="inicio-formulario" class="d-flex flex-wrap gap-2 align-items-center justify-content-between alert alert-light border ancora-formulario">
             <span><i class="bi bi-envelope-check me-1"></i>Você já entrou com <strong>{{ $identificacao['email'] }}</strong></span>
             <form method="POST" action="{{ request()->fullUrl() }}" class="m-0">
                 @csrf<input type="hidden" name="acao" value="trocar_email">
@@ -60,15 +66,24 @@
     @endif
 
     @if($estado['motivo'] === 'duplicada' && $inscricao)
+        @php
+            $itensComprovante = count($dadosComprovante) + count($respostasComprovante);
+            $caracteresComprovante = collect([...$dadosComprovante, ...$respostasComprovante])
+                ->sum(fn ($item) => mb_strlen((string) ($item['label'] ?? '') . (string) ($item['valor'] ?? '')));
+            $densidadeComprovante = $itensComprovante > 22 || $caracteresComprovante > 2600
+                ? 'comprovante-ultracompacto'
+                : ($itensComprovante > 13 || $caracteresComprovante > 1500 ? 'comprovante-compacto' : '');
+        @endphp
         <div class="d-flex flex-wrap gap-2 mb-3">
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#comprovanteModal"><i class="bi bi-printer me-1"></i>Imprimir comprovante</button>
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#apagarInscricaoModal"><i class="bi bi-trash me-1"></i>Apagar inscrição</button>
         </div>
 
-        <div id="comprovanteRespostas" class="card content-card">
+        <div id="comprovanteRespostas" class="card content-card {{ $densidadeComprovante }}">
             <div class="card-header"><h2 class="h5 fw-bold mb-0">Respostas da inscrição</h2></div>
             <div class="card-body p-4">
                 @include('atividades.partials.comprovante-respostas', ['dadosParticipante' => $dadosComprovante, 'respostas' => $respostasComprovante])
+                @include('atividades.partials.qrcode-presenca', ['qrPresenca' => $qrPresenca])
             </div>
         </div>
 
@@ -194,7 +209,9 @@
                         </div>
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="participante_sexo">Sexo</label>
-                            @php($sexo = old('participante.sexo', $participante->sexo))
+                            @php
+                                $sexo = old('participante.sexo', $participante->sexo);
+                            @endphp
                             <select class="form-select" id="participante_sexo" name="participante[sexo]">
                                 <option value="">Não informado</option>
                                 <option value="M" @selected($sexo === 'M')>Masculino</option>
@@ -213,14 +230,20 @@
                             @php
                                 $nome = $campo['nome'];
                                 $tipo = $campo['tipo'] ?? 'text';
-                                $multiplo = $tipo === 'multiselect';
+                                $opcoesCampo = $campo['opcoes'] ?? [];
+                                $checkboxSimples = $tipo === 'checkbox' && $opcoesCampo === [];
+                                $multiplo = $tipo === 'multiselect' || ($tipo === 'checkbox' && ! $checkboxSimples);
                                 $anterior = old($nome);
                                 $criterioVagas = !empty($campo['criterio_vagas']);
                                 $nivelVagas = collect($config['distribuicao_vagas']['niveis'] ?? [])->firstWhere('campo', $nome);
                             @endphp
                             <div class="col-12 col-md-{{ in_array((int) ($campo['grid'] ?? 6), [12, 6, 4]) ? (int) ($campo['grid'] ?? 6) : 6 }}">
-                                <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
-                                @if(in_array($tipo, ['select', 'radio', 'checkbox', 'multiselect']))
+                                @if(in_array($tipo, ['radio', 'checkbox'], true) && ! $checkboxSimples)
+                                    <div class="form-label">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</div>
+                                @else
+                                    <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
+                                @endif
+                                @if(in_array($tipo, ['select', 'multiselect'], true))
                                     <select class="form-select" id="campo_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" data-nome-campo="{{ $nome }}" @if($criterioVagas) data-criterio-vagas="1" @endif @if(!empty($campo['obrigatorio']) || $criterioVagas) required @endif @if($multiplo) multiple @endif>
                                         @foreach($campo['opcoes'] ?? [] as $opcao)
                                             @php
@@ -229,9 +252,34 @@
                                                 $cotasOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['usadas'] ?? 0));
                                                 $restantesOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['restantes'] ?? 0));
                                             @endphp
-                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}@if($criterioVagas) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
+                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}@if($criterioVagas && !empty($config['mostrar_vagas_restantes'])) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
                                         @endforeach
                                     </select>
+                                @elseif(in_array($tipo, ['radio', 'checkbox'], true))
+                                    @if($checkboxSimples)
+                                        <div class="form-check pt-1">
+                                            <input class="form-check-input" type="checkbox" id="campo_{{ $loop->index }}" name="{{ $nome }}" value="1" @checked((string) $anterior === '1') @if(!empty($campo['obrigatorio'])) required @endif>
+                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
+                                            @if(!empty($campo['obrigatorio']))<div class="invalid-feedback">Marque esta declaração para continuar.</div>@endif
+                                        </div>
+                                    @else
+                                    <div id="campo_{{ $loop->index }}" class="d-flex flex-column gap-2 pt-1" role="group" aria-label="{{ $campo['label'] ?? $nome }}" @if(!empty($campo['obrigatorio'])) data-checkbox-obrigatorio @endif>
+                                        @foreach($opcoesCampo as $opcao)
+                                            @php
+                                                $valorOpcao = is_array($opcao) ? (string) $opcao['valor'] : (string) $opcao;
+                                                $textoOpcao = is_array($opcao) ? $opcao['texto'] : $opcao;
+                                                $selecionado = $multiplo
+                                                    ? in_array($valorOpcao, (array) $anterior, true)
+                                                    : (string) $anterior === $valorOpcao;
+                                            @endphp
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="{{ $tipo }}" id="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" value="{{ $valorOpcao }}" @checked($selecionado) @if($tipo === 'radio' && !empty($campo['obrigatorio'])) required @endif>
+                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}</label>
+                                            </div>
+                                        @endforeach
+                                        @if($tipo === 'checkbox' && !empty($campo['obrigatorio']))<div class="invalid-feedback">Selecione pelo menos uma opção.</div>@endif
+                                    </div>
+                                    @endif
                                 @elseif($tipo === 'textarea')
                                     <textarea class="form-control" id="campo_{{ $loop->index }}" name="{{ $nome }}" placeholder="{{ $campo['placeholder'] ?? '' }}" @if(!empty($campo['obrigatorio'])) required @endif>{{ $anterior }}</textarea>
                                 @elseif($tipo === 'file')
@@ -267,6 +315,8 @@
     .editor-publico li[data-list="bullet"] { list-style-type: disc; }
     .editor-publico li[data-list="ordered"] { list-style-type: decimal; }
     .editor-publico pre { white-space: pre-wrap; overflow: visible; }
+    [data-checkbox-obrigatorio].is-invalid .invalid-feedback { display: block; }
+    .ancora-formulario { scroll-margin-top: 1rem; }
     /* Fora da tela em vez de display:none, para o robô continuar preenchendo. */
 </style>
 @endpush
@@ -337,6 +387,19 @@ document.querySelectorAll('#participante_email2, #participante_email_institucion
     campo.addEventListener('input', () => campo.classList.remove('is-invalid'));
 });
 
+const atualizarCheckboxObrigatorio = grupo => {
+    const opcoes = [...grupo.querySelectorAll('input[type=checkbox]')];
+    const valido = opcoes.some(opcao => opcao.checked);
+    opcoes[0]?.setCustomValidity(valido ? '' : 'Selecione pelo menos uma opção.');
+    grupo.classList.toggle('is-invalid', !valido);
+};
+document.querySelectorAll('[data-checkbox-obrigatorio]').forEach(grupo => {
+    const opcoes = [...grupo.querySelectorAll('input[type=checkbox]')];
+    opcoes.forEach(opcao => opcao.addEventListener('change', () => atualizarCheckboxObrigatorio(grupo)));
+    opcoes[0]?.setCustomValidity(opcoes.some(opcao => opcao.checked) ? '' : 'Selecione pelo menos uma opção.');
+    opcoes[0]?.addEventListener('invalid', () => grupo.classList.add('is-invalid'));
+});
+
 document.querySelectorAll('form').forEach(formulario => formulario.addEventListener('submit', evento => {
     const invalidos = [];
     if (nome && formulario.contains(nome) && !nomeCompleto(nome.value)) invalidos.push(nome);
@@ -354,6 +417,7 @@ document.querySelectorAll('form').forEach(formulario => formulario.addEventListe
 
 document.getElementById('imprimirComprovante')?.addEventListener('click', () => window.print());
 const distribuicaoVagas = {{ Illuminate\Support\Js::from($config['distribuicao_vagas'] ?? []) }};
+const mostrarVagasRestantes = {{ !empty($config['mostrar_vagas_restantes']) ? 'true' : 'false' }};
 const selectsCriterio = [...document.querySelectorAll('select[data-criterio-vagas]')];
 const atualizarCotas = () => {
     const anteriores = [];
@@ -370,8 +434,8 @@ const atualizarCotas = () => {
             const usadas = cotas.reduce((total, cota) => total + Number(cota.usadas || 0), 0);
             const restantes = cotas.reduce((total, cota) => total + Number(cota.restantes || 0), 0);
             const disponiveis = cotas.reduce((total, cota) => total + Number(cota.disponiveis || 0), 0);
-            option.textContent = `${option.dataset.texto} — ${usadas}/${restantes}`;
-            option.title = `${usadas} vaga(s) preenchida(s) de ${disponiveis}; restam ${restantes}`;
+            option.textContent = mostrarVagasRestantes ? `${option.dataset.texto} — ${usadas}/${restantes}` : option.dataset.texto;
+            option.title = mostrarVagasRestantes ? `${usadas} vaga(s) preenchida(s) de ${disponiveis}; restam ${restantes}` : '';
             option.disabled = restantes < 1 && !option.selected;
         });
         if (select.value) anteriores.push(select.value);
@@ -394,9 +458,38 @@ if (window.parent !== window && window.ResizeObserver) {
 @push('styles')
 <style>
 @media print {
+    @page { size: A4 portrait; margin: 7mm; }
     body * { visibility: hidden !important; }
     #comprovanteRespostas, #comprovanteRespostas * { visibility: visible !important; }
-    #comprovanteRespostas { position: absolute; inset: 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+    #comprovanteRespostas {
+        position: absolute; inset: 0; width: 100%; border: 0 !important; box-shadow: none !important;
+        color: #22303f; font-size: 9pt; line-height: 1.15;
+    }
+    #comprovanteRespostas .card-header { padding: 3mm 2mm 2mm !important; background: transparent !important; }
+    #comprovanteRespostas .card-header h2 { font-size: 14pt !important; }
+    #comprovanteRespostas .card-body { padding: 1.5mm 2mm 0 !important; }
+    #comprovanteRespostas h3 { margin: 0 0 1.5mm !important; font-size: 8.5pt !important; }
+    #comprovanteRespostas .mb-4 { margin-bottom: 2.5mm !important; }
+    #comprovanteRespostas .row { --bs-gutter-x: 2.5mm; --bs-gutter-y: 1.5mm; }
+    #comprovanteRespostas .col-12 { width: 50%; flex: 0 0 auto; }
+    #comprovanteRespostas label { margin: 0 0 .5mm !important; font-size: 7.5pt; font-weight: 700; line-height: 1.05; }
+    #comprovanteRespostas .form-control {
+        min-height: 0; padding: 1mm 1.5mm; border-color: #dfe3e8; border-radius: 1.5mm;
+        font-size: 8.5pt; line-height: 1.12; page-break-inside: avoid;
+    }
+    #comprovanteRespostas .qr-presenca { margin-top: 2.5mm !important; padding-top: 2mm !important; page-break-inside: avoid; }
+    #comprovanteRespostas .qr-presenca p { margin-bottom: 1mm !important; font-size: 7.5pt !important; }
+    #comprovanteRespostas .qr-presenca img { width: 42mm !important; height: 42mm !important; }
+    #comprovanteRespostas .qr-presenca .font-monospace { margin-top: .5mm !important; font-size: 6.5pt !important; }
+    #comprovanteRespostas.comprovante-compacto { font-size: 8pt; }
+    #comprovanteRespostas.comprovante-compacto .row { --bs-gutter-y: 1mm; }
+    #comprovanteRespostas.comprovante-compacto .form-control { padding: .7mm 1.2mm; font-size: 7.5pt; line-height: 1.05; }
+    #comprovanteRespostas.comprovante-ultracompacto { font-size: 7pt; }
+    #comprovanteRespostas.comprovante-ultracompacto .card-header { padding: 1.5mm 1mm !important; }
+    #comprovanteRespostas.comprovante-ultracompacto .card-body { padding: 1mm !important; }
+    #comprovanteRespostas.comprovante-ultracompacto .row { --bs-gutter-x: 1.5mm; --bs-gutter-y: .6mm; }
+    #comprovanteRespostas.comprovante-ultracompacto label { font-size: 6.5pt; }
+    #comprovanteRespostas.comprovante-ultracompacto .form-control { padding: .5mm 1mm; font-size: 6.8pt; line-height: 1; }
 }
 </style>
 @endpush

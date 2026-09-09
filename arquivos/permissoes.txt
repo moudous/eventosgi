@@ -12,6 +12,7 @@ atividades.formulario.estrutura
 atividades.visualizar_formulario
 atividades.inscritos
 atividades.wordpress
+atividades.validador_qr
 categorias.listar
 categorias.criar
 categorias.visualizar

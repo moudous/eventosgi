@@ -19,6 +19,8 @@ use App\Services\GiEmailService;
 use App\Services\IdentificacaoParticipanteService;
 use App\Services\GiPermissionService;
 use App\Services\HistoricoService;
+use App\Services\PresencaQrService;
+use App\Services\InscricoesExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,7 +96,7 @@ class AtividadeController
             ->orderBy('nome')->get();
     }
     public function formulario(Atividade $atividade, GiPermissionService $permissoes, DistribuicaoVagasService $distribuicao): View { $distribuicao->recalcular($atividade); return view('atividades.formulario', ['atividade' => $atividade->refresh(), 'permissoes' => $permissoes]); }
-    public function salvarFormulario(Request $request, Atividade $atividade, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao): RedirectResponse
+    public function salvarFormulario(Request $request, Atividade $atividade, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao, PresencaQrService $presencaQr): RedirectResponse
     {
         $dados = $request->validate(['formulario' => ['required', 'json']]);
         $config = $distribuicao->prepararConfiguracao(json_decode($dados['formulario'], true));
@@ -112,6 +114,8 @@ class AtividadeController
             'config.criterios_vagas.*' => ['required', 'string', 'distinct'],
             'config.limitar_inscricoes' => ['sometimes', 'boolean'],
             'config.limite_inscricoes' => ['required_if:config.limitar_inscricoes,true', 'nullable', 'integer', 'min:1'],
+            'config.mostrar_vagas_restantes' => ['sometimes', 'boolean'],
+            'config.registrar_presenca_qrcode' => ['sometimes', 'boolean'],
             'config.mensagem_vagas_esgotadas' => ['nullable', 'string', 'max:2000'],
             'config.mensagem_ja_inscrito' => ['nullable', 'string', 'max:2000'],
             'config.mensagem_identificacao' => ['nullable', 'string', 'max:2000'],
@@ -136,9 +140,12 @@ class AtividadeController
         $config['mensagem_vagas_esgotadas'] = trim($config['mensagem_vagas_esgotadas'] ?? '') ?: Atividade::MENSAGEM_VAGAS_ESGOTADAS;
         $config['mensagem_ja_inscrito'] = trim($config['mensagem_ja_inscrito'] ?? '') ?: Atividade::MENSAGEM_JA_INSCRITO;
         $config['mensagem_identificacao'] = trim($config['mensagem_identificacao'] ?? '') ?: Atividade::MENSAGEM_IDENTIFICACAO;
+        $config['mostrar_vagas_restantes'] = ! empty($config['limitar_inscricoes']) && ! empty($config['mostrar_vagas_restantes']);
+        $config['registrar_presenca_qrcode'] = ! empty($config['registrar_presenca_qrcode']);
         $config['editor']['exibir'] = (bool) ($config['editor']['exibir'] ?? false);
         $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');
         $distribuicao->recalcular($atividade, $config);
+        $presencaQr->garantirCodigos($atividade->refresh());
         $editor->sincronizarImagens($atividade, $config['editor']['conteudo']);
         return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
     }
@@ -200,6 +207,7 @@ class AtividadeController
             'inscricao' => $inscricao,
             'dadosComprovante' => $inscricao ? $comprovante->participante($inscricao) : [],
             'respostasComprovante' => $inscricao ? $comprovante->respostas($inscricao) : [],
+            'qrPresenca' => $inscricao ? $comprovante->qrPresenca($inscricao) : null,
         ]);
     }
     /**
@@ -276,7 +284,7 @@ class AtividadeController
 
         $participante = $identificacao->participanteDaSessao($request, $atividade);
         if ($participante && app(FormularioInscricaoService::class)->jaInscrito($atividade, $participante, $dados['email'])) {
-            return back()->with('identificado', $atividade->mensagemJaInscrito());
+            return $this->voltarAoInicioFormulario($request, $atividade->mensagemJaInscrito());
         }
 
         $aviso = $resultado['unificados'] > 0
@@ -285,7 +293,7 @@ class AtividadeController
                 ? 'E-mail confirmado. Complete o seu cadastro abaixo.'
                 : 'E-mail confirmado. Confira e complete os seus dados abaixo.');
 
-        return back()->with('identificado', $aviso);
+        return $this->voltarAoInicioFormulario($request, $aviso);
     }
 
     private function validarSenha(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
@@ -303,7 +311,12 @@ class AtividadeController
             ? 'E-mail confirmado. Complete seus dados para continuar.'
             : 'Olá, '.$resultado['nome'].'. Sua identificação foi confirmada pela senha.';
 
-        return back()->with('identificado', $aviso);
+        return $this->voltarAoInicioFormulario($request, $aviso);
+    }
+
+    private function voltarAoInicioFormulario(Request $request, string $mensagem): RedirectResponse
+    {
+        return redirect()->to($request->fullUrl().'#inicio-formulario')->with('identificado', $mensagem);
     }
 
     private function registrarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao): RedirectResponse
@@ -335,6 +348,7 @@ class AtividadeController
             'inscricao' => $inscricao,
             'dadosParticipante' => $comprovante->participante($inscricao),
             'respostas' => $comprovante->respostas($inscricao),
+            'qrPresenca' => $comprovante->qrPresenca($inscricao),
         ])->render(), 'UTF-8');
         $pdf->setPaper('A4');
         $pdf->render();
@@ -365,6 +379,7 @@ class AtividadeController
                     'inscricao' => $inscricao,
                     'dadosParticipante' => $comprovante->participante($inscricao),
                     'respostas' => $comprovante->respostas($inscricao),
+                    'qrPresenca' => $comprovante->qrPresenca($inscricao),
                     'urlPdf' => route('inscricoes.comprovante.pdf', $inscricao->comprovante_hash),
                 ])->render(),
                 'comprovante-inscricao-'.$inscricao->id.'-'.bin2hex(random_bytes(8)),
@@ -428,7 +443,7 @@ class AtividadeController
 
         return [$inscricao, $sessao];
     }
-    public function inscricoes(Request $request, Atividade $atividade, ArmazemService $armazem): View
+    public function inscricoes(Request $request, Atividade $atividade, ArmazemService $armazem, InscricoesExportService $exportacao): View
     {
         $recurso = 'atividades.inscricoes.'.$atividade->id;
         $estado = $armazem->recuperar($recurso, $request);
@@ -457,7 +472,9 @@ class AtividadeController
             ->appends(['pesquisar' => $pesquisar]);
         $armazem->salvar($recurso, $request, $inscricoes->currentPage(), $pesquisar, $porPagina);
 
-        return view('atividades.inscricoes', compact('atividade', 'inscricoes', 'pesquisar'));
+        return view('atividades.inscricoes', compact('atividade', 'inscricoes', 'pesquisar') + [
+            'camposExportacao' => $exportacao->camposDisponiveis($atividade),
+        ]);
     }
 
     /**
@@ -467,18 +484,24 @@ class AtividadeController
      * do iframe do GI o blob nao chega ao visitante. A assinatura tambem dispensa o cookie
      * de sessao, que um navegador pode recusar num iframe de outro dominio.
      */
-    public function exportarLink(Atividade $atividade, string $formato): JsonResponse
+    public function exportarLink(Request $request, Atividade $atividade, string $formato, InscricoesExportService $exportacao): JsonResponse
     {
         abort_unless(in_array($formato, ['csv', 'ods', 'xls', 'xlsx'], true), 404);
+        $dados = $request->validate(['campos' => ['required', 'array', 'min:1'], 'campos.*' => ['required', 'string', 'max:180']]);
+        $permitidos = collect($exportacao->camposDisponiveis($atividade))->pluck('chave')->all();
+        $campos = array_values(array_unique(array_filter($dados['campos'], fn ($campo) => in_array($campo, $permitidos, true))));
+        abort_if($campos === [], 422, 'Selecione pelo menos um campo para exportar.');
 
         return response()->json([
-            'url' => URL::temporarySignedRoute('atividades.inscricoes.exportar', now()->addMinutes(10), [$atividade, $formato]),
+            'url' => URL::temporarySignedRoute('atividades.inscricoes.exportar', now()->addMinutes(10), [
+                'atividade' => $atividade, 'formato' => $formato, 'campos' => $campos,
+            ]),
         ]);
     }
 
-    public function exportarInscricoes(Atividade $atividade, string $formato)
+    public function exportarInscricoes(Request $request, Atividade $atividade, string $formato, InscricoesExportService $exportacao)
     {
-        return app(\App\Services\InscricoesExportService::class)->download($atividade, $formato);
+        return $exportacao->download($atividade, $formato, array_values((array) $request->query('campos', [])));
     }
 
     /**

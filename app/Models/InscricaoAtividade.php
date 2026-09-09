@@ -8,8 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class InscricaoAtividade extends Model
 {
     protected $table = 'inscricoes_atividade';
-    protected $fillable = ['atividade_id', 'participante_id', 'participante_email', 'resposta', 'ip', 'user_agent', 'dispositivo', 'comprovante_hash'];
-    protected $casts = ['resposta' => 'array', 'dispositivo' => 'array', 'participante_id' => 'integer'];
+    protected $fillable = ['atividade_id', 'participante_id', 'participante_email', 'resposta', 'ip', 'user_agent', 'dispositivo', 'comprovante_hash', 'presente', 'data_presenca', 'presenca_validada_por', 'codigo_qr'];
+    protected $casts = [
+        'resposta' => 'array', 'dispositivo' => 'array', 'participante_id' => 'integer',
+        'presente' => 'boolean', 'data_presenca' => 'datetime', 'presenca_validada_por' => 'integer',
+    ];
 
     protected static function booted(): void
     {
@@ -21,5 +24,10 @@ class InscricaoAtividade extends Model
     public function atividade(): BelongsTo
     {
         return $this->belongsTo(Atividade::class);
+    }
+
+    public function participante(): BelongsTo
+    {
+        return $this->belongsTo(Participante::class);
     }
 }

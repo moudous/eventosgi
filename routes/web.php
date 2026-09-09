@@ -19,6 +19,7 @@ use App\Http\Controllers\SenhaParticipanteController;
 use App\Http\Controllers\BibliotecaController;
 use App\Http\Controllers\CaptchaInscricaoController;
 use App\Http\Controllers\CaptchaSubmissaoController;
+use App\Http\Controllers\PresencaController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -162,6 +163,9 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/apagados', [AtividadeController::class, 'apagados'])->middleware('gi.permission:atividades.listar')->name('apagados');
     Route::get('/criar', [AtividadeController::class, 'create'])->middleware('gi.permission:atividades.criar')->name('create');
     Route::post('/', [AtividadeController::class, 'store'])->middleware('gi.permission:atividades.criar')->name('store');
+    Route::get('/validador-presenca', [PresencaController::class, 'index'])->middleware('gi.permission:atividades.validador_qr')->name('validador-presenca');
+    Route::post('/validador-presenca', [PresencaController::class, 'validar'])->middleware('gi.permission:atividades.validador_qr')->name('validador-presenca.validar');
+    Route::post('/validador-presenca/confirmar', [PresencaController::class, 'confirmar'])->middleware('gi.permission:atividades.validador_qr')->name('validador-presenca.confirmar');
     // O construtor de formulario abre com atividades.formulario. Dentro dele, o bloco
     // Estrutura -- linhas, colunas e campos -- exige atividades.formulario.estrutura:
     // quem so tem a primeira ajusta titulo, datas, limites e mensagens sem poder mexer
@@ -179,6 +183,7 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     // pela permissao em inscricoes.exportar-link.
     Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
     Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.inscritos')->name('inscricoes');
+    Route::patch('/inscricoes/{inscricao}/presenca', [PresencaController::class, 'definir'])->middleware('gi.permission:atividades.validador_qr')->name('inscricoes.presenca');
     Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.historico')->name('historico');
     Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
     Route::delete('/{atividade}/definitivamente', [AtividadeController::class, 'forceDestroy'])->middleware('gi.permission:atividades.excluir_definitivamente')->name('force-destroy');
