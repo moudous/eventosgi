@@ -40,7 +40,7 @@ class EventosGI_Evento {
 		wp_enqueue_style( 'eventosgi-formularios' );
 
 		return sprintf(
-			'<iframe class="eventosgi-evento" src="%1$s" title="%2$s" height="%3$d" loading="lazy" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-top-navigation-by-user-activation"></iframe>',
+			'<iframe class="eventosgi-evento" src="%1$s" title="%2$s" height="%3$d" loading="lazy" allow="camera" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts allow-top-navigation-by-user-activation"></iframe>',
 			esc_url( $origem ),
 			esc_attr__( 'Página do evento', 'eventosgi-formularios' ),
 			$altura

@@ -1,0 +1,7 @@
+em http://localhost:8006/formularios/36aa50eb9d87a9dae6131266980102cdd63fb954336d8216979afa47cb8bcec1 quando for dispositivo movel com pouco espaço na largura faça o botao entrar com senha ir para baixo para o campo senha ocupar toda a largura.
+
+
+em http://localhost:8006/formularios/36aa50eb9d87a9dae6131266980102cdd63fb954336d8216979afa47cb8bcec1 faça a imagem da atividade no card que fica no top ser centralizado.
+
+
+
