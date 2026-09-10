@@ -1,9 +1,27 @@
 @php($estiloImagem = old('personalizacao', ($atividade ?? new \App\Models\Atividade)->estiloImagem()))
 @php($imagemAtividade = $atividade?->estiloImagem()['imagem'])
+@php($alterarFundoPagina = (bool) ($estiloImagem['alterar_cor_fundo_pagina'] ?? false))
+@php($fundoHerdado = $atividade?->evento?->corFundoPagina('atividade') ?? \App\Models\Evento::COR_FUNDO_PAGINA_ATIVIDADE)
 <div class="card content-card mt-4">
     <div class="card-header"><h2 class="h5 fw-bold mb-0">Personalização da atividade</h2></div>
     <div class="card-body p-4">
         <p class="text-muted">Configure a imagem pequena exibida ao lado das informações no formulário público.</p>
+        <div class="border rounded-3 p-3 mb-4 bg-light">
+            <input type="hidden" name="personalizacao[alterar_cor_fundo_pagina]" value="0">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="alterar_cor_fundo_pagina" name="personalizacao[alterar_cor_fundo_pagina]" value="1" @checked($alterarFundoPagina) data-alterar-fundo-pagina>
+                <label class="form-check-label fw-semibold" for="alterar_cor_fundo_pagina">Alterar cor de fundo da página</label>
+            </div>
+            <div class="mt-3" data-cor-fundo-pagina-container @if(!$alterarFundoPagina) hidden @endif>
+                <label class="form-label" for="cor_fundo_pagina_atividade">Cor de fundo da página</label>
+                <div class="input-group color-pareada">
+                    <input type="color" class="form-control form-control-color" id="cor_fundo_pagina_atividade" value="{{ $estiloImagem['cor_fundo_pagina'] }}" data-fundo-color-picker aria-label="Selecionar cor de fundo da página">
+                    <input type="text" class="form-control font-monospace @error('personalizacao.cor_fundo_pagina') is-invalid @enderror" name="personalizacao[cor_fundo_pagina]" value="{{ $estiloImagem['cor_fundo_pagina'] }}" maxlength="7" pattern="#[0-9A-Fa-f]{6}" data-fundo-color-text aria-label="Código da cor de fundo da página">
+                </div>
+                @error('personalizacao.cor_fundo_pagina')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+            </div>
+            <div class="form-text">Desmarcado: herda a cor do evento ({{ $fundoHerdado }}).</div>
+        </div>
         <div class="row g-4 align-items-start">
             <div class="col-12 col-lg-7">
                 <div class="row g-3">
@@ -50,4 +68,4 @@
         </div>
     </div>
 </div>
-@push('scripts')<script src="{{ asset('personalizacao-atividade.js') }}" defer></script>@endpush
+@push('scripts')<script src="{{ asset('personalizacao-atividade.js') }}?v={{ filemtime(public_path('personalizacao-atividade.js')) }}" defer></script><script src="{{ asset('cor-fundo-pagina.js') }}?v={{ filemtime(public_path('cor-fundo-pagina.js')) }}" defer></script>@endpush

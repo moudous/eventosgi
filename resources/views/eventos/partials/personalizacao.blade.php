@@ -7,9 +7,25 @@
         @foreach(['submissao' => 'Submissão', 'atividade' => 'Atividade'] as $tipo => $rotulo)
             @php($estilo = old("personalizacao.$tipo", ($evento ?? new \App\Models\Evento)->estiloFormulario($tipo)))
             @php($imagem = $evento?->estiloFormulario($tipo)['imagem'])
+            @php($alterarFundoPagina = (bool) ($estilo['alterar_cor_fundo_pagina'] ?? false))
             <div class="col-12 col-lg-6">
                 <fieldset class="border rounded-3 p-3 h-100 personalizacao-editor" data-imagem="{{ $imagem ? route('eventos.personalizacao.imagem', ['arquivo' => $imagem]) : '' }}">
                     <legend class="float-none w-auto px-2 h5">{{ $rotulo }}</legend>
+                    <div class="border rounded-3 p-3 mb-3 bg-light">
+                        <input type="hidden" name="personalizacao[{{ $tipo }}][alterar_cor_fundo_pagina]" value="0">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="alterar_fundo_pagina_{{ $tipo }}" name="personalizacao[{{ $tipo }}][alterar_cor_fundo_pagina]" value="1" @checked($alterarFundoPagina) data-alterar-fundo-pagina>
+                            <label class="form-check-label fw-semibold" for="alterar_fundo_pagina_{{ $tipo }}">Alterar cor de fundo da página</label>
+                        </div>
+                        <div class="mt-3" data-cor-fundo-pagina-container @if(!$alterarFundoPagina) hidden @endif>
+                            <label class="form-label" for="cor_fundo_pagina_{{ $tipo }}">Cor de fundo da página</label>
+                            <div class="input-group color-pareada">
+                                <input type="color" class="form-control form-control-color" id="cor_fundo_pagina_{{ $tipo }}" value="{{ $estilo['cor_fundo_pagina'] }}" data-color-picker aria-label="Selecionar cor de fundo da página">
+                                <input type="text" class="form-control font-monospace" name="personalizacao[{{ $tipo }}][cor_fundo_pagina]" value="{{ $estilo['cor_fundo_pagina'] }}" maxlength="7" pattern="#[0-9A-Fa-f]{6}" data-color-text aria-label="Código da cor de fundo da página">
+                            </div>
+                        </div>
+                        <div class="form-text">Desmarcado: usa {{ $tipo === 'atividade' ? '#f4f6f9' : '#f3f6fa' }}.</div>
+                    </div>
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <button type="button" class="btn btn-outline-secondary btn-sm" data-cores-padrao data-padrao='@json((new \App\Models\Evento)->estiloFormulario($tipo))'>Cores padrão do sistema</button>
                         <button type="button" class="btn btn-outline-primary btn-sm" data-cores-evento>Sortear cores do evento</button>
@@ -62,4 +78,4 @@
         <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="aplicarRecorte">Usar recorte</button></div>
     </div></div>
 </div>
-@push('scripts')<script src="{{ asset('personalizacao-evento.js') }}?v={{ filemtime(public_path('personalizacao-evento.js')) }}" defer></script>@endpush
+@push('scripts')<script src="{{ asset('personalizacao-evento.js') }}?v={{ filemtime(public_path('personalizacao-evento.js')) }}" defer></script><script src="{{ asset('cor-fundo-pagina.js') }}?v={{ filemtime(public_path('cor-fundo-pagina.js')) }}" defer></script>@endpush

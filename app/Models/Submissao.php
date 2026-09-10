@@ -11,7 +11,7 @@ class Submissao extends Model
 {
     protected $table = 'submissoes';
 
-    protected $fillable = ['evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores'];
+    protected $fillable = ['evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
 
     protected $attributes = [
         'qtde_resumo' => 1600,
@@ -25,7 +25,28 @@ class Submissao extends Model
         'ativo' => 'boolean',
         'qtde_resumo' => 'integer',
         'qtde_autores' => 'integer',
+        'personalizacao' => 'array',
     ];
+
+    public function estiloPagina(): array
+    {
+        return array_replace([
+            'alterar_cor_fundo_pagina' => false,
+            'cor_fundo_pagina' => Evento::COR_FUNDO_PAGINA_SUBMISSAO,
+        ], $this->personalizacao ?? []);
+    }
+
+    public function corFundoPagina(): string
+    {
+        $estilo = $this->estiloPagina();
+        $cor = (string) $estilo['cor_fundo_pagina'];
+
+        if (! empty($estilo['alterar_cor_fundo_pagina']) && preg_match('/^#[0-9a-fA-F]{6}$/', $cor)) {
+            return strtolower($cor);
+        }
+
+        return $this->evento?->corFundoPagina('submissao') ?? Evento::COR_FUNDO_PAGINA_SUBMISSAO;
+    }
 
     public function evento(): BelongsTo
     {

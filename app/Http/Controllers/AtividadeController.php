@@ -558,7 +558,7 @@ class AtividadeController
     }
     private function validar(Request $request, ?Atividade $atividade = null): array
     {
-        $podePersonalizar = app(GiPermissionService::class)->permite('atividade.personalizar', $request);
+        $podePersonalizar = app(GiPermissionService::class)->permite('atividades.personalizar', $request);
         $ignorarPersonalizacao = \Illuminate\Validation\Rule::excludeIf(!$podePersonalizar);
         $request->mergeIfMissing(['tipo' => $atividade?->tipo ?? 'somente_inscricao']);
         $dados = $request->validate([
@@ -570,10 +570,12 @@ class AtividadeController
             'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],
             'data_inicio' => ['nullable', 'date'],
             'data_fim' => ['nullable', 'date'],
-            'personalizacao' => [$ignorarPersonalizacao, 'required', 'array:posicao,borda,cor_borda'],
+            'personalizacao' => [$ignorarPersonalizacao, 'required', 'array:posicao,borda,cor_borda,alterar_cor_fundo_pagina,cor_fundo_pagina'],
             'personalizacao.posicao' => [$ignorarPersonalizacao, 'required', 'in:esquerda,direita'],
             'personalizacao.borda' => [$ignorarPersonalizacao, 'required', 'boolean'],
             'personalizacao.cor_borda' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.alterar_cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'boolean'],
+            'personalizacao.cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
         ]);
 
@@ -583,6 +585,8 @@ class AtividadeController
 
         if (!$podePersonalizar) return $dados;
 
+        $dados['personalizacao']['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao']['alterar_cor_fundo_pagina'];
+        $dados['personalizacao']['cor_fundo_pagina'] = strtolower($dados['personalizacao']['cor_fundo_pagina']);
         $dados['personalizacao']['imagem'] = $atividade?->estiloImagem()['imagem'];
         if ($arquivo = $request->file('imagem_atividade')) {
             $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();

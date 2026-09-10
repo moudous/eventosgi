@@ -37,7 +37,21 @@ class Atividade extends Model
             'posicao' => 'esquerda',
             'borda' => false,
             'cor_borda' => '#ffffff',
+            'alterar_cor_fundo_pagina' => false,
+            'cor_fundo_pagina' => Evento::COR_FUNDO_PAGINA_ATIVIDADE,
         ], $this->personalizacao ?? []);
+    }
+
+    public function corFundoPagina(): string
+    {
+        $estilo = $this->estiloImagem();
+        $cor = (string) $estilo['cor_fundo_pagina'];
+
+        if (! empty($estilo['alterar_cor_fundo_pagina']) && preg_match('/^#[0-9a-fA-F]{6}$/', $cor)) {
+            return strtolower($cor);
+        }
+
+        return $this->evento?->corFundoPagina('atividade') ?? Evento::COR_FUNDO_PAGINA_ATIVIDADE;
     }
 
     public function inscricoes(): \Illuminate\Database\Eloquent\Relations\HasMany

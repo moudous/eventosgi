@@ -64,6 +64,6 @@ biblioteca.listar
 biblioteca.enviar
 biblioteca.recortar
 
-atividade.personalizar
+atividades.personalizar
 atividades.convidados.visualizar
 atividades.convidados.editar

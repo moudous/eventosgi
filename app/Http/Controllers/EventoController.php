@@ -166,17 +166,21 @@ class EventoController
         ];
         foreach (['atividade', 'submissao'] as $tipo) {
             $prefixo = "personalizacao.$tipo";
-            $regras[$prefixo] = ['required_with:personalizacao', 'array:tipo,degrade_inicio,degrade_fim,cor_solida,cor_fonte'];
+            $regras[$prefixo] = ['required_with:personalizacao', 'array:tipo,degrade_inicio,degrade_fim,cor_solida,cor_fonte,alterar_cor_fundo_pagina,cor_fundo_pagina'];
             $regras["$prefixo.tipo"] = ['required_with:personalizacao', 'in:degrade,solida,imagem'];
             foreach (['degrade_inicio', 'degrade_fim', 'cor_solida', 'cor_fonte'] as $cor) {
                 $regras["$prefixo.$cor"] = ['required_with:personalizacao', 'regex:/^#[0-9a-fA-F]{6}$/'];
             }
+            $regras["$prefixo.alterar_cor_fundo_pagina"] = ['required_with:personalizacao', 'boolean'];
+            $regras["$prefixo.cor_fundo_pagina"] = ['required_with:personalizacao', 'regex:/^#[0-9a-fA-F]{6}$/'];
             $regras["imagem_$tipo"] = ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'];
         }
         $dados = $request->validate($regras);
         if (isset($dados['personalizacao'])) {
             // Os três fundos permanecem salvos; o seletor apenas define qual será exibido.
             foreach (['atividade', 'submissao'] as $tipo) {
+                $dados['personalizacao'][$tipo]['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao'][$tipo]['alterar_cor_fundo_pagina'];
+                $dados['personalizacao'][$tipo]['cor_fundo_pagina'] = strtolower($dados['personalizacao'][$tipo]['cor_fundo_pagina']);
                 $dados['personalizacao'][$tipo]['imagem'] = $evento?->estiloFormulario($tipo)['imagem'];
                 if ($dados['personalizacao'][$tipo]['tipo'] === 'imagem'
                     && !$request->hasFile("imagem_$tipo") && !$dados['personalizacao'][$tipo]['imagem']) {

@@ -49,13 +49,17 @@ Illuminate\Support\Facades\DB::table('eventos')->insert(['id' => 1]);
 $validar = new ReflectionMethod(App\Http\Controllers\AtividadeController::class, 'validar');
 $request = Illuminate\Http\Request::create('/', 'POST', [
     'nome' => 'Teste', 'ativo' => 1, 'evento_id' => 1,
-    'personalizacao' => ['posicao' => 'direita', 'borda' => 1, 'cor_borda' => '#123456'],
+    'personalizacao' => [
+        'posicao' => 'direita', 'borda' => 1, 'cor_borda' => '#123456',
+        'alterar_cor_fundo_pagina' => 1, 'cor_fundo_pagina' => '#ABCDEF',
+    ],
 ]);
 $request->setLaravelSession(app('session.store'));
 $request->session()->put('gi_context.permissoes', []);
 $dados = $validar->invoke(new App\Http\Controllers\AtividadeController, $request);
 $check(false, array_key_exists('personalizacao', $dados));
-$request->session()->put('gi_context.permissoes', ['atividade.personalizar']);
+$request->session()->put('gi_context.permissoes', ['atividades.personalizar']);
 $dados = $validar->invoke(new App\Http\Controllers\AtividadeController, $request);
 $check('direita', $dados['personalizacao']['posicao']);
-echo "OK: personalização só é aceita com atividade.personalizar.\n";
+$check('#abcdef', $dados['personalizacao']['cor_fundo_pagina']);
+echo "OK: personalização só é aceita com atividades.personalizar.\n";

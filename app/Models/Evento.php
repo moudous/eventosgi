@@ -10,6 +10,10 @@ class Evento extends Model
 {
     use SoftDeletes;
 
+    public const COR_FUNDO_PAGINA_ATIVIDADE = '#f4f6f9';
+
+    public const COR_FUNDO_PAGINA_SUBMISSAO = '#f3f6fa';
+
     protected $fillable = ['nome', 'ativo', 'template_pagina_id', 'pagina_variaveis', 'personalizacao', 'imagem', 'cores'];
 
     protected $casts = [
@@ -30,7 +34,26 @@ class Evento extends Model
             'cor_solida' => '#102a43',
             'cor_fonte' => '#ffffff',
             'imagem' => null,
+            'alterar_cor_fundo_pagina' => false,
+            'cor_fundo_pagina' => $this->corFundoPaginaPadrao($tipo),
         ], $this->personalizacao[$tipo] ?? []);
+    }
+
+    public function corFundoPagina(string $tipo): string
+    {
+        $estilo = $this->estiloFormulario($tipo);
+        $cor = (string) $estilo['cor_fundo_pagina'];
+
+        return ! empty($estilo['alterar_cor_fundo_pagina']) && preg_match('/^#[0-9a-fA-F]{6}$/', $cor)
+            ? strtolower($cor)
+            : $this->corFundoPaginaPadrao($tipo);
+    }
+
+    public function corFundoPaginaPadrao(string $tipo): string
+    {
+        return $tipo === 'submissao'
+            ? self::COR_FUNDO_PAGINA_SUBMISSAO
+            : self::COR_FUNDO_PAGINA_ATIVIDADE;
     }
 
     public function fundoFormulario(string $tipo): string

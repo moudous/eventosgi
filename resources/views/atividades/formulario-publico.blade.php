@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('title', $config['titulo'] ?? $atividade->nome)
+@push('styles')<style>body{background:{{ $atividade->corFundoPagina() }}}</style>@endpush
 @section('content')
 @php
     // O estado vem do controller (FormularioInscricaoService::estado), que também conhece

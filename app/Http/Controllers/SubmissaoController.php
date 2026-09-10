@@ -238,6 +238,9 @@ class SubmissaoController
             'qtde_resumo' => ['required', 'integer', 'min:1', 'max:100000'],
             'qtde_autores' => ['required', 'integer', 'min:1', 'max:100'],
             'modelo_trabalho' => ['nullable', 'string', 'max:1000000'],
+            'personalizacao' => ['required', 'array:alterar_cor_fundo_pagina,cor_fundo_pagina'],
+            'personalizacao.alterar_cor_fundo_pagina' => ['required', 'boolean'],
+            'personalizacao.cor_fundo_pagina' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ], [
             'evento_id.required' => 'Selecione o evento.',
             'titulo.required' => 'Informe o título da submissão.',
@@ -255,6 +258,8 @@ class SubmissaoController
         ]);
 
         $dados['modelo_trabalho'] = $this->limparHtml((string) ($dados['modelo_trabalho'] ?? '')) ?: null;
+        $dados['personalizacao']['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao']['alterar_cor_fundo_pagina'];
+        $dados['personalizacao']['cor_fundo_pagina'] = strtolower($dados['personalizacao']['cor_fundo_pagina']);
 
         return $dados;
     }
