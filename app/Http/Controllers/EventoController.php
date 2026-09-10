@@ -104,9 +104,9 @@ class EventoController
 
     public function update(Request $request, Evento $evento, HistoricoService $historico): RedirectResponse
     {
-        $antes = $evento->only(['nome', 'ativo', 'personalizacao']);
+        $antes = $evento->only(['nome', 'ativo', 'personalizacao', 'imagem', 'cores']);
         $evento->update($this->validar($request, $evento));
-        $alteracoes = $historico->alteracoes($antes, $evento->only(['nome', 'ativo', 'personalizacao']));
+        $alteracoes = $historico->alteracoes($antes, $evento->only(['nome', 'ativo', 'personalizacao', 'imagem', 'cores']));
         if ($alteracoes !== []) $historico->evento($evento, 'Evento alterado', $alteracoes, $request);
 
         return redirect()->route('eventos.index')->with('status', 'Evento atualizado com sucesso.');
@@ -158,6 +158,9 @@ class EventoController
     {
         $regras = [
             'nome' => ['required', 'string', 'max:255'],
+            'imagem_evento' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'cores' => ['nullable', 'array', 'max:32'],
+            'cores.*' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'ativo' => ['required', 'boolean'],
             'personalizacao' => ['sometimes', 'array:atividade,submissao'],
         ];
@@ -190,7 +193,13 @@ class EventoController
                 }
             }
         }
-        unset($dados['imagem_atividade'], $dados['imagem_submissao']);
+        if ($arquivo = $request->file('imagem_evento')) {
+            $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();
+            $arquivo->move(storage_path('app/public/personalizacao'), $nome);
+            $dados['imagem'] = $nome;
+        }
+        $dados['cores'] = array_map('strtoupper', array_values(($dados['cores'] ?? []) ?: []));
+        unset($dados['imagem_atividade'], $dados['imagem_submissao'], $dados['imagem_evento']);
         return $dados;
     }
 }

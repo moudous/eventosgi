@@ -10,7 +10,7 @@ class Evento extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nome', 'ativo', 'template_pagina_id', 'pagina_variaveis', 'personalizacao'];
+    protected $fillable = ['nome', 'ativo', 'template_pagina_id', 'pagina_variaveis', 'personalizacao', 'imagem', 'cores'];
 
     protected $casts = [
         'ativo' => 'boolean',
@@ -18,6 +18,7 @@ class Evento extends Model
         'template_pagina_id' => 'integer',
         'pagina_variaveis' => 'array',
         'personalizacao' => 'array',
+        'cores' => 'array',
     ];
 
     public function estiloFormulario(string $tipo): array

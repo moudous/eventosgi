@@ -10,6 +10,11 @@
             <div class="col-12 col-lg-6">
                 <fieldset class="border rounded-3 p-3 h-100 personalizacao-editor" data-imagem="{{ $imagem ? route('eventos.personalizacao.imagem', ['arquivo' => $imagem]) : '' }}">
                     <legend class="float-none w-auto px-2 h5">{{ $rotulo }}</legend>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-cores-padrao data-padrao='@json((new \App\Models\Evento)->estiloFormulario($tipo))'>Cores padrão do sistema</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-cores-evento>Sortear cores do evento</button>
+                    </div>
+                    <p class="small text-muted" data-cores-status role="status" aria-live="polite"></p>
                     <label class="form-label" for="fundo_{{ $tipo }}">Fundo ativo</label>
                     <select class="form-select mb-3" id="fundo_{{ $tipo }}" name="personalizacao[{{ $tipo }}][tipo]" data-campo="tipo">
                         @foreach(['degrade' => 'Degradê', 'solida' => 'Cor sólida', 'imagem' => 'Imagem'] as $valor => $texto)
@@ -18,7 +23,12 @@
                     </select>
                     <div class="row g-3 mb-3">
                     @foreach(['degrade_inicio' => 'Degradê: cor inicial', 'degrade_fim' => 'Degradê: cor final', 'cor_solida' => 'Cor sólida', 'cor_fonte' => 'Cor da fonte'] as $campo => $texto)
-                        <div class="col-12 col-md-6">
+                        @if($campo === 'degrade_fim')
+                        <div class="col-12 col-md-2 d-flex align-items-end justify-content-center">
+                            <button type="button" class="btn btn-outline-secondary" data-inverter-degrade title="Inverter cores do degradê" aria-label="Inverter cores inicial e final do degradê"><i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>
+                        </div>
+                        @endif
+                        <div class="col-12 {{ in_array($campo, ['degrade_inicio', 'degrade_fim']) ? 'col-md-5' : 'col-md-6' }}">
                             <label class="form-label" for="{{ $tipo }}_{{ $campo }}">{{ $texto }}</label>
                             <div class="input-group color-pareada">
                                 <input type="color" class="form-control form-control-color" id="{{ $tipo }}_{{ $campo }}" value="{{ $estilo[$campo] }}" data-color-picker aria-label="Selecionar {{ strtolower($texto) }}">
@@ -52,4 +62,4 @@
         <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" id="aplicarRecorte">Usar recorte</button></div>
     </div></div>
 </div>
-@push('scripts')<script src="{{ asset('personalizacao-evento.js') }}" defer></script>@endpush
+@push('scripts')<script src="{{ asset('personalizacao-evento.js') }}?v={{ filemtime(public_path('personalizacao-evento.js')) }}" defer></script>@endpush

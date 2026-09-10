@@ -188,6 +188,8 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
     Route::delete('/{atividade}/definitivamente', [AtividadeController::class, 'forceDestroy'])->middleware('gi.permission:atividades.excluir_definitivamente')->name('force-destroy');
     Route::get('/{atividade}', [AtividadeController::class, 'show'])->middleware('gi.permission:atividades.visualizar')->name('show');
+    Route::get('/{atividade}/convidados', [\App\Http\Controllers\AtividadeConvidadoController::class, 'edit'])->name('convidados.edit');
+    Route::put('/{atividade}/convidados', [\App\Http\Controllers\AtividadeConvidadoController::class, 'update'])->middleware('gi.permission:atividades.convidados.editar')->name('convidados.update');
     Route::get('/{atividade}/editar', [AtividadeController::class, 'edit'])->middleware('gi.permission:atividades.editar')->name('edit');
     Route::put('/{atividade}', [AtividadeController::class, 'update'])->middleware('gi.permission:atividades.editar')->name('update');
     Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');

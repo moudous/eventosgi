@@ -10,6 +10,11 @@ class Convidado extends Model
     protected $fillable = ['evento_id','nome','sobrenome','titulacao','curriculo','descricao','local','telefone_whatsapp','redes_sociais','email','foto_nome'];
     protected $casts = ['evento_id' => 'integer', 'redes_sociais' => 'array'];
 
+    public function eventos(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Evento::class, 'convidados_eventos')->withTrashed()->orderBy('nome');
+    }
+
     public function evento(): BelongsTo
     {
         return $this->belongsTo(Evento::class)->withTrashed();

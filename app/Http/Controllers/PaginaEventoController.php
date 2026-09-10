@@ -101,7 +101,7 @@ class PaginaEventoController
                     'configuracao' => $evento->paginaPadrao?->configuracaoCompleta() ?? PaginaPadraoEvento::padrao(),
                     'submissoes' => $evento->submissoes()->where('ativo', true)->orderBy('id')->get(),
                     'atividades' => Atividade::query()->with('categoria')->where('evento_id', $evento->id)->where('ativo', true)->orderByRaw('data_inicio is null, data_inicio')->orderBy('nome')->get(),
-                    'convidados' => Convidado::query()->where('evento_id', $evento->id)->orderBy('nome')->get(),
+                    'convidados' => Convidado::query()->whereHas('eventos', fn ($query) => $query->where('eventos.id', $evento->id))->orderBy('nome')->get(),
                 ])->render(),
             );
         }

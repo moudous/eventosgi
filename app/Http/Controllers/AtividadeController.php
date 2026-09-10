@@ -77,7 +77,7 @@ class AtividadeController
     public function store(Request $request, HistoricoService $historico): RedirectResponse
     {
         $dados = $this->validar($request); $dados['criado_por'] = (int) $request->session()->get('gi_context.usuario.id');
-        $atividade = Atividade::create($dados); $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim']), $request);
+        $atividade = Atividade::create($dados); $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'tipo', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim']), $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade cadastrada com sucesso.');
     }
     public function show(Atividade $atividade): View { $atividade->load(['evento', 'categoria']); return view('atividades.show', compact('atividade')); }
@@ -541,7 +541,7 @@ class AtividadeController
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica])]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
-        $campos = ['nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $campos = ['tipo', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
         $antes = $atividade->only($campos); $atividade->update($this->validar($request, $atividade));
         $mudancas = $historico->alteracoes($antes, $atividade->only($campos));
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
@@ -558,21 +558,30 @@ class AtividadeController
     }
     private function validar(Request $request, ?Atividade $atividade = null): array
     {
+        $podePersonalizar = app(GiPermissionService::class)->permite('atividade.personalizar', $request);
+        $ignorarPersonalizacao = \Illuminate\Validation\Rule::excludeIf(!$podePersonalizar);
+        $request->mergeIfMissing(['tipo' => $atividade?->tipo ?? 'somente_inscricao']);
         $dados = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
-            'palestrante' => ['nullable', 'string', 'max:255'],
+            'tipo' => ['required', 'in:somente_inscricao,atividade_evento'],
             'ativo' => ['required', 'boolean'],
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
-            'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
-            'modalidade' => ['nullable', 'in:ead,presencial'],
+            'categoria_id' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'integer', 'exists:categorias,id'],
+            'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],
             'data_inicio' => ['nullable', 'date'],
             'data_fim' => ['nullable', 'date'],
-            'personalizacao' => ['required', 'array:posicao,borda,cor_borda'],
-            'personalizacao.posicao' => ['required', 'in:esquerda,direita'],
-            'personalizacao.borda' => ['required', 'boolean'],
-            'personalizacao.cor_borda' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
-            'imagem_atividade' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'personalizacao' => [$ignorarPersonalizacao, 'required', 'array:posicao,borda,cor_borda'],
+            'personalizacao.posicao' => [$ignorarPersonalizacao, 'required', 'in:esquerda,direita'],
+            'personalizacao.borda' => [$ignorarPersonalizacao, 'required', 'boolean'],
+            'personalizacao.cor_borda' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
         ]);
+
+        if ($dados['tipo'] === 'somente_inscricao') {
+            $dados['categoria_id'] = $dados['modalidade'] = null;
+        }
+
+        if (!$podePersonalizar) return $dados;
 
         $dados['personalizacao']['imagem'] = $atividade?->estiloImagem()['imagem'];
         if ($arquivo = $request->file('imagem_atividade')) {

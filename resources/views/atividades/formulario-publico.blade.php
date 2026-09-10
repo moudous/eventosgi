@@ -283,8 +283,29 @@
                                 @elseif($tipo === 'textarea')
                                     <textarea class="form-control" id="campo_{{ $loop->index }}" name="{{ $nome }}" placeholder="{{ $campo['placeholder'] ?? '' }}" @if(!empty($campo['obrigatorio'])) required @endif>{{ $anterior }}</textarea>
                                 @elseif($tipo === 'file')
-                                    @php $varios = ($campo['max_arquivos'] ?? 1) > 1; @endphp
-                                    <input class="form-control" type="file" id="campo_{{ $loop->index }}" name="{{ $nome }}{{ $varios ? '[]' : '' }}" @if($varios) multiple @endif @if(!empty($campo['obrigatorio'])) required @endif accept="{{ implode(',', $campo['aceitos'] ?? []) }}">
+                                    @php
+                                        $maxArquivos = min(10, max(1, (int) ($campo['max_arquivos'] ?? 1)));
+                                        $varios = $maxArquivos > 1;
+                                        $aceitos = collect($campo['aceitos'] ?? [])->map(function ($tipoAceito) {
+                                            $tipoAceito = trim((string) $tipoAceito);
+                                            return $tipoAceito === '' || str_contains($tipoAceito, '/') || str_starts_with($tipoAceito, '.')
+                                                ? $tipoAceito
+                                                : '.'.$tipoAceito;
+                                        })->filter()->implode(',');
+                                    @endphp
+                                    <div class="anexos-campo"
+                                        data-anexos-campo
+                                        data-nome="{{ $nome }}{{ $varios ? '[]' : '' }}"
+                                        data-maximo="{{ $maxArquivos }}"
+                                        data-accept="{{ $aceitos }}"
+                                        data-obrigatorio="{{ !empty($campo['obrigatorio']) ? '1' : '0' }}">
+                                        <div class="row g-2 mb-2" data-anexos-lista></div>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" data-adicionar-arquivo>
+                                            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Adicionar arquivo
+                                        </button>
+                                        <div class="form-text" data-anexos-limite>Você pode adicionar até {{ $maxArquivos }} {{ $maxArquivos === 1 ? 'arquivo' : 'arquivos' }}.</div>
+                                        <div class="invalid-feedback" data-anexos-erro>Adicione os {{ $maxArquivos }} {{ $maxArquivos === 1 ? 'arquivo solicitado' : 'arquivos solicitados' }}.</div>
+                                    </div>
                                 @else
                                     <input class="form-control" type="{{ $tipo }}" id="campo_{{ $loop->index }}" name="{{ $nome }}" placeholder="{{ $campo['placeholder'] ?? '' }}" @if(!empty($campo['obrigatorio'])) required @endif value="{{ is_array($anterior) ? '' : $anterior }}">
                                 @endif
@@ -316,6 +337,14 @@
     .editor-publico li[data-list="ordered"] { list-style-type: decimal; }
     .editor-publico pre { white-space: pre-wrap; overflow: visible; }
     [data-checkbox-obrigatorio].is-invalid .invalid-feedback { display: block; }
+    .anexo-preview { min-height: 84px; }
+    .anexo-miniatura { width: 64px; height: 64px; border-radius: .5rem; object-fit: cover; flex: 0 0 64px; }
+    .anexo-icone { width: 64px; height: 64px; border-radius: .5rem; flex: 0 0 64px; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; background: var(--bs-tertiary-bg); color: var(--bs-secondary-color); }
+    .anexo-nome { min-width: 0; overflow-wrap: anywhere; }
+    [data-anexos-campo].is-invalid [data-anexos-erro] { display: block; }
+    .comprovante-anexo-miniatura { width: 72px; height: 72px; border-radius: .5rem; object-fit: cover; flex: 0 0 72px; }
+    .comprovante-anexo-icone { width: 72px; height: 72px; border-radius: .5rem; flex: 0 0 72px; display: inline-flex; align-items: center; justify-content: center; background: var(--bs-body-bg); font-size: 2.25rem; }
+    .comprovante-anexos-nomes { display: none; }
     .ancora-formulario { scroll-margin-top: 1rem; }
     @media (max-width: 575.98px) {
         .senha-inscricao { flex-direction: column; align-items: stretch; gap: .5rem; }
@@ -327,6 +356,7 @@
 @endpush
 
 @push('scripts')
+<script src="{{ asset('formulario-arquivos.js') }}?v={{ filemtime(public_path('formulario-arquivos.js')) }}"></script>
 <script>
 const captchaImagem = document.getElementById('captchaImagem');
 document.getElementById('renovarCaptcha')?.addEventListener('click', () => {
@@ -405,6 +435,8 @@ document.querySelectorAll('[data-checkbox-obrigatorio]').forEach(grupo => {
     opcoes[0]?.addEventListener('invalid', () => grupo.classList.add('is-invalid'));
 });
 
+document.querySelectorAll('[data-anexos-campo]').forEach(inicializarCampoDeArquivos);
+
 document.querySelectorAll('form').forEach(formulario => formulario.addEventListener('submit', evento => {
     const invalidos = [];
     if (nome && formulario.contains(nome) && !nomeCompleto(nome.value)) invalidos.push(nome);
@@ -482,6 +514,8 @@ if (window.parent !== window && window.ResizeObserver) {
         min-height: 0; padding: 1mm 1.5mm; border-color: #dfe3e8; border-radius: 1.5mm;
         font-size: 8.5pt; line-height: 1.12; page-break-inside: avoid;
     }
+    #comprovanteRespostas .comprovante-anexos-visuais { display: none !important; }
+    #comprovanteRespostas .comprovante-anexos-nomes { display: inline !important; }
     #comprovanteRespostas .qr-presenca { margin-top: 2.5mm !important; padding-top: 2mm !important; page-break-inside: avoid; }
     #comprovanteRespostas .qr-presenca p { margin-bottom: 1mm !important; font-size: 7.5pt !important; }
     #comprovanteRespostas .qr-presenca img { width: 42mm !important; height: 42mm !important; }

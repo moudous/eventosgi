@@ -63,3 +63,7 @@ usuarios.visualizar
 biblioteca.listar
 biblioteca.enviar
 biblioteca.recortar
+
+atividade.personalizar
+atividades.convidados.visualizar
+atividades.convidados.editar

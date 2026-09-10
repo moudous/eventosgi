@@ -10,7 +10,7 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
+    protected $fillable = ['tipo', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
     protected $casts = [
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
@@ -70,6 +70,11 @@ class Atividade extends Model
     public function evento(): BelongsTo
     {
         return $this->belongsTo(Evento::class)->withTrashed();
+    }
+
+    public function convidados(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Convidado::class, 'atividade_convidado')->withPivot('ordem')->orderByPivot('ordem');
     }
 
     public function categoria(): BelongsTo

@@ -9,9 +9,11 @@ use App\Rules\Cpf;
 use App\Rules\EmailValido;
 use App\Rules\NomeCompleto;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class FormularioInscricaoService
@@ -106,6 +108,7 @@ class FormularioInscricaoService
                 if ($maxArquivos > 1) {
                     $regras[$destino][] = 'array';
                     $regras[$destino][] = 'max:'.$maxArquivos;
+                    if (! empty($campo['obrigatorio'])) $regras[$destino][] = 'size:'.$maxArquivos;
                     $destino .= '.*';
                 }
                 $regras[$destino][] = 'file';
@@ -259,6 +262,7 @@ class FormularioInscricaoService
             'mimes' => 'O arquivo em :attribute deve ser do tipo: :values.',
             'array' => 'O campo :attribute deve conter uma lista de valores.',
             'max.array' => 'O campo :attribute aceita no máximo :max arquivos.',
+            'size.array' => 'O campo :attribute deve conter exatamente :size arquivos.',
             'max.file' => 'O arquivo em :attribute não pode ser maior que :max kilobytes.',
             'regex' => 'O campo :attribute está em um formato inválido.',
             'in' => 'Selecione uma opção válida em :attribute.',
@@ -352,7 +356,7 @@ class FormularioInscricaoService
                 $arquivos = $request->file($nome);
                 if ($arquivos === null) continue;
                 $lista = is_array($arquivos) ? $arquivos : [$arquivos];
-                $resposta[$nome] = array_map(fn ($arquivo) => $arquivo->store(self::PASTA_ANEXOS, self::DISCO_ANEXOS), $lista);
+                $resposta[$nome] = array_map(fn (UploadedFile $arquivo) => $this->guardarAnexo($arquivo), $lista);
             }
 
             if ($participante) {
@@ -382,5 +386,19 @@ class FormularioInscricaoService
                 'inscricao_id' => $inscricao->id,
             ];
         });
+    }
+
+    private function guardarAnexo(UploadedFile $arquivo): string
+    {
+        $original = pathinfo($arquivo->getClientOriginalName(), PATHINFO_FILENAME);
+        $nome = Str::slug($original) ?: 'arquivo';
+        $extensao = mb_strtolower((string) $arquivo->getClientOriginalExtension());
+        $extensao = preg_replace('/[^a-z0-9]+/', '', $extensao) ?: $arquivo->extension();
+
+        return (string) $arquivo->storeAs(
+            self::PASTA_ANEXOS,
+            Str::uuid().'-'.$nome.($extensao ? '.'.$extensao : ''),
+            self::DISCO_ANEXOS,
+        );
     }
 }
