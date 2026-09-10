@@ -1,0 +1,905 @@
+{
+    "schema": "gi.perfis-menus.v1",
+    "exportado_em": "2026-09-10T19:23:17-03:00",
+    "sistema": {
+        "id": 11,
+        "nome": "Gestão de Eventos",
+        "sigla": "event"
+    },
+    "perfis": [
+        {
+            "id": 34,
+            "nome": "Coord. de Curso",
+            "ativo": true,
+            "permissoes_aplicacoes_externas": [
+                {
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    },
+                    "permissoes": [
+                        "email-disparos.enviar",
+                        "atividades.listar",
+                        "atividades.visualizar",
+                        "atividades.historico",
+                        "atividades.visualizar_formulario",
+                        "atividades.inscritos",
+                        "atividades.validador_qr",
+                        "categorias.listar",
+                        "categorias.visualizar",
+                        "convidados.listar",
+                        "convidados.visualizar",
+                        "eventos.listar",
+                        "eventos.visualizar",
+                        "participantes.listar",
+                        "participantes.visualizar",
+                        "submissoes.listar",
+                        "submissoes.inscritos",
+                        "usuarios.listar",
+                        "usuarios.importar",
+                        "usuarios.visualizar",
+                        "biblioteca.listar",
+                        "atividades.convidados.visualizar",
+                        "dashboard.visualizar"
+                    ]
+                }
+            ],
+            "menus": [
+                {
+                    "id": 166,
+                    "texto": "Usuários",
+                    "icone": "a-classic fa-solid fa-circle-user",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/usuarios",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 1,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 167,
+                    "texto": "Eventos",
+                    "icone": "bi bi-calendar2-event",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/eventos",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 2,
+                    "permissoes_externas": [
+                        "eventos.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 168,
+                    "texto": "Atividades",
+                    "icone": "bi bi-list-check",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 3,
+                    "permissoes_externas": [
+                        "atividades.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 169,
+                    "texto": "Convidados",
+                    "icone": "bi bi-people",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/convidados",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 4,
+                    "permissoes_externas": [
+                        "convidados.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 170,
+                    "texto": "Submissão de Trabalhos",
+                    "icone": "bi bi-layout-text-sidebar-reverse",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/submissao",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 5,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 171,
+                    "texto": "Biblioteca de Arquivos",
+                    "icone": "fa-classic fa-regular fa-images",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/biblioteca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 6,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 172,
+                    "texto": "Validador de QRCode",
+                    "icone": "bi bi-qr-code-scan me-2",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades/validador-presenca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 7,
+                    "permissoes_externas": [
+                        "atividades.validador_qr"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 175,
+                    "texto": "Dashboard",
+                    "icone": "bi bi-grid-1x2-fill",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/dashboard",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 8,
+                    "permissoes_externas": [
+                        "dashboard.visualizar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                }
+            ]
+        },
+        {
+            "id": 32,
+            "nome": "Inovação",
+            "ativo": true,
+            "permissoes_aplicacoes_externas": [
+                {
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    },
+                    "permissoes": [
+                        "email-disparos.enviar",
+                        "atividades.listar",
+                        "atividades.criar",
+                        "atividades.visualizar",
+                        "atividades.editar",
+                        "atividades.historico",
+                        "atividades.formulario",
+                        "atividades.formulario.estrutura",
+                        "atividades.visualizar_formulario",
+                        "atividades.inscritos",
+                        "atividades.wordpress",
+                        "atividades.validador_qr",
+                        "categorias.listar",
+                        "categorias.criar",
+                        "categorias.visualizar",
+                        "categorias.editar",
+                        "categorias.ativar_desativar",
+                        "configuracao.visualizar",
+                        "configuracao.faixa.criar",
+                        "configuracao.faixa.ativar_desativar",
+                        "configuracao.wordpress.visualizar",
+                        "convidados.listar",
+                        "convidados.criar",
+                        "convidados.visualizar",
+                        "convidados.editar",
+                        "eventos.listar",
+                        "eventos.criar",
+                        "eventos.visualizar",
+                        "eventos.editar",
+                        "eventos.pagina.editar",
+                        "eventos.pagina.visualizar",
+                        "participantes.listar",
+                        "participantes.criar",
+                        "participantes.visualizar",
+                        "participantes.editar",
+                        "submissoes.listar",
+                        "submissoes.criar",
+                        "submissoes.editar",
+                        "submissoes.ativar_desativar",
+                        "submissoes.inscritos",
+                        "submissoes.avaliar",
+                        "submissoes.trabalhos.restaurar",
+                        "submissoes.trabalhos.alterar_status",
+                        "templates.listar",
+                        "templates.importar",
+                        "templates.exportar",
+                        "usuarios.listar",
+                        "usuarios.importar",
+                        "usuarios.visualizar",
+                        "biblioteca.listar",
+                        "biblioteca.enviar",
+                        "biblioteca.recortar",
+                        "atividades.personalizar",
+                        "atividades.convidados.visualizar",
+                        "atividades.convidados.editar",
+                        "dashboard.visualizar"
+                    ]
+                }
+            ],
+            "menus": [
+                {
+                    "id": 151,
+                    "texto": "Usuários",
+                    "icone": "a-classic fa-solid fa-circle-user",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/usuarios",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 1,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 152,
+                    "texto": "Eventos",
+                    "icone": "bi bi-calendar2-event",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/eventos",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 2,
+                    "permissoes_externas": [
+                        "eventos.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 153,
+                    "texto": "Atividades",
+                    "icone": "bi bi-list-check",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 3,
+                    "permissoes_externas": [
+                        "atividades.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 154,
+                    "texto": "Participantes",
+                    "icone": "bi bi-file-person",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/participantes",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 4,
+                    "permissoes_externas": [
+                        "participantes.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 155,
+                    "texto": "Convidados",
+                    "icone": "bi bi-people",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/convidados",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 5,
+                    "permissoes_externas": [
+                        "convidados.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 156,
+                    "texto": "Configuração",
+                    "icone": "bi bi-gear-wide",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/configuracao",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 6,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 157,
+                    "texto": "Categorias",
+                    "icone": "bi bi-tags",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/categorias",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 7,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 158,
+                    "texto": "Submissão de Trabalhos",
+                    "icone": "bi bi-layout-text-sidebar-reverse",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/submissao",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 8,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 159,
+                    "texto": "Biblioteca de Arquivos",
+                    "icone": "fa-classic fa-regular fa-images",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/biblioteca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 9,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 176,
+                    "texto": "Dashboard",
+                    "icone": "bi bi-grid-1x2-fill",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/dashboard",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 10,
+                    "permissoes_externas": [
+                        "dashboard.visualizar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                }
+            ]
+        },
+        {
+            "id": 33,
+            "nome": "Secretaria",
+            "ativo": true,
+            "permissoes_aplicacoes_externas": [
+                {
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    },
+                    "permissoes": [
+                        "email-disparos.enviar",
+                        "atividades.listar",
+                        "atividades.visualizar",
+                        "atividades.visualizar_formulario",
+                        "atividades.inscritos",
+                        "atividades.validador_qr",
+                        "categorias.listar",
+                        "categorias.visualizar",
+                        "convidados.listar",
+                        "convidados.visualizar",
+                        "eventos.listar",
+                        "eventos.visualizar",
+                        "participantes.listar",
+                        "participantes.visualizar",
+                        "submissoes.listar",
+                        "submissoes.inscritos",
+                        "usuarios.listar",
+                        "usuarios.importar",
+                        "usuarios.visualizar",
+                        "biblioteca.listar",
+                        "atividades.convidados.visualizar",
+                        "dashboard.visualizar"
+                    ]
+                }
+            ],
+            "menus": [
+                {
+                    "id": 161,
+                    "texto": "Usuários",
+                    "icone": "a-classic fa-solid fa-circle-user",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/usuarios",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 1,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 162,
+                    "texto": "Eventos",
+                    "icone": "bi bi-calendar2-event",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/eventos",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 2,
+                    "permissoes_externas": [
+                        "eventos.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 163,
+                    "texto": "Atividades",
+                    "icone": "bi bi-list-check",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 3,
+                    "permissoes_externas": [
+                        "atividades.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 164,
+                    "texto": "Biblioteca de Arquivos",
+                    "icone": "fa-classic fa-regular fa-images",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/biblioteca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 4,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 165,
+                    "texto": "Validador de QRCode",
+                    "icone": "bi bi-qr-code-scan me-2",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades/validador-presenca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 5,
+                    "permissoes_externas": [
+                        "atividades.validador_qr"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 174,
+                    "texto": "Dashboard",
+                    "icone": "bi bi-grid-1x2-fill",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/dashboard",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 6,
+                    "permissoes_externas": [
+                        "dashboard.visualizar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                }
+            ]
+        },
+        {
+            "id": 31,
+            "nome": "TI",
+            "ativo": true,
+            "permissoes_aplicacoes_externas": [
+                {
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    },
+                    "permissoes": [
+                        "email-disparos.enviar",
+                        "atividades.listar",
+                        "atividades.criar",
+                        "atividades.visualizar",
+                        "atividades.editar",
+                        "atividades.excluir",
+                        "atividades.restaurar",
+                        "atividades.excluir_definitivamente",
+                        "atividades.historico",
+                        "atividades.formulario",
+                        "atividades.formulario.estrutura",
+                        "atividades.visualizar_formulario",
+                        "atividades.inscritos",
+                        "atividades.wordpress",
+                        "atividades.validador_qr",
+                        "categorias.listar",
+                        "categorias.criar",
+                        "categorias.visualizar",
+                        "categorias.editar",
+                        "categorias.excluir",
+                        "categorias.ativar_desativar",
+                        "configuracao.visualizar",
+                        "configuracao.faixa.criar",
+                        "configuracao.faixa.ativar_desativar",
+                        "configuracao.faixa.excluir",
+                        "configuracao.wordpress.visualizar",
+                        "convidados.listar",
+                        "convidados.criar",
+                        "convidados.visualizar",
+                        "convidados.editar",
+                        "convidados.excluir",
+                        "eventos.listar",
+                        "eventos.criar",
+                        "eventos.visualizar",
+                        "eventos.editar",
+                        "eventos.excluir",
+                        "eventos.restaurar",
+                        "eventos.excluir_definitivamente",
+                        "eventos.pagina.editar",
+                        "eventos.pagina.visualizar",
+                        "participantes.listar",
+                        "participantes.criar",
+                        "participantes.visualizar",
+                        "participantes.editar",
+                        "participantes.excluir",
+                        "submissoes.listar",
+                        "submissoes.criar",
+                        "submissoes.editar",
+                        "submissoes.excluir",
+                        "submissoes.ativar_desativar",
+                        "submissoes.inscritos",
+                        "submissoes.avaliar",
+                        "submissoes.trabalhos.restaurar",
+                        "submissoes.trabalhos.excluir_definitivamente",
+                        "submissoes.trabalhos.alterar_status",
+                        "templates.listar",
+                        "templates.importar",
+                        "templates.exportar",
+                        "templates.excluir",
+                        "usuarios.listar",
+                        "usuarios.importar",
+                        "usuarios.visualizar",
+                        "biblioteca.listar",
+                        "biblioteca.enviar",
+                        "biblioteca.recortar",
+                        "atividades.personalizar",
+                        "atividades.convidados.visualizar",
+                        "atividades.convidados.editar",
+                        "dashboard.visualizar"
+                    ]
+                }
+            ],
+            "menus": [
+                {
+                    "id": 173,
+                    "texto": "Dashboard",
+                    "icone": "bi bi-grid-1x2-fill",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/dashboard",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 1,
+                    "permissoes_externas": [
+                        "dashboard.visualizar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 141,
+                    "texto": "Teste",
+                    "icone": "bi bi-bug",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 2,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 142,
+                    "texto": "Usuários",
+                    "icone": "a-classic fa-solid fa-circle-user",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/usuarios",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 3,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 143,
+                    "texto": "Eventos",
+                    "icone": "bi bi-calendar2-event",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/eventos",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 4,
+                    "permissoes_externas": [
+                        "eventos.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 148,
+                    "texto": "Categorias",
+                    "icone": "bi bi-tags",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/categorias",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 5,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 144,
+                    "texto": "Atividades",
+                    "icone": "bi bi-list-check",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 6,
+                    "permissoes_externas": [
+                        "atividades.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 145,
+                    "texto": "Participantes",
+                    "icone": "bi bi-file-person",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/participantes",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 7,
+                    "permissoes_externas": [
+                        "participantes.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 146,
+                    "texto": "Convidados",
+                    "icone": "bi bi-people",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/convidados",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 8,
+                    "permissoes_externas": [
+                        "convidados.listar"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 149,
+                    "texto": "Submissão de Trabalhos",
+                    "icone": "bi bi-layout-text-sidebar-reverse",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/submissao",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 9,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 147,
+                    "texto": "Configuração",
+                    "icone": "bi bi-gear-wide",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/configuracao",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 10,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 150,
+                    "texto": "Biblioteca de Arquivos",
+                    "icone": "fa-classic fa-regular fa-images",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/biblioteca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 11,
+                    "permissoes_externas": [],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                },
+                {
+                    "id": 160,
+                    "texto": "Validador de QRCode",
+                    "icone": "bi bi-qr-code-scan me-2",
+                    "tipo_link": "external_embed",
+                    "classe": null,
+                    "link": "/atividades/validador-presenca",
+                    "extra": null,
+                    "ativo": true,
+                    "ordem": 12,
+                    "permissoes_externas": [
+                        "atividades.validador_qr"
+                    ],
+                    "aplicacao_externa": {
+                        "id": 9,
+                        "nome": "App Gestão de Eventos",
+                        "slug": "eventos"
+                    }
+                }
+            ]
+        }
+    ]
+}
