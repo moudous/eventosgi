@@ -20,6 +20,7 @@ use App\Http\Controllers\BibliotecaController;
 use App\Http\Controllers\CaptchaInscricaoController;
 use App\Http\Controllers\CaptchaSubmissaoController;
 use App\Http\Controllers\PresencaController;
+use App\Http\Controllers\DashboardController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -82,6 +83,9 @@ Route::get('/', function (Request $request) {
         ->view('session', ['context' => $visibleContext])
         ->header('Cache-Control', 'no-store');
 });
+
+Route::get('/dashboard', DashboardController::class)
+    ->middleware('gi.permission:dashboard.visualizar')->name('dashboard');
 
 Route::prefix('usuarios')->name('usuarios.')->group(function (): void {
     Route::get('/', [UsuarioController::class, 'index'])
