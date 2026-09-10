@@ -52,6 +52,16 @@ if (! str_contains($html, 'name="declaracao" value="1"') || ! str_contains($html
 if (! str_contains($html, 'id="inicio-formulario"') || ! str_contains($html, 'Você já entrou com')) {
     throw new RuntimeException('A âncora do início do formulário não foi renderizada no aviso de identificação.');
 }
+$htmlIdentificacao = view('atividades.formulario-publico', [
+    'atividade' => $atividade, 'config' => $config,
+    'identificacao' => null, 'participante' => null,
+    'estado' => ['aberto' => true, 'motivo' => null, 'mensagem' => null], 'inscricao' => null,
+    'dadosComprovante' => [], 'respostasComprovante' => [],
+    'qrPresenca' => null,
+])->render();
+if (! str_contains($htmlIdentificacao, 'input-group senha-inscricao') || ! str_contains($htmlIdentificacao, '@media (max-width: 575.98px)')) {
+    throw new RuntimeException('O campo e o botão da senha devem ser empilhados em telas de celular.');
+}
 $atividade->formulario = $config;
 $regras = app(App\Services\FormularioInscricaoService::class)->regras($atividade);
 if (validator(['periodo' => 'manha', 'interesses' => ['arte'], 'declaracao' => '1'], $regras)->fails()

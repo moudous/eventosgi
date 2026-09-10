@@ -132,7 +132,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="senha">Senha de inscrição</label>
-                        <div class="input-group">
+                        <div class="input-group senha-inscricao">
                             <input class="form-control @if($errosIdentificacao->has('senha')) is-invalid @endif" type="password" id="senha" name="senha" maxlength="200" autocomplete="current-password">
                             <button class="btn btn-primary" type="submit" name="acao" value="validar_senha"><i class="bi bi-key me-1"></i>Entrar com senha</button>
                         </div>
@@ -317,6 +317,11 @@
     .editor-publico pre { white-space: pre-wrap; overflow: visible; }
     [data-checkbox-obrigatorio].is-invalid .invalid-feedback { display: block; }
     .ancora-formulario { scroll-margin-top: 1rem; }
+    @media (max-width: 575.98px) {
+        .senha-inscricao { flex-direction: column; align-items: stretch; gap: .5rem; }
+        .senha-inscricao > .form-control,
+        .senha-inscricao > .btn { width: 100%; border-radius: var(--bs-border-radius) !important; }
+    }
     /* Fora da tela em vez de display:none, para o robô continuar preenchendo. */
 </style>
 @endpush
