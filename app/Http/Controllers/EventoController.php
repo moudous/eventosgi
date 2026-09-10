@@ -33,7 +33,10 @@ class EventoController
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
         $apagados = $request->boolean('apagados');
-        $query = $apagados ? Evento::onlyTrashed() : Evento::query();
+        $query = ($apagados ? Evento::onlyTrashed() : Evento::query())->withCount([
+            'atividades' => fn ($consulta) => $consulta->withTrashed(),
+            'submissoes',
+        ]);
         $total = (clone $query)->count();
         $busca = trim((string) $request->input('search.value', ''));
 
@@ -114,6 +117,10 @@ class EventoController
 
     public function destroy(Request $request, Evento $evento, HistoricoService $historico): JsonResponse
     {
+        if ($evento->temAtividadesOuSubmissoes()) {
+            return response()->json(['message' => $this->motivoExclusaoBloqueada($evento)], 409);
+        }
+
         $historico->evento($evento, 'Evento excluído', $evento->only(['id', 'nome', 'ativo']), $request);
         $evento->delete();
 
@@ -132,10 +139,22 @@ class EventoController
     public function forceDestroy(Request $request, int $evento, HistoricoService $historico): JsonResponse
     {
         $registro = Evento::onlyTrashed()->findOrFail($evento);
+        if ($registro->temAtividadesOuSubmissoes()) {
+            return response()->json(['message' => $this->motivoExclusaoBloqueada($registro)], 409);
+        }
+
         $historico->evento($registro, 'Evento excluído definitivamente', $registro->only(['id', 'nome', 'ativo']), $request);
         $registro->forceDelete();
 
         return response()->json(['message' => 'Evento excluído definitivamente.']);
+    }
+
+    private function motivoExclusaoBloqueada(Evento $evento): string
+    {
+        $atividades = $evento->atividades()->withTrashed()->count();
+        $submissoes = $evento->submissoes()->count();
+
+        return "Este evento possui {$atividades} atividade(s) e {$submissoes} submissão(ões) vinculada(s) e não pode ser excluído.";
     }
 
     public function historico(Request $request, int $evento): JsonResponse

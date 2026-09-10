@@ -58,6 +58,11 @@ class Submissao extends Model
         return $this->hasMany(InscricaoSubmissao::class);
     }
 
+    public function temInscritos(): bool
+    {
+        return $this->inscricoes()->exists();
+    }
+
     public function trabalhos(): HasManyThrough
     {
         return $this->hasManyThrough(

@@ -59,6 +59,11 @@ class Atividade extends Model
         return $this->hasMany(InscricaoAtividade::class);
     }
 
+    public function temInscricoes(): bool
+    {
+        return $this->inscricoes()->exists();
+    }
+
     public function vagasEsgotadas(): bool
     {
         if (empty($this->formulario['limitar_inscricoes'])) return false;

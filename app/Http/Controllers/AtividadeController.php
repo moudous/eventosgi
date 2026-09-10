@@ -548,9 +548,37 @@ class AtividadeController
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade atualizada com sucesso.');
     }
-    public function destroy(Request $request, Atividade $atividade, HistoricoService $historico): JsonResponse { $historico->atividade($atividade, 'Atividade excluída', $atividade->only(['id','nome','ativo','evento_id']), $request); $atividade->delete(); return response()->json(['message' => 'Atividade excluída com sucesso.']); }
+    public function destroy(Request $request, Atividade $atividade, HistoricoService $historico): JsonResponse
+    {
+        if ($atividade->temInscricoes()) {
+            return response()->json(['message' => $this->motivoExclusaoBloqueada($atividade)], 409);
+        }
+
+        $historico->atividade($atividade, 'Atividade excluída', $atividade->only(['id','nome','ativo','evento_id']), $request);
+        $atividade->delete();
+
+        return response()->json(['message' => 'Atividade excluída com sucesso.']);
+    }
     public function restore(Request $request, int $atividade, HistoricoService $historico): JsonResponse { $item=Atividade::onlyTrashed()->findOrFail($atividade); $item->restore(); $historico->atividade($item, 'Atividade restaurada', $item->only(['id','nome','ativo','evento_id']), $request); return response()->json(['message'=>'Atividade restaurada com sucesso.']); }
-    public function forceDestroy(Request $request, int $atividade, HistoricoService $historico): JsonResponse { $item=Atividade::onlyTrashed()->findOrFail($atividade); $historico->atividade($item, 'Atividade excluída definitivamente', $item->only(['id','nome','ativo','evento_id']), $request); $item->forceDelete(); return response()->json(['message'=>'Atividade excluída definitivamente.']); }
+    public function forceDestroy(Request $request, int $atividade, HistoricoService $historico): JsonResponse
+    {
+        $item = Atividade::onlyTrashed()->findOrFail($atividade);
+        if ($item->temInscricoes()) {
+            return response()->json(['message' => $this->motivoExclusaoBloqueada($item)], 409);
+        }
+
+        $historico->atividade($item, 'Atividade excluída definitivamente', $item->only(['id','nome','ativo','evento_id']), $request);
+        $item->forceDelete();
+
+        return response()->json(['message'=>'Atividade excluída definitivamente.']);
+    }
+
+    private function motivoExclusaoBloqueada(Atividade $atividade): string
+    {
+        $total = $atividade->inscricoes()->count();
+
+        return "Esta atividade possui {$total} participante(s) inscrito(s) e não pode ser excluída.";
+    }
     public function historico(Request $request, int $atividade): JsonResponse
     {
         $query=HistoricoAtividade::query()->where('atividade_id',$atividade); $total=$query->count(); $inicio=max(0,(int)$request->input('start')); $tamanho=min(100,max(1,(int)$request->input('length',10)));

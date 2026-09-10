@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Evento extends Model
@@ -76,6 +77,17 @@ class Evento extends Model
     public function submissoes(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Submissao::class);
+    }
+
+    public function atividades(): HasMany
+    {
+        return $this->hasMany(Atividade::class);
+    }
+
+    /** Considera também atividades na lixeira, pois elas ainda podem ser restauradas. */
+    public function temAtividadesOuSubmissoes(): bool
+    {
+        return $this->atividades()->withTrashed()->exists() || $this->submissoes()->exists();
     }
 
     public function paginaPadrao(): \Illuminate\Database\Eloquent\Relations\HasOne

@@ -24,7 +24,7 @@ class SubmissaoController
 
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
-        $query = Submissao::query()->with('evento')->withCount('trabalhos');
+        $query = Submissao::query()->with('evento')->withCount(['trabalhos', 'inscricoes']);
         $total = (clone $query)->count();
         $filtroEvento = max(0, (int) $request->input('filtro_evento', 0));
         if ($filtroEvento > 0) $query->where('evento_id', $filtroEvento);
@@ -112,12 +112,17 @@ class SubmissaoController
 
     public function destroy(Submissao $submissao): JsonResponse
     {
-        $total = $submissao->trabalhos()->count();
+        if ($submissao->temInscritos()) {
+            $total = $submissao->inscricoes()->count();
+
+            return response()->json([
+                'message' => "Esta submissão possui {$total} inscrito(s) e não pode ser excluída.",
+            ], 409);
+        }
+
         $submissao->delete();
 
-        return response()->json([
-            'message' => 'Submissão excluída com sucesso.'.($total ? " {$total} trabalho(s) vinculado(s) também foram removidos." : ''),
-        ]);
+        return response()->json(['message' => 'Submissão excluída com sucesso.']);
     }
 
     public function inscritos(Request $request, Submissao $submissao, ArmazemService $armazem): View
