@@ -34,7 +34,7 @@
         <div class="editor-publico mb-4">{!! $config['editor']['conteudo'] !!}</div>
     @endif
 
-    @if(!empty($config['limitar_inscricoes']) && !empty($config['mostrar_vagas_restantes']))
+    @if(!empty($config['limitar_inscricoes']))
         @php
             $totalVagas = $config['distribuicao_vagas']['total'] ?? [
                 'usadas' => $atividade->inscricoes()->count(),
@@ -42,7 +42,7 @@
                 'restantes' => 0,
             ];
         @endphp
-        <div class="d-flex justify-content-end mb-3"><span class="badge text-bg-light border fs-6" title="{{ $totalVagas['usadas'] }} inscrição(ões) de {{ $totalVagas['disponiveis'] }} vagas; restam {{ $totalVagas['restantes'] }}">Vagas: {{ $totalVagas['usadas'] }}/{{ $totalVagas['disponiveis'] }}</span></div>
+        <div class="d-flex justify-content-end mb-3"><span class="badge text-bg-light border fs-6" title="{{ $totalVagas['usadas'] }} vaga(s) utilizada(s) de {{ $totalVagas['disponiveis'] }}; restam {{ $totalVagas['restantes'] }}">@if(!empty($config['mostrar_vagas_restantes'])) Vagas: {{ $totalVagas['usadas'] }}/{{ $totalVagas['disponiveis'] }} @else Total de vagas: {{ $totalVagas['disponiveis'] }} @endif</span></div>
     @endif
 
     @if(session('status'))<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>{{ session('status') }}</div>@endif
@@ -237,6 +237,7 @@
                                 $anterior = old($nome);
                                 $criterioVagas = !empty($campo['criterio_vagas']);
                                 $nivelVagas = collect($config['distribuicao_vagas']['niveis'] ?? [])->firstWhere('campo', $nome);
+                                $reservaCheckbox = collect($config['distribuicao_vagas']['reservas_checkbox'] ?? [])->firstWhere('campo', $nome);
                             @endphp
                             <div class="col-12 col-md-{{ in_array((int) ($campo['grid'] ?? 6), [12, 6, 4]) ? (int) ($campo['grid'] ?? 6) : 6 }}">
                                 @if(in_array($tipo, ['radio', 'checkbox'], true) && ! $checkboxSimples)
@@ -258,9 +259,13 @@
                                     </select>
                                 @elseif(in_array($tipo, ['radio', 'checkbox'], true))
                                     @if($checkboxSimples)
+                                        @php
+                                            $cotaCheckboxSimples = $criterioVagas ? ($reservaCheckbox['opcoes']['1'] ?? null) : null;
+                                            $checkboxSimplesEsgotado = $cotaCheckboxSimples && (int) ($cotaCheckboxSimples['restantes'] ?? 0) < 1;
+                                        @endphp
                                         <div class="form-check pt-1">
-                                            <input class="form-check-input" type="checkbox" id="campo_{{ $loop->index }}" name="{{ $nome }}" value="1" @checked((string) $anterior === '1') @if(!empty($campo['obrigatorio'])) required @endif>
-                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
+                                            <input class="form-check-input" type="checkbox" id="campo_{{ $loop->index }}" name="{{ $nome }}" value="1" @checked(!$checkboxSimplesEsgotado && (string) $anterior === '1') @disabled($checkboxSimplesEsgotado) @if(!empty($campo['obrigatorio'])) required @endif>
+                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif @if($cotaCheckboxSimples)<span class="text-muted">— {{ $cotaCheckboxSimples['restantes'] }} vaga(s) restante(s)</span>@endif</label>
                                             @if(!empty($campo['obrigatorio']))<div class="invalid-feedback">Marque esta declaração para continuar.</div>@endif
                                         </div>
                                     @else
@@ -272,10 +277,15 @@
                                                 $selecionado = $multiplo
                                                     ? in_array($valorOpcao, (array) $anterior, true)
                                                     : (string) $anterior === $valorOpcao;
+                                                $cotaCheckbox = $tipo === 'checkbox' && $criterioVagas
+                                                    ? ($reservaCheckbox['opcoes'][$valorOpcao] ?? null)
+                                                    : null;
+                                                $checkboxEsgotado = $cotaCheckbox && (int) ($cotaCheckbox['restantes'] ?? 0) < 1;
+                                                if ($checkboxEsgotado) $selecionado = false;
                                             @endphp
                                             <div class="form-check">
-                                                <input class="form-check-input" type="{{ $tipo }}" id="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" value="{{ $valorOpcao }}" @checked($selecionado) @if($tipo === 'radio' && !empty($campo['obrigatorio'])) required @endif>
-                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}</label>
+                                                <input class="form-check-input" type="{{ $tipo }}" id="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" value="{{ $valorOpcao }}" @checked($selecionado) @disabled($checkboxEsgotado) @if($tipo === 'radio' && !empty($campo['obrigatorio'])) required @endif>
+                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}@if($cotaCheckbox) <span class="text-muted">— {{ $cotaCheckbox['restantes'] }} vaga(s) restante(s)</span>@endif</label>
                                             </div>
                                         @endforeach
                                         @if($tipo === 'checkbox' && !empty($campo['obrigatorio']))<div class="invalid-feedback">Selecione pelo menos uma opção.</div>@endif
@@ -337,6 +347,9 @@
     .editor-publico li[data-list="bullet"] { list-style-type: disc; }
     .editor-publico li[data-list="ordered"] { list-style-type: decimal; }
     .editor-publico pre { white-space: pre-wrap; overflow: visible; }
+    .editor-publico table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+    .editor-publico tbody { display: table; width: 100%; table-layout: fixed; }
+    .editor-publico td { min-width: 90px; padding: .65rem; border: 1px solid #ced4da; vertical-align: top; overflow-wrap: anywhere; }
     [data-checkbox-obrigatorio].is-invalid .invalid-feedback { display: block; }
     .anexo-preview { min-height: 84px; }
     .anexo-miniatura { width: 64px; height: 64px; border-radius: .5rem; object-fit: cover; flex: 0 0 64px; }

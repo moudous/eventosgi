@@ -8,13 +8,18 @@ use Illuminate\Validation\ValidationException;
 
 class DistribuicaoVagasService
 {
-    private const TIPOS_CRITERIO = ['select', 'radio'];
+    private const TIPOS_CRITERIO = ['select', 'radio', 'checkbox'];
+
+    private const TIPOS_CRITERIO_HIERARQUICO = ['select', 'radio'];
 
     public function prepararConfiguracao(array $config): array
     {
         $campos = collect($config['campos'] ?? [])->map(function (array $campo): array {
             $campo['criterio_vagas'] = in_array($campo['tipo'] ?? '', self::TIPOS_CRITERIO, true)
                 && ! empty($campo['criterio_vagas']);
+            $campo['percentual_vagas'] = isset($campo['percentual_vagas']) && $campo['percentual_vagas'] !== ''
+                ? round((float) $campo['percentual_vagas'], 4)
+                : null;
             $campo['opcoes'] = array_values(array_map(function ($opcao): array {
                 $opcao = is_array($opcao) ? $opcao : ['valor' => (string) $opcao, 'texto' => (string) $opcao];
                 $opcao['percentual_vagas'] = isset($opcao['percentual_vagas'])
@@ -24,7 +29,8 @@ class DistribuicaoVagasService
             }, $campo['opcoes'] ?? []));
             return $campo;
         })->all();
-        $habilitados = collect($campos)->filter(fn ($campo) => ! empty($campo['criterio_vagas']))
+        $habilitados = collect($campos)->filter(fn ($campo) => ! empty($campo['criterio_vagas'])
+                && in_array($campo['tipo'] ?? '', self::TIPOS_CRITERIO_HIERARQUICO, true))
             ->pluck('nome')->filter()->values()->all();
         $ordem = array_values(array_unique(array_filter($config['criterios_vagas'] ?? [], fn ($nome) => in_array($nome, $habilitados, true))));
         $config['criterios_vagas'] = [...$ordem, ...array_values(array_diff($habilitados, $ordem))];
@@ -39,6 +45,14 @@ class DistribuicaoVagasService
         $erros = [];
         foreach ($config['campos'] ?? [] as $campo) {
             if (empty($campo['criterio_vagas'])) continue;
+            if (($campo['tipo'] ?? '') === 'checkbox' && empty($campo['opcoes'])) {
+                if (! isset($campo['percentual_vagas']) || $campo['percentual_vagas'] === '') {
+                    $erros[] = 'Informe o percentual do checkbox “'.($campo['label'] ?? $campo['nome']).'”.';
+                } elseif ((float) $campo['percentual_vagas'] < 0 || (float) $campo['percentual_vagas'] > 100) {
+                    $erros[] = 'O percentual do checkbox “'.($campo['label'] ?? $campo['nome']).'” deve estar entre 0% e 100%.';
+                }
+                continue;
+            }
             $soma = 0;
             foreach ($campo['opcoes'] ?? [] as $indice => $opcao) {
                 if (! isset($opcao['percentual_vagas']) || $opcao['percentual_vagas'] === '') {
@@ -60,10 +74,12 @@ class DistribuicaoVagasService
         $config = $this->prepararConfiguracao($config ?? $atividade->formulario ?? []);
         $total = ! empty($config['limitar_inscricoes']) ? max(0, (int) ($config['limite_inscricoes'] ?? 0)) : 0;
         $inscricoes = InscricaoAtividade::query()->where('atividade_id', $atividade->id)->get(['resposta']);
+        $usadasTotal = $inscricoes->sum(fn ($inscricao) => $this->consumoResposta($inscricao->resposta ?? [], $config));
         $distribuicao = [
-            'total' => ['disponiveis' => $total, 'usadas' => $inscricoes->count(), 'restantes' => max(0, $total - $inscricoes->count())],
+            'total' => ['disponiveis' => $total, 'usadas' => $usadasTotal, 'restantes' => max(0, $total - $usadasTotal)],
             'criterios' => array_values($config['criterios_vagas'] ?? []),
             'niveis' => [],
+            'reservas_checkbox' => [],
         ];
         if ($total > 0) {
             $campos = collect($config['campos'] ?? [])->keyBy('nome');
@@ -92,6 +108,29 @@ class DistribuicaoVagasService
                 $distribuicao['niveis'][] = ['campo' => $nomeCampo, 'contextos' => $contextos];
                 $pais = $proximos;
             }
+            foreach (($config['campos'] ?? []) as $campo) {
+                if (($campo['tipo'] ?? '') !== 'checkbox' || empty($campo['criterio_vagas']) || empty($campo['nome'])) continue;
+                $opcoes = [];
+                $opcoesCampo = $campo['opcoes'] ?? [];
+                if ($opcoesCampo === []) {
+                    $opcoesCampo = [['valor' => '1', 'percentual_vagas' => $campo['percentual_vagas'] ?? 0]];
+                }
+                foreach ($opcoesCampo as $opcao) {
+                    $valor = (string) ($opcao['valor'] ?? '');
+                    $percentual = (float) ($opcao['percentual_vagas'] ?? 0);
+                    $disponiveis = (int) floor($total * $percentual / 100 + 0.000001);
+                    $usadas = $inscricoes->filter(function ($inscricao) use ($campo, $valor): bool {
+                        $selecionadas = (array) (($inscricao->resposta ?? [])[$campo['nome']] ?? []);
+                        return in_array($valor, array_map('strval', $selecionadas), true);
+                    })->count();
+                    $opcoes[$valor] = [
+                        'disponiveis' => $disponiveis,
+                        'usadas' => $usadas,
+                        'restantes' => max(0, $disponiveis - $usadas),
+                    ];
+                }
+                $distribuicao['reservas_checkbox'][] = ['campo' => $campo['nome'], 'opcoes' => $opcoes];
+            }
         }
         $config['distribuicao_vagas'] = $distribuicao;
         if ($salvar && $atividade->exists && ($atividade->formulario ?? []) !== $config) {
@@ -105,6 +144,10 @@ class DistribuicaoVagasService
     {
         $config = $this->recalcular($atividade, salvar: false);
         $distribuicao = $config['distribuicao_vagas'];
+        $consumo = $this->consumoResposta($respostas, $config);
+        if ($consumo > (int) ($distribuicao['total']['restantes'] ?? 0)) {
+            throw ValidationException::withMessages(['formulario' => 'Não há vagas totais suficientes para todas as opções selecionadas.']);
+        }
         $anteriores = [];
         foreach ($distribuicao['niveis'] as $nivel) {
             $campo = $nivel['campo'];
@@ -118,6 +161,34 @@ class DistribuicaoVagasService
             }
             $anteriores[] = (string) $valor;
         }
+        foreach ($distribuicao['reservas_checkbox'] ?? [] as $reserva) {
+            $campo = (string) $reserva['campo'];
+            foreach ((array) ($respostas[$campo] ?? []) as $valor) {
+                $cota = $reserva['opcoes'][(string) $valor] ?? null;
+                if (! $cota || $cota['restantes'] < 1) {
+                    throw ValidationException::withMessages([$campo => 'Não há mais vagas disponíveis para uma das opções selecionadas.']);
+                }
+            }
+        }
+    }
+
+    public function consumoResposta(array $resposta, array $config): int
+    {
+        $consumo = 0;
+        foreach (($config['campos'] ?? []) as $campo) {
+            if (($campo['tipo'] ?? '') !== 'checkbox' || empty($campo['criterio_vagas']) || empty($campo['nome'])) continue;
+            $valorResposta = $resposta[$campo['nome']] ?? null;
+            if (empty($campo['opcoes'])) {
+                if ((string) $valorResposta === '1') $consumo++;
+                continue;
+            }
+            $permitidos = array_map(fn ($opcao) => (string) ($opcao['valor'] ?? ''), $campo['opcoes']);
+            $selecionados = array_unique(array_map('strval', (array) $valorResposta));
+            $consumo += count(array_intersect($selecionados, $permitidos));
+        }
+
+        // Formulários sem reservas marcadas continuam consumindo uma vaga geral.
+        return max(1, $consumo);
     }
 
     private function corresponde(array $resposta, array $criterios, array $valores): bool

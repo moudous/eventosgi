@@ -98,7 +98,7 @@ class FormularioInscricaoService
                 $regras[$nome][] = Rule::in($opcoes);
             }
 
-            if (! empty($campo['criterio_vagas'])) {
+            if (! empty($campo['criterio_vagas']) && in_array($tipo, ['select', 'radio'], true)) {
                 $regras[$nome] = ['required', Rule::in($opcoes)];
             }
 

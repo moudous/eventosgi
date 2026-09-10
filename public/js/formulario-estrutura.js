@@ -6,12 +6,13 @@
     let sequence = 0;
     let criteriaUids = [];
     const choiceTypes = ['select', 'radio', 'checkbox', 'multiselect'];
-    const singleChoiceTypes = ['select', 'radio'];
+    const quotaTypes = ['select', 'radio', 'checkbox'];
+    const hierarchicalTypes = ['select', 'radio'];
     const slug = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
     function optionHtml(option = {valor: '', texto: ''}) {
         const item = typeof option === 'object' && option !== null ? option : {valor: String(option), texto: String(option)};
         const percentual = item.percentual_vagas === null || item.percentual_vagas === undefined ? '' : `${Number(item.percentual_vagas)}%`;
-        return `<div class="row g-2 align-items-end mb-2 option-item"><div class="col-md-4"><label class="form-label small mb-1">Texto exibido<input class="form-control option-text" value="${esc(item.texto)}" required></label></div><div class="col-md-3"><label class="form-label small mb-1">Valor<input class="form-control option-value" value="${esc(item.valor)}" required></label></div><div class="col-md-3 option-percent-column"><label class="form-label small mb-1">% de vaga<input class="form-control option-percent" inputmode="decimal" value="${esc(percentual)}" placeholder="Ex.: 33% ou 3"></label><div class="small text-muted option-quota-number"></div></div><div class="col-md-2"><button type="button" class="btn btn-outline-danger remove-option mb-1" aria-label="Remover item" title="Remover item"><i class="bi bi-trash"></i></button></div></div>`;
+        return `<div class="row g-2 align-items-end mb-2 option-item"><div class="col-md-4"><label class="form-label small mb-1">Texto exibido<input class="form-control option-text" value="${esc(item.texto)}" required></label></div><div class="col-md-3"><label class="form-label small mb-1">Valor<input class="form-control option-value" value="${esc(item.valor)}" required></label></div><div class="col-md-3 option-percent-column"><label class="form-label small mb-1">% de vaga<input class="form-control option-percent quota-percent" inputmode="decimal" value="${esc(percentual)}" placeholder="Ex.: 33% ou 3"></label><div class="small text-muted option-quota-number"></div></div><div class="col-md-2"><button type="button" class="btn btn-outline-danger remove-option mb-1" aria-label="Remover item" title="Remover item"><i class="bi bi-trash"></i></button></div></div>`;
     }
     function refresh() {
         const fields = [...root.children];
@@ -25,22 +26,27 @@
             el.className = `col-12 col-lg-${grid} field`;
             const type = el.querySelector('.f-type').value;
             const criterio = el.querySelector('.f-criterion');
-            criterio.disabled = !singleChoiceTypes.includes(type);
+            const checkboxSimples = type === 'checkbox' && !el.querySelector('.option-item');
+            criterio.disabled = !quotaTypes.includes(type);
             if (criterio.disabled) criterio.checked = false;
             for (const [selector, visible] of [['.field-options', choiceTypes.includes(type)], ['.field-upload', type === 'file']]) {
                 const section = el.querySelector(selector);
                 section.hidden = !visible;
                 section.querySelectorAll('input,button').forEach(control => control.disabled = !visible);
             }
-            el.querySelector('.criterion-toggle').hidden = !singleChoiceTypes.includes(type);
+            el.querySelector('.criterion-toggle').hidden = !quotaTypes.includes(type);
             el.querySelectorAll('.option-percent').forEach(input => {
-                input.disabled = !criterio.checked;
-                input.required = criterio.checked;
+                input.disabled = !criterio.checked || checkboxSimples;
+                input.required = criterio.checked && !checkboxSimples;
             });
-            el.querySelectorAll('.option-percent-column').forEach(area => area.hidden = !criterio.checked);
+            el.querySelectorAll('.option-percent-column').forEach(area => area.hidden = !criterio.checked || checkboxSimples);
+            const percentualCampo = el.querySelector('.f-field-percent');
+            percentualCampo.disabled = !criterio.checked || !checkboxSimples;
+            percentualCampo.required = criterio.checked && checkboxSimples;
+            el.querySelector('.field-percent-column').hidden = !criterio.checked || !checkboxSimples;
             const obrigatorio = el.querySelector('.f-required');
-            if (criterio.checked) obrigatorio.checked = true;
-            obrigatorio.disabled = criterio.checked;
+            if (criterio.checked && hierarchicalTypes.includes(type)) obrigatorio.checked = true;
+            obrigatorio.disabled = criterio.checked && hierarchicalTypes.includes(type);
         });
         renderCriteria();
         updateQuotaNumbers();
@@ -58,7 +64,7 @@
         <div class="col-12"><label class="form-label">Texto de exemplo<input class="form-control f-placeholder" value="${esc(field.placeholder)}"></label></div>
         <div class="col-12"><label class="form-label">Validação<select class="form-select f-validation"><option value="">Nenhuma</option><option value="cpf">CPF</option><option value="telefone">Telefone</option><option value="email">E-mail</option></select></label></div>
         <div class="col-12"><label class="form-check"><input class="form-check-input f-required" type="checkbox" ${field.obrigatorio ? 'checked' : ''}><span class="form-check-label">Preenchimento obrigatório</span></label></div>
-        </div><div class="field-options border-top mt-3 pt-3"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h3 class="h6 mb-0">Itens da lista</h3><label class="form-check criterion-toggle"><input class="form-check-input f-criterion" type="checkbox" ${field.criterio_vagas ? 'checked' : ''}><span class="form-check-label fw-semibold">Habilitar % de vaga</span></label></div><p class="small text-muted mt-2">O valor é sugerido pelo texto e pode ser editado. Em um checkbox de declaração única, deixe os itens vazios. Ao habilitar vagas, informe uma porcentagem ou um número inteiro de vagas.</p><div class="option-items">${(field.opcoes || []).map(optionHtml).join('')}</div><button type="button" class="btn btn-outline-primary btn-sm add-option"><i class="bi bi-plus-lg me-1"></i>Adicionar item da lista</button></div>
+        </div><div class="field-options border-top mt-3 pt-3"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h3 class="h6 mb-0">Itens da lista</h3><label class="form-check criterion-toggle"><input class="form-check-input f-criterion" type="checkbox" ${field.criterio_vagas ? 'checked' : ''}><span class="form-check-label fw-semibold">Habilitar % de vaga</span></label></div><p class="small text-muted mt-2">O valor é sugerido pelo texto e pode ser editado. Em um checkbox de declaração única, deixe os itens vazios. Ao habilitar vagas, informe uma porcentagem ou um número inteiro de vagas. As reservas de checkbox são independentes e não tornam o preenchimento obrigatório.</p><div class="field-percent-column mb-3"><label class="form-label small mb-1">% de vagas deste checkbox<input class="form-control f-field-percent quota-percent" inputmode="decimal" value="${field.percentual_vagas === null || field.percentual_vagas === undefined ? '' : `${Number(field.percentual_vagas)}%`}" placeholder="Ex.: 25% ou 3"></label><div class="small text-muted field-quota-number"></div></div><div class="option-items">${(field.opcoes || []).map(optionHtml).join('')}</div><button type="button" class="btn btn-outline-primary btn-sm add-option"><i class="bi bi-plus-lg me-1"></i>Adicionar item da lista</button></div>
         <div class="field-upload border-top mt-3 pt-3"><label class="form-label">Extensões aceitas<input class="form-control f-accept" placeholder="pdf,jpg" value="${esc((field.aceitos || []).join(','))}"></label><label class="form-label">Máximo de arquivos<input class="form-control f-max" type="number" min="1" max="10" value="${Number(field.max_arquivos) || 1}"></label></div></div></section>`;
         el.querySelector('.f-type').value = field.tipo || 'text';
         el.querySelector('.f-grid').value = [12,6,4].includes(Number(field.grid)) ? field.grid : 6;
@@ -87,7 +93,7 @@
     });
     root.addEventListener('change', refresh);
     root.addEventListener('focusout', event => {
-        if (!event.target.matches('.option-percent') || event.target.disabled) return;
+        if (!event.target.matches('.quota-percent') || event.target.disabled) return;
         const campo = event.target.closest('.field');
         const texto = event.target.value.trim().replace(',', '.');
         const numero = Number.parseFloat(texto.replace('%', ''));
@@ -109,7 +115,7 @@
             return;
         }
         event.target.value = `${Math.round(percentual * 10000) / 10000}%`;
-        validarSoma(campo);
+        if (event.target.matches('.option-percent')) validarSoma(campo);
         updateQuotaNumbers();
     });
     root.addEventListener('click', event => {
@@ -131,6 +137,7 @@
         const value = selector => el.querySelector(selector).value;
         return {...el._original, label:value('.f-label'), nome:value('.f-name'), tipo:value('.f-type'), grid:Number(value('.f-grid')), placeholder:value('.f-placeholder'), obrigatorio:el.querySelector('.f-required').checked,
             criterio_vagas:el.querySelector('.f-criterion').checked,
+            percentual_vagas:el.querySelector('.f-field-percent').disabled?null:parsePercent(el.querySelector('.f-field-percent').value),
             opcoes:[...el.querySelectorAll('.option-item')].map(item => ({texto:item.querySelector('.option-text').value,valor:item.querySelector('.option-value').value,percentual_vagas:item.querySelector('.option-percent').disabled?null:parsePercent(item.querySelector('.option-percent').value)})),
             aceitos:value('.f-accept').split(',').map(v => v.trim()).filter(Boolean), max_arquivos:Number(value('.f-max')) || 1, validacao:value('.f-validation')};
     });
@@ -143,6 +150,10 @@
     window.refreshBuilderQuota = refresh;
 
     function criterionFields() {
+        return [...root.children].filter(el => el.querySelector('.f-criterion').checked
+            && hierarchicalTypes.includes(el.querySelector('.f-type').value));
+    }
+    function quotaFields() {
         return [...root.children].filter(el => el.querySelector('.f-criterion').checked && !el.querySelector('.f-criterion').disabled);
     }
     function renderCriteria() {
@@ -167,6 +178,7 @@
     }
     function quotaBase(campo) {
         let base = Math.max(0, Number(document.getElementById('limite_inscricoes')?.value) || 0);
+        if (campo.querySelector('.f-type').value === 'checkbox') return base;
         const indice = criteriaUids.indexOf(campo.dataset.builderId);
         for (let i = 0; i < indice; i++) {
             const anterior = [...root.children].find(el => el.dataset.builderId === criteriaUids[i]);
@@ -176,8 +188,14 @@
         return base;
     }
     function updateQuotaNumbers() {
-        criterionFields().forEach(campo => {
+        quotaFields().forEach(campo => {
             const base = quotaBase(campo);
+            const percentualCampo = campo.querySelector('.f-field-percent');
+            if (!percentualCampo.disabled) {
+                const percentual = parsePercent(percentualCampo.value) || 0;
+                campo.querySelector('.field-quota-number').textContent = `${Math.floor(base * percentual / 100 + 0.000001)} vaga(s) de um total de ${base}`;
+                return;
+            }
             campo.querySelectorAll('.option-item').forEach(item => {
                 const percentual = parsePercent(item.querySelector('.option-percent').value) || 0;
                 item.querySelector('.option-quota-number').textContent = `${Math.floor(base * percentual / 100 + 0.000001)} vaga(s) de uma cota de ${base}`;

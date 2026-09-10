@@ -27,10 +27,11 @@ $config = [
     'titulo' => 'Formulário', 'limitar_inscricoes' => true, 'limite_inscricoes' => 12,
     'campos' => [
         ['nome' => 'periodo', 'label' => 'Período', 'tipo' => 'select', 'criterio_vagas' => true, 'opcoes' => [['valor' => 'manha', 'texto' => 'Manhã', 'percentual_vagas' => 25]]],
-        ['nome' => 'interesses', 'label' => 'Interesses', 'tipo' => 'checkbox', 'obrigatorio' => true, 'opcoes' => [['valor' => 'arte', 'texto' => 'Arte'], ['valor' => 'musica', 'texto' => 'Música']]],
+        ['nome' => 'interesses', 'label' => 'Interesses', 'tipo' => 'checkbox', 'obrigatorio' => false, 'criterio_vagas' => true, 'opcoes' => [['valor' => 'arte', 'texto' => 'Arte', 'percentual_vagas' => 50], ['valor' => 'musica', 'texto' => 'Música', 'percentual_vagas' => 50]]],
+        ['nome' => 'libras', 'label' => 'Inscrever em Libras?', 'tipo' => 'checkbox', 'obrigatorio' => false, 'criterio_vagas' => true, 'percentual_vagas' => 25, 'opcoes' => []],
         ['nome' => 'declaracao', 'label' => 'Declaro ter disponibilidade', 'tipo' => 'checkbox', 'obrigatorio' => true, 'opcoes' => []],
     ],
-    'distribuicao_vagas' => ['total' => ['disponiveis' => 12, 'usadas' => 8, 'restantes' => 4], 'criterios' => ['periodo'], 'niveis' => [['campo' => 'periodo', 'contextos' => ['[]' => ['opcoes' => ['manha' => ['disponiveis' => 3, 'usadas' => 1, 'restantes' => 2]]]]]]],
+    'distribuicao_vagas' => ['total' => ['disponiveis' => 12, 'usadas' => 8, 'restantes' => 4], 'criterios' => ['periodo'], 'niveis' => [['campo' => 'periodo', 'contextos' => ['[]' => ['opcoes' => ['manha' => ['disponiveis' => 3, 'usadas' => 1, 'restantes' => 2]]]]]], 'reservas_checkbox' => [['campo' => 'interesses', 'opcoes' => ['arte' => ['disponiveis' => 6, 'usadas' => 4, 'restantes' => 2], 'musica' => ['disponiveis' => 6, 'usadas' => 6, 'restantes' => 0]]], ['campo' => 'libras', 'opcoes' => ['1' => ['disponiveis' => 3, 'usadas' => 3, 'restantes' => 0]]]]],
 ];
 $html = view('atividades.formulario-publico', [
     'atividade' => $atividade, 'config' => $config,
@@ -40,11 +41,17 @@ $html = view('atividades.formulario-publico', [
     'qrPresenca' => null,
 ])->render();
 
-if (str_contains($html, 'Vagas: 8/12') || str_contains($html, 'Manhã — 1/2')) {
-    throw new RuntimeException('Os contadores de vagas devem ficar ocultos por padrão.');
+if (! str_contains($html, 'Total de vagas: 12') || str_contains($html, 'Manhã — 1/2')) {
+    throw new RuntimeException('O total deve aparecer e os contadores hierárquicos devem respeitar sua configuração.');
 }
-if (substr_count($html, 'type="checkbox"') < 2 || ! str_contains($html, 'name="interesses[]"') || ! str_contains($html, 'value="arte" checked') || ! str_contains($html, '>Arte</label>')) {
+if (substr_count($html, 'type="checkbox"') < 2 || ! str_contains($html, 'name="interesses[]"') || ! str_contains($html, 'value="arte" checked') || ! str_contains($html, 'Arte <span class="text-muted">— 2 vaga(s) restante(s)</span>')) {
     throw new RuntimeException('O campo checkbox não foi renderizado como caixas de seleção.');
+}
+if (! preg_match('/value="musica"[^>]*disabled/', $html) || preg_match('/value="musica"[^>]*checked/', $html)) {
+    throw new RuntimeException('A opção checkbox esgotada deve ficar desmarcada e desabilitada.');
+}
+if (! preg_match('/name="libras" value="1"[^>]*disabled/', $html) || ! str_contains($html, 'Inscrever em Libras?  <span class="text-muted">— 0 vaga(s) restante(s)</span>')) {
+    throw new RuntimeException('O checkbox simples esgotado deve exibir o saldo e ficar desabilitado.');
 }
 if (! str_contains($html, 'name="declaracao" value="1"') || ! str_contains($html, '>Declaro ter disponibilidade *')) {
     throw new RuntimeException('O checkbox de declaração única não foi renderizado.');
@@ -65,7 +72,7 @@ if (! str_contains($htmlIdentificacao, 'input-group senha-inscricao') || ! str_c
 $atividade->formulario = $config;
 $regras = app(App\Services\FormularioInscricaoService::class)->regras($atividade);
 if (validator(['periodo' => 'manha', 'interesses' => ['arte'], 'declaracao' => '1'], $regras)->fails()
-    || validator(['periodo' => 'manha', 'interesses' => [], 'declaracao' => '1'], $regras)->passes()
+    || validator(['periodo' => 'manha', 'declaracao' => '1'], $regras)->fails()
     || validator(['periodo' => 'manha', 'interesses' => ['opcao-invalida'], 'declaracao' => '1'], $regras)->passes()
     || validator(['periodo' => 'manha', 'interesses' => ['arte']], $regras)->passes()
     || validator(['periodo' => 'manha', 'interesses' => ['arte'], 'declaracao' => '0'], $regras)->passes()) {

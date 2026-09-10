@@ -27,6 +27,11 @@ $config = [
             ['valor' => 'F', 'texto' => 'Feminino', 'percentual_vagas' => 66.6667],
             ['valor' => 'M', 'texto' => 'Masculino', 'percentual_vagas' => 33.3333],
         ]],
+        ['nome' => 'oficinas', 'label' => 'Oficinas', 'tipo' => 'checkbox', 'criterio_vagas' => true, 'opcoes' => [
+            ['valor' => 'arte', 'texto' => 'Arte', 'percentual_vagas' => 25],
+            ['valor' => 'musica', 'texto' => 'Música', 'percentual_vagas' => 0],
+        ]],
+        ['nome' => 'extras', 'label' => 'Incluir almoço', 'tipo' => 'checkbox', 'criterio_vagas' => true, 'percentual_vagas' => 50, 'opcoes' => []],
     ],
 ];
 $atividade = new Atividade(['nome' => 'Teste', 'formulario' => $config]);
@@ -37,6 +42,17 @@ $resultado = $servico->recalcular($atividade, $config, false)['distribuicao_vaga
 conferirVagas($resultado['niveis'][0]['contextos']['[]']['opcoes']['manha']['disponiveis'] === 3, 'O primeiro nível deve aplicar a cota sobre o total.');
 conferirVagas($resultado['niveis'][1]['contextos']['["manha"]']['opcoes']['F']['disponiveis'] === 2, 'O segundo nível deve aplicar a cota sobre o primeiro.');
 conferirVagas($resultado['niveis'][1]['contextos']['["manha"]']['opcoes']['M']['disponiveis'] === 1, 'A conversão de uma vaga em percentual deve preservar a vaga inteira.');
+conferirVagas($resultado['reservas_checkbox'][0]['opcoes']['arte']['disponiveis'] === 3, 'A reserva de checkbox deve usar diretamente o total de vagas.');
+conferirVagas($resultado['reservas_checkbox'][1]['opcoes']['1']['disponiveis'] === 6, 'O checkbox simples deve possuir uma reserva independente.');
+conferirVagas($servico->consumoResposta(['oficinas' => ['arte'], 'extras' => '1'], $config) === 2, 'Dois checkboxes reservados devem consumir duas vagas totais.');
+conferirVagas($servico->consumoResposta([], $config) === 1, 'Uma inscrição sem reserva selecionada deve continuar consumindo uma vaga geral.');
+$servico->conferirDisponibilidade($atividade, ['periodo' => 'manha', 'sexo' => 'F', 'extras' => '1']);
+try {
+    $servico->conferirDisponibilidade($atividade, ['periodo' => 'manha', 'sexo' => 'F', 'oficinas' => ['musica']]);
+    throw new RuntimeException('Uma opção checkbox sem vagas deveria ser recusada.');
+} catch (ValidationException) {
+    // esperado
+}
 
 $invalida = $config;
 $invalida['campos'][0]['opcoes'][0]['percentual_vagas'] = 80;
@@ -48,4 +64,4 @@ try {
     // esperado
 }
 
-echo "OK: cotas hierárquicas e limite percentual validados.\n";
+echo "OK: cotas hierárquicas, reservas independentes de checkbox e limite percentual validados.\n";

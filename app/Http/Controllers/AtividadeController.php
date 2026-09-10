@@ -110,6 +110,7 @@ class AtividadeController
             'config.campos.*.opcoes.*.valor' => ['required_with:config.campos.*.opcoes.*.texto', 'string', 'max:255'],
             'config.campos.*.opcoes.*.texto' => ['required_with:config.campos.*.opcoes.*.valor', 'string', 'max:255'],
             'config.campos.*.opcoes.*.percentual_vagas' => ['nullable', 'numeric', 'between:0,100'],
+            'config.campos.*.percentual_vagas' => ['nullable', 'numeric', 'between:0,100'],
             'config.criterios_vagas' => ['sometimes', 'array'],
             'config.criterios_vagas.*' => ['required', 'string', 'distinct'],
             'config.limitar_inscricoes' => ['sometimes', 'boolean'],

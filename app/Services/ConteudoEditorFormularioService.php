@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\File;
 
 class ConteudoEditorFormularioService
 {
-    private const TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'blockquote', 'a', 'img', 'span', 'sub', 'sup', 'pre', 'code'];
+    private const TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'h1', 'h2', 'h3', 'ol', 'ul', 'li', 'blockquote', 'a', 'img', 'span', 'sub', 'sup', 'pre', 'code', 'table', 'tbody', 'tr', 'td'];
 
     public function sanitizar(?string $html): string
     {
@@ -79,6 +79,7 @@ class ConteudoEditorFormularioService
                 'alt', 'title' => in_array($elemento->tagName, ['a', 'img'], true),
                 'target' => $elemento->tagName === 'a' && in_array($valor, ['_blank', '_self'], true),
                 'data-list' => $elemento->tagName === 'li' && in_array($valor, ['ordered', 'bullet', 'checked', 'unchecked'], true),
+                'data-row' => $elemento->tagName === 'td' && preg_match('/^row-[a-z0-9]{4}$/', $valor) === 1,
                 'width', 'height' => $elemento->tagName === 'img' && preg_match('/^\d{1,4}$/', $valor) === 1,
                 default => false,
             };

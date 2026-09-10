@@ -61,8 +61,11 @@ class Atividade extends Model
 
     public function vagasEsgotadas(): bool
     {
-        return !empty($this->formulario['limitar_inscricoes'])
-            && $this->inscricoes()->count() >= (int) ($this->formulario['limite_inscricoes'] ?? 0);
+        if (empty($this->formulario['limitar_inscricoes'])) return false;
+
+        $config = app(\App\Services\DistribuicaoVagasService::class)->recalcular($this, salvar: false);
+
+        return (int) ($config['distribuicao_vagas']['total']['restantes'] ?? 0) < 1;
     }
 
     public function mensagemVagasEsgotadas(): string
