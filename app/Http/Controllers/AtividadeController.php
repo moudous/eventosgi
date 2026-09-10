@@ -208,6 +208,7 @@ class AtividadeController
             'dadosComprovante' => $inscricao ? $comprovante->participante($inscricao) : [],
             'respostasComprovante' => $inscricao ? $comprovante->respostas($inscricao) : [],
             'qrPresenca' => $inscricao ? $comprovante->qrPresenca($inscricao) : null,
+            'presencaInscricao' => $inscricao ? $comprovante->presenca($inscricao) : null,
         ]);
     }
     /**

@@ -30,4 +30,9 @@ class InscricaoAtividade extends Model
     {
         return $this->belongsTo(Participante::class);
     }
+
+    public function validadorPresenca(): BelongsTo
+    {
+        return $this->belongsTo(Usuario::class, 'presenca_validada_por');
+    }
 }

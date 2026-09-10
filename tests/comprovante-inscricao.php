@@ -6,6 +6,7 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Models\Atividade;
 use App\Models\InscricaoAtividade;
+use App\Models\Usuario;
 use App\Services\ComprovanteInscricaoService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -55,6 +56,18 @@ $respostasPdf = collect(range(1, 18))->map(fn ($numero) => [
     'valor' => 'Resposta informada pelo participante número '.$numero.'.',
 ])->all();
 $qrPdf = $servico->qrPresenca($inscricao);
+$inscricao->forceFill([
+    'presente' => true,
+    'data_presenca' => '2026-09-09 14:35:20',
+    'presenca_validada_por' => 37,
+]);
+$inscricao->setRelation('validadorPresenca', new Usuario(['nome' => 'Usuário Validador']));
+$dadosPresenca = $servico->presenca($inscricao);
+conferirComprovante($dadosPresenca === ['data' => '09/09/2026 14:35:20', 'usuario' => 'Usuário Validador'], 'A presença deve informar data, hora e nome do usuário validador.');
+$htmlPresencaComQr = view('atividades.partials.qrcode-presenca', ['qrPresenca' => $qrPdf, 'presenca' => $dadosPresenca])->render();
+$htmlPresencaSemQr = view('atividades.partials.qrcode-presenca', ['qrPresenca' => null, 'presenca' => $dadosPresenca])->render();
+conferirComprovante(str_contains($htmlPresencaComQr, 'col-md-6') && str_contains($htmlPresencaComQr, 'Usuário Validador'), 'A presença validada deve aparecer ao lado do QR Code.');
+conferirComprovante(str_contains($htmlPresencaSemQr, 'Presença validada') && str_contains($htmlPresencaSemQr, '09/09/2026 14:35:20'), 'A presença validada deve aparecer mesmo sem QR Code.');
 $htmlPdf = view('atividades.comprovante-pdf', [
     'inscricao' => $inscricao,
     'dadosParticipante' => $dadosPdf,

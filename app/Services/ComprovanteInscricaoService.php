@@ -61,4 +61,18 @@ class ComprovanteInscricaoService
     {
         return app(PresencaQrService::class)->dados($inscricao);
     }
+
+    /** @return array{data: string, usuario: string}|null */
+    public function presenca(InscricaoAtividade $inscricao): ?array
+    {
+        if (! $inscricao->presente) return null;
+
+        $usuario = $inscricao->validadorPresenca;
+
+        return [
+            'data' => $inscricao->data_presenca?->format('d/m/Y H:i:s') ?? 'Não informada',
+            'usuario' => $usuario?->nome
+                ?: ($inscricao->presenca_validada_por ? 'Usuário GI #'.$inscricao->presenca_validada_por : 'Não informado'),
+        ];
+    }
 }

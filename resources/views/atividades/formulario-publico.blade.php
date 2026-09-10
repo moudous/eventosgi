@@ -83,7 +83,7 @@
             <div class="card-header"><h2 class="h5 fw-bold mb-0">Respostas da inscrição</h2></div>
             <div class="card-body p-4">
                 @include('atividades.partials.comprovante-respostas', ['dadosParticipante' => $dadosComprovante, 'respostas' => $respostasComprovante])
-                @include('atividades.partials.qrcode-presenca', ['qrPresenca' => $qrPresenca])
+                @include('atividades.partials.qrcode-presenca', ['qrPresenca' => $qrPresenca, 'presenca' => $presencaInscricao ?? null])
             </div>
         </div>
 
