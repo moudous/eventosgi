@@ -40,8 +40,8 @@ use Throwable;
 
 class AtividadeController
 {
-    public function index(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => false, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderBy('nome')->get(['id', 'nome'])]); }
-    public function apagados(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => true, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderBy('nome')->get(['id', 'nome'])]); }
+    public function index(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => false, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome'])]); }
+    public function apagados(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => true, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome'])]); }
 
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {

@@ -18,7 +18,7 @@ class SubmissaoController
     {
         return view('submissoes.index', [
             'estadoTabela' => $armazem->recuperar('submissoes', $request),
-            'eventosFiltro' => Evento::withTrashed()->orderBy('nome')->get(['id', 'nome']),
+            'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome']),
         ]);
     }
 

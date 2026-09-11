@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Submissões de trabalhos')
-@push('styles')<link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet"><style>#submissoesTable_wrapper .dt-layout-end{display:flex;align-items:end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}.filtro-evento-dt{min-width:260px}.filtro-evento-dt label{display:block;margin-bottom:.25rem;font-size:.875rem;font-weight:600}</style>@endpush
+@push('styles')<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet"><link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet"><style>#submissoesTable_wrapper .dt-layout-end{display:flex;align-items:end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}.filtro-evento-dt{min-width:260px}.filtro-evento-dt label{display:block;margin-bottom:.25rem;font-size:.875rem;font-weight:600}</style>@endpush
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">Submissões de trabalhos</h1><p class="page-description mb-0">Configure os períodos e acompanhe os trabalhos enviados.</p></div>
@@ -22,7 +22,7 @@
 </div></div></div>
 @endsection
 @push('scripts')
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script src="{{ asset('filtro-evento-datatable.js') }}?v=1"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
 const filtroEvento=document.getElementById('filtroEventoSubmissoes');
@@ -55,7 +55,7 @@ const table=new DataTable('#submissoesTable',{
         }
     }
 });
-seletorEvento.addEventListener('change',function(){table.ajax.reload(null,true)});
+iniciarFiltroEventoDataTable(seletorEvento,()=>table.ajax.reload(null,true));
 const feedback=document.getElementById('actionFeedback');
 document.getElementById('submissoesTable').onclick=async e=>{const b=e.target.closest('[data-action-url]');if(!b)return;const pergunta=b.dataset.action==='delete'?'Excluir esta submissão e todos os trabalhos vinculados? Esta ação não pode ser desfeita.':'Alterar o status desta submissão?';if(!confirm(pergunta))return;b.disabled=true;try{const r=await fetch(b.dataset.actionUrl,{method:b.dataset.method,credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-TOKEN':@json(csrf_token())}});const p=await r.json();if(!r.ok)throw new Error(p.message);feedback.querySelector('span').textContent=p.message;feedback.classList.remove('d-none','alert-danger');feedback.classList.add('show','alert-success');table.ajax.reload(null,false)}catch(x){feedback.querySelector('span').textContent=x.message||'Falha na operação.';feedback.classList.remove('d-none','alert-success');feedback.classList.add('show','alert-danger');b.disabled=false}};
 });

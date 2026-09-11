@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', $apagados ? 'Atividades apagadas' : 'Atividades')
-@push('styles')<link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet"><style>#atividadesTable_wrapper .dt-layout-end{display:flex;align-items:end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}.filtro-evento-dt{min-width:260px}.filtro-evento-dt label{display:block;margin-bottom:.25rem;font-size:.875rem;font-weight:600}</style>@endpush
+@push('styles')<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet"><link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet"><style>#atividadesTable_wrapper .dt-layout-end{display:flex;align-items:end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}.filtro-evento-dt{min-width:260px}.filtro-evento-dt label{display:block;margin-bottom:.25rem;font-size:.875rem;font-weight:600}</style>@endpush
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
  <div><h1 class="page-title">{{ $apagados?'Atividades apagadas':'Atividades' }}</h1><p class="page-description mb-0">{{ $apagados?'Restaure ou exclua definitivamente as atividades apagadas.':'Cadastre e gerencie as atividades dos eventos.' }}</p></div>
@@ -52,12 +52,12 @@
 @include('partials.historico-modal')
 @endsection
 @push('scripts')
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script src="{{ asset('filtro-evento-datatable.js') }}?v=1"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{const apagados=@json($apagados);
 const cols=[{data:'id'},{data:'nome'},{data:'evento'},{data:'modalidade'},{data:'data_inicio'},{data:'data_fim'},{data:'inscricoes_count'},{data:'ativo'},{data:'criado_por'},{data:'created_at'},{data:'updated_at'},...(apagados?[{data:'deleted_at'}]:[]),{data:'acoes',orderable:false,searchable:false}];
 const table=new DataTable('#atividadesTable',{processing:true,serverSide:true,order:[[0,'desc']],pageLength:@json($estadoTabela['por_pagina']),displayStart:@json(($estadoTabela['page']-1)*$estadoTabela['por_pagina']),search:{search:@json($estadoTabela['pesquisar'])},ajax:{url:@json(route('atividades.dados',[],false)),data:d=>{d.apagados=apagados?1:0;d.filtro_evento=document.getElementById('filtro_evento').value}},columns:cols,language:{processing:'Carregando...',emptyTable:'Nenhuma atividade cadastrada.',info:'Exibindo _START_ a _END_ de _TOTAL_ atividades',infoEmpty:'Nenhuma atividade encontrada',lengthMenu:'Exibir _MENU_ registros',search:'Pesquisar:',zeroRecords:'Nenhuma atividade encontrada.',paginate:{next:'Próxima',previous:'Anterior'}}});
-const filtroEvento=document.getElementById('filtroEventoAtividades'),areaPesquisa=document.querySelector('#atividadesTable_wrapper .dt-search');if(areaPesquisa){areaPesquisa.parentElement.insertBefore(filtroEvento,areaPesquisa);filtroEvento.classList.remove('d-none')}document.getElementById('filtro_evento').addEventListener('change',()=>table.ajax.reload(null,true));
+const filtroEvento=document.getElementById('filtroEventoAtividades'),areaPesquisa=document.querySelector('#atividadesTable_wrapper .dt-search');if(areaPesquisa){areaPesquisa.parentElement.insertBefore(filtroEvento,areaPesquisa);filtroEvento.classList.remove('d-none')}iniciarFiltroEventoDataTable(document.getElementById('filtro_evento'),()=>table.ajax.reload(null,true));
 const feedback=document.getElementById('actionFeedback');let historyTable=null;const modal=new bootstrap.Modal('#historicoModal');
 // Dentro do iframe do GI a API de area de transferencia pode estar bloqueada, entao
 // a reserva usa um textarea temporario com execCommand.

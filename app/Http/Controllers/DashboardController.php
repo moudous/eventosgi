@@ -31,7 +31,48 @@ class DashboardController
         $campoNome = trim((string) $request->query('campo', ''));
         $campo = collect($campos)->firstWhere('nome', $campoNome) ?? ($campos[0] ?? null);
 
+        $dispositivoEventoId = max(0, (int) $request->query('dispositivo_evento'));
+        if (! $eventos->contains('id', $dispositivoEventoId)) $dispositivoEventoId = 0;
+        $dispositivoAtividades = Atividade::query()
+            ->whereHas('evento')
+            ->when($dispositivoEventoId, fn ($query) => $query->where('evento_id', $dispositivoEventoId))
+            ->with('evento:id,nome')->orderBy('nome')->get(['id', 'nome', 'evento_id']);
+        $dispositivoAtividadeId = max(0, (int) $request->query('dispositivo_atividade'));
+        if (! $dispositivoAtividades->contains('id', $dispositivoAtividadeId)) $dispositivoAtividadeId = 0;
+        $dimensoesDispositivo = \App\Services\InscricoesDispositivoService::DIMENSOES;
+        $inscricoesDispositivo = InscricaoAtividade::query()
+            ->whereIn('atividade_id', $dispositivoAtividades->pluck('id'))
+            ->when($dispositivoAtividadeId, fn ($query) => $query->where('atividade_id', $dispositivoAtividadeId))
+            ->get(['dispositivo']);
+        $graficosDispositivo = [];
+        foreach ($dimensoesDispositivo as $dimensao => $titulo) {
+            $graficosDispositivo[$dimensao] = app(\App\Services\InscricoesDispositivoService::class)->agrupar($inscricoesDispositivo, $dimensao);
+        }
+        $totalDispositivo = $inscricoesDispositivo->count();
+
+        $categorias = \App\Models\Categoria::query()->orderBy('nome')->get(['id', 'nome']);
+        $atividadesPorCategoria = Atividade::query()->selectRaw('categoria_id, COUNT(*) as total')
+            ->groupBy('categoria_id')->pluck('total', 'categoria_id');
+        $inscricoesPorCategoria = InscricaoAtividade::query()
+            ->join('atividades', 'atividades.id', '=', 'inscricoes_atividade.atividade_id')
+            ->whereNull('atividades.deleted_at')->selectRaw('atividades.categoria_id, COUNT(*) as total')
+            ->groupBy('atividades.categoria_id')->pluck('total', 'categoria_id');
+        $contagensCategorias = $categorias->map(fn ($categoria) => [
+            'nome' => $categoria->nome,
+            'icone' => \App\Models\Categoria::iconeParaNome($categoria->nome),
+            'atividades' => (int) ($atividadesPorCategoria[$categoria->id] ?? 0),
+            'inscricoes' => (int) ($inscricoesPorCategoria[$categoria->id] ?? 0),
+        ])->filter(fn ($categoria) => $categoria['inscricoes'] > 0 || $categoria['atividades'] > 0)->values();
+        if (($inscricoesPorCategoria[''] ?? 0) > 0 || ($atividadesPorCategoria[''] ?? 0) > 0) {
+            $contagensCategorias->push(['nome' => 'Sem categoria',
+                'icone' => 'bi-tags',
+                'atividades' => (int) ($atividadesPorCategoria[''] ?? 0),
+                'inscricoes' => (int) ($inscricoesPorCategoria[''] ?? 0)]);
+        }
+
         return view('dashboard', [
+            'contagensCategorias' => $contagensCategorias,
+            ...compact('dispositivoEventoId', 'dispositivoAtividades', 'dispositivoAtividadeId', 'dimensoesDispositivo', 'graficosDispositivo', 'totalDispositivo'),
             'indicadores' => [
                 ['rotulo' => 'Eventos', 'valor' => Evento::query()->count(), 'icone' => 'bi-calendar-event', 'cor' => 'primary'],
                 ['rotulo' => 'Atividades', 'valor' => Atividade::query()->count(), 'icone' => 'bi-list-check', 'cor' => 'success'],
@@ -44,6 +85,7 @@ class DashboardController
             'atividadeId' => $atividadeId,
             'campos' => $campos,
             'campoNome' => $campo['nome'] ?? '',
+            'evolucao' => $atividade ? app(\App\Services\EvolucaoInscricoesService::class)->paraAtividade($atividade) : null,
             'grafico' => $atividade && $campo ? $this->grafico($atividade, $campo) : ['total' => 0, 'itens' => []],
             'ultimasInscricoes' => InscricaoAtividade::query()
                 ->with([

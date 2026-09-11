@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class ConvidadoController
 {
 
-    public function index(Request $request, ArmazemService $armazem): View { return view('convidados.index',['estadoTabela'=>$armazem->recuperar('convidados',$request),'eventosFiltro'=>Evento::withTrashed()->orderBy('nome')->get(['id','nome'])]); }
+    public function index(Request $request, ArmazemService $armazem): View { return view('convidados.index',['estadoTabela'=>$armazem->recuperar('convidados',$request),'eventosFiltro'=>Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id','nome'])]); }
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
         $query=Convidado::query()->with('eventos'); $total=(clone $query)->count(); $filtroEvento=max(0,(int)$request->input('filtro_evento',0));if($filtroEvento>0)$query->whereHas('eventos', fn($e) => $e->where('eventos.id', $filtroEvento));$busca=trim((string)$request->input('search.value',''));
