@@ -87,6 +87,7 @@
             'participante' => $participantes->get($inscricao->participante_id),
             'participante_id' => $inscricao->participante_id,
             'participante_email' => $inscricao->participante_email,
+            'lista_reserva' => (bool) $inscricao->lista_reserva,
             'data' => $inscricao->created_at?->format('d/m/Y') ?? '—',
             'hora' => $inscricao->created_at?->format('H:i') ?? '',
             'presente' => (bool) $inscricao->presente,
@@ -105,7 +106,7 @@
                 <tbody>
                 @forelse($linhas as $linha)
                     <tr>
-                        <td class="text-muted">#{{ $linha['id'] }}</td>
+                        <td class="text-muted">#{{ $linha['id'] }} @if($linha['lista_reserva'])<span class="badge text-bg-warning d-block mt-1">Além do limite</span>@endif</td>
                         <td class="text-nowrap">{{ $linha['data'] }} <small class="text-muted">{{ $linha['hora'] }}</small></td>
                         <td>
                             @if($linha['participante_id'])

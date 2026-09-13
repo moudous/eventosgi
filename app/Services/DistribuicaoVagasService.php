@@ -14,6 +14,15 @@ class DistribuicaoVagasService
 
     public function prepararConfiguracao(array $config): array
     {
+        $config['apos_encerrar_vagas'] = ($config['apos_encerrar_vagas'] ?? 'encerrar') === 'lista_reserva'
+            ? 'lista_reserva'
+            : 'encerrar';
+        $config['lista_reserva_sem_limite'] = $config['apos_encerrar_vagas'] === 'lista_reserva'
+            && ! empty($config['lista_reserva_sem_limite']);
+        $config['limite_lista_reserva'] = $config['apos_encerrar_vagas'] === 'lista_reserva'
+            && ! $config['lista_reserva_sem_limite']
+                ? max(0, (int) ($config['limite_lista_reserva'] ?? 0))
+                : null;
         $campos = collect($config['campos'] ?? [])->map(function (array $campo): array {
             $campo['criterio_vagas'] = in_array($campo['tipo'] ?? '', self::TIPOS_CRITERIO, true)
                 && ! empty($campo['criterio_vagas']);
@@ -73,7 +82,9 @@ class DistribuicaoVagasService
     {
         $config = $this->prepararConfiguracao($config ?? $atividade->formulario ?? []);
         $total = ! empty($config['limitar_inscricoes']) ? max(0, (int) ($config['limite_inscricoes'] ?? 0)) : 0;
-        $inscricoes = InscricaoAtividade::query()->where('atividade_id', $atividade->id)->get(['resposta']);
+        // Inscrições além do limite aguardam análise e não consomem as cotas regulares.
+        $inscricoes = InscricaoAtividade::query()->where('atividade_id', $atividade->id)
+            ->where('lista_reserva', false)->get(['resposta']);
         $usadasTotal = $inscricoes->sum(fn ($inscricao) => $this->consumoResposta($inscricao->resposta ?? [], $config));
         $distribuicao = [
             'total' => ['disponiveis' => $total, 'usadas' => $usadasTotal, 'restantes' => max(0, $total - $usadasTotal)],

@@ -8,10 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class InscricaoAtividade extends Model
 {
     protected $table = 'inscricoes_atividade';
-    protected $fillable = ['atividade_id', 'sessao_atividade_id', 'participante_id', 'participante_email', 'resposta', 'ip', 'user_agent', 'dispositivo', 'comprovante_hash', 'presente', 'data_presenca', 'presenca_validada_por', 'codigo_qr'];
+    protected $fillable = ['atividade_id', 'sessao_atividade_id', 'participante_id', 'participante_email', 'lista_reserva', 'resposta', 'ip', 'user_agent', 'dispositivo', 'comprovante_hash', 'presente', 'data_presenca', 'presenca_validada_por', 'codigo_qr'];
     protected $casts = [
         'resposta' => 'array', 'dispositivo' => 'array', 'participante_id' => 'integer', 'sessao_atividade_id' => 'integer',
-        'presente' => 'boolean', 'data_presenca' => 'datetime', 'presenca_validada_por' => 'integer',
+        'presente' => 'boolean', 'lista_reserva' => 'boolean', 'data_presenca' => 'datetime', 'presenca_validada_por' => 'integer',
     ];
 
     protected static function booted(): void

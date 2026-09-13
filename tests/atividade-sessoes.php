@@ -19,7 +19,7 @@ $schema->create('atividades', function ($table): void {
     $table->timestamps(); $table->softDeletes();
 });
 $schema->create('inscricoes_atividade', function ($table): void {
-    $table->id(); $table->unsignedBigInteger('atividade_id'); $table->json('resposta'); $table->timestamps();
+    $table->id(); $table->unsignedBigInteger('atividade_id'); $table->boolean('lista_reserva')->default(false); $table->json('resposta'); $table->timestamps();
 });
 $schema->create('eventos', fn ($table) => $table->id());
 DB::table('eventos')->insert(['id' => 1]);

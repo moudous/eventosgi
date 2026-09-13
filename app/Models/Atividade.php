@@ -29,6 +29,8 @@ class Atividade extends Model
 
     public const MENSAGEM_JA_INSCRITO = 'Você já está inscrito nesta atividade. Cada participante pode se inscrever uma única vez.';
 
+    public const MENSAGEM_LISTA_RESERVA = 'As vagas regulares foram preenchidas. Esta inscrição será registrada além do limite e não garante direito a uma vaga. A ordem e os critérios da inscrição serão considerados para efetivá-la.';
+
     public const MENSAGEM_IDENTIFICACAO = 'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite uma senha temporária por e-mail.';
 
     private const MENSAGENS_IDENTIFICACAO_ANTIGAS = [
@@ -96,10 +98,24 @@ class Atividade extends Model
 
     public function vagasEsgotadas(): bool
     {
+        if (! $this->vagasRegularesEsgotadas()) return false;
+        if (! $this->permiteListaReserva()) return true;
+        if (! empty($this->formulario['lista_reserva_sem_limite'])) return false;
+
+        $limite = max(0, (int) ($this->formulario['limite_lista_reserva'] ?? 0));
+
+        return $this->inscricoes()->where('lista_reserva', true)->count() >= $limite;
+    }
+
+    public function vagasRegularesEsgotadas(): bool
+    {
         if ($this->comSessoes()) {
-            $sessoes = $this->sessoesAtivas()->withCount('inscricoes')->get();
+            $sessoes = $this->sessoesAtivas()->withCount([
+                'inscricoes as inscricoes_regulares_count' => fn ($query) => $query->where('lista_reserva', false),
+            ])->get();
             if ($sessoes->isEmpty()) return true;
-            if ($sessoes->every(fn (SessaoAtividade $sessao) => $sessao->limite_vagas !== null && $sessao->vagasRestantes() < 1)) return true;
+            if ($sessoes->every(fn (SessaoAtividade $sessao) => $sessao->limite_vagas !== null
+                && $sessao->inscricoes_regulares_count >= $sessao->limite_vagas)) return true;
         }
 
         if (empty($this->formulario['limitar_inscricoes'])) return false;
@@ -107,6 +123,17 @@ class Atividade extends Model
         $config = app(\App\Services\DistribuicaoVagasService::class)->recalcular($this, salvar: false);
 
         return (int) ($config['distribuicao_vagas']['total']['restantes'] ?? 0) < 1;
+    }
+
+    public function permiteListaReserva(): bool
+    {
+        return ! empty($this->formulario['limitar_inscricoes'])
+            && ($this->formulario['apos_encerrar_vagas'] ?? 'encerrar') === 'lista_reserva';
+    }
+
+    public function aceitandoListaReserva(): bool
+    {
+        return $this->vagasRegularesEsgotadas() && $this->permiteListaReserva() && ! $this->vagasEsgotadas();
     }
 
     public function mensagemVagasEsgotadas(): string

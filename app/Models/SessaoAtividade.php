@@ -32,7 +32,9 @@ class SessaoAtividade extends Model
     {
         if ($this->limite_vagas === null) return null;
 
-        $usadas = isset($this->inscricoes_count) ? (int) $this->inscricoes_count : $this->inscricoes()->count();
+        $usadas = isset($this->inscricoes_regulares_count)
+            ? (int) $this->inscricoes_regulares_count
+            : $this->inscricoes()->where('lista_reserva', false)->count();
         return max(0, $this->limite_vagas - $usadas);
     }
 

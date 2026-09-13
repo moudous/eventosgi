@@ -8,6 +8,7 @@
     $eventoVisual = $atividade->evento ?? new \App\Models\Evento;
     $imagemVisual = $atividade->estiloImagem();
     $aberto = $estado['aberto'];
+    $listaReservaAtiva = $aberto && !empty($estado['lista_reserva']);
     $errosIdentificacao = $errors->identificacao;
     // Mantém o e-mail digitado entre um passo e outro da identificação.
     $emailInformado = old('email', session('senha_temporaria_enviada', ''));
@@ -41,7 +42,7 @@
         <div class="editor-publico mb-4">{!! $config['editor']['conteudo'] !!}</div>
     @endif
 
-    @if(!empty($config['limitar_inscricoes']))
+    @if(!empty($config['limitar_inscricoes']) && !$listaReservaAtiva && $estado['motivo'] !== 'duplicada')
         @php
             $totalVagas = $config['distribuicao_vagas']['total'] ?? [
                 'usadas' => $atividade->inscricoes()->count(),
@@ -61,6 +62,10 @@
     @if(session('vagas_esgotadas'))<div class="alert alert-warning">{{ session('vagas_esgotadas') }}</div>@endif
     @if(session('identificacao_expirada'))<div class="alert alert-warning">{{ session('identificacao_expirada') }}</div>@endif
     @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
+
+    @if($listaReservaAtiva)
+        <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>{{ \App\Models\Atividade::MENSAGEM_LISTA_RESERVA }}</div>
+    @endif
 
     @if($identificacao)
         <div id="inicio-formulario" class="d-flex flex-wrap gap-2 align-items-center justify-content-between alert alert-light border ancora-formulario">
@@ -260,7 +265,9 @@
                     <div class="row g-3">
                         @if($atividade->comSessoes())
                             @php
-                                $sessoesPublicas = $atividade->sessoesAtivas()->withCount('inscricoes')->get();
+                                $sessoesPublicas = $atividade->sessoesAtivas()->withCount([
+                                    'inscricoes as inscricoes_regulares_count' => fn ($query) => $query->where('lista_reserva', false),
+                                ])->get();
                             @endphp
                             <div class="col-12">
                                 <div class="form-label fw-semibold">Sessão *</div>
@@ -271,8 +278,8 @@
                                             $esgotadaSessao = $restantesSessao !== null && $restantesSessao < 1;
                                         @endphp
                                         <div class="form-check border rounded-3 p-3 ps-5">
-                                            <input class="form-check-input" type="radio" name="sessao_atividade_id" id="sessao_atividade_{{ $sessaoAtividade->id }}" value="{{ $sessaoAtividade->id }}" required @checked(!$esgotadaSessao && (int) old('sessao_atividade_id') === $sessaoAtividade->id) @disabled($esgotadaSessao)>
-                                            <label class="form-check-label w-100" for="sessao_atividade_{{ $sessaoAtividade->id }}"><span class="fw-semibold">{{ $sessaoAtividade->nome }}</span>@if($sessaoAtividade->data_inicio)<span class="d-block small text-muted">{{ $sessaoAtividade->data_inicio->format('d/m/Y H:i') }}@if($sessaoAtividade->data_fim) a {{ $sessaoAtividade->data_fim->format('d/m/Y H:i') }}@endif</span>@endif @if($restantesSessao !== null)<span class="d-block small {{ $esgotadaSessao ? 'text-danger' : 'text-muted' }}">{{ $esgotadaSessao ? 'Vagas esgotadas' : $restantesSessao.' vaga(s) restante(s)' }}</span>@endif</label>
+                                            <input class="form-check-input" type="radio" name="sessao_atividade_id" id="sessao_atividade_{{ $sessaoAtividade->id }}" value="{{ $sessaoAtividade->id }}" required @checked((!$esgotadaSessao || $listaReservaAtiva) && (int) old('sessao_atividade_id') === $sessaoAtividade->id) @disabled($esgotadaSessao && !$listaReservaAtiva)>
+                                            <label class="form-check-label w-100" for="sessao_atividade_{{ $sessaoAtividade->id }}"><span class="fw-semibold">{{ $sessaoAtividade->nome }}</span>@if($sessaoAtividade->data_inicio)<span class="d-block small text-muted">{{ $sessaoAtividade->data_inicio->format('d/m/Y H:i') }}@if($sessaoAtividade->data_fim) a {{ $sessaoAtividade->data_fim->format('d/m/Y H:i') }}@endif</span>@endif @if($listaReservaAtiva)<span class="d-block small text-warning-emphasis">Seleção para inscrição além do limite</span>@elseif($restantesSessao !== null)<span class="d-block small {{ $esgotadaSessao ? 'text-danger' : 'text-muted' }}">{{ $esgotadaSessao ? 'Vagas esgotadas' : $restantesSessao.' vaga(s) restante(s)' }}</span>@endif</label>
                                         </div>
                                     @endforeach
                                 </div>
@@ -306,7 +313,7 @@
                                                 $cotasOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['usadas'] ?? 0));
                                                 $restantesOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['restantes'] ?? 0));
                                             @endphp
-                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}@if($criterioVagas && !empty($config['mostrar_vagas_restantes'])) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
+                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}@if($criterioVagas && !empty($config['mostrar_vagas_restantes']) && !$listaReservaAtiva) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
                                         @endforeach
                                     </select>
                                 @elseif(in_array($tipo, ['radio', 'checkbox'], true))
@@ -316,8 +323,8 @@
                                             $checkboxSimplesEsgotado = $cotaCheckboxSimples && (int) ($cotaCheckboxSimples['restantes'] ?? 0) < 1;
                                         @endphp
                                         <div class="form-check pt-1">
-                                            <input class="form-check-input" type="checkbox" id="campo_{{ $loop->index }}" name="{{ $nome }}" value="1" @checked(!$checkboxSimplesEsgotado && (string) $anterior === '1') @disabled($checkboxSimplesEsgotado) @if(!empty($campo['obrigatorio'])) required @endif>
-                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ trim((string) ($campo['texto_opcao'] ?? '')) ?: 'Sim' }} @if($cotaCheckboxSimples)<span class="text-muted">— {{ $cotaCheckboxSimples['restantes'] }} vaga(s) restante(s)</span>@endif</label>
+                                            <input class="form-check-input" type="checkbox" id="campo_{{ $loop->index }}" name="{{ $nome }}" value="1" @checked((!$checkboxSimplesEsgotado || $listaReservaAtiva) && (string) $anterior === '1') @disabled($checkboxSimplesEsgotado && !$listaReservaAtiva) @if(!empty($campo['obrigatorio'])) required @endif>
+                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ trim((string) ($campo['texto_opcao'] ?? '')) ?: 'Sim' }} @if($cotaCheckboxSimples && !$listaReservaAtiva)<span class="text-muted">— {{ $cotaCheckboxSimples['restantes'] }} vaga(s) restante(s)</span>@endif</label>
                                             @if(!empty($campo['obrigatorio']))<div class="invalid-feedback">Marque esta declaração para continuar.</div>@endif
                                         </div>
                                     @else
@@ -333,11 +340,11 @@
                                                     ? ($reservaCheckbox['opcoes'][$valorOpcao] ?? null)
                                                     : null;
                                                 $checkboxEsgotado = $cotaCheckbox && (int) ($cotaCheckbox['restantes'] ?? 0) < 1;
-                                                if ($checkboxEsgotado) $selecionado = false;
+                                                if ($checkboxEsgotado && !$listaReservaAtiva) $selecionado = false;
                                             @endphp
                                             <div class="form-check">
-                                                <input class="form-check-input" type="{{ $tipo }}" id="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" value="{{ $valorOpcao }}" @checked($selecionado) @disabled($checkboxEsgotado) @if($tipo === 'radio' && !empty($campo['obrigatorio'])) required @endif>
-                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}@if($cotaCheckbox) <span class="text-muted">— {{ $cotaCheckbox['restantes'] }} vaga(s) restante(s)</span>@endif</label>
+                                                <input class="form-check-input" type="{{ $tipo }}" id="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" value="{{ $valorOpcao }}" @checked($selecionado) @disabled($checkboxEsgotado && !$listaReservaAtiva) @if($tipo === 'radio' && !empty($campo['obrigatorio'])) required @endif>
+                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}@if($cotaCheckbox && !$listaReservaAtiva) <span class="text-muted">— {{ $cotaCheckbox['restantes'] }} vaga(s) restante(s)</span>@endif</label>
                                             </div>
                                         @endforeach
                                         @if($tipo === 'checkbox' && !empty($campo['obrigatorio']))<div class="invalid-feedback">Selecione pelo menos uma opção.</div>@endif
@@ -542,7 +549,8 @@ document.querySelectorAll('form').forEach(formulario => formulario.addEventListe
 
 document.getElementById('imprimirComprovante')?.addEventListener('click', () => window.print());
 const distribuicaoVagas = {{ Illuminate\Support\Js::from($config['distribuicao_vagas'] ?? []) }};
-const mostrarVagasRestantes = {{ !empty($config['mostrar_vagas_restantes']) ? 'true' : 'false' }};
+const mostrarVagasRestantes = {{ !empty($config['mostrar_vagas_restantes']) && !$listaReservaAtiva ? 'true' : 'false' }};
+const listaReservaAtiva = {{ $listaReservaAtiva ? 'true' : 'false' }};
 const selectsCriterio = [...document.querySelectorAll('select[data-criterio-vagas]')];
 const atualizarCotas = () => {
     const anteriores = [];
@@ -561,7 +569,7 @@ const atualizarCotas = () => {
             const disponiveis = cotas.reduce((total, cota) => total + Number(cota.disponiveis || 0), 0);
             option.textContent = mostrarVagasRestantes ? `${option.dataset.texto} — ${usadas}/${restantes}` : option.dataset.texto;
             option.title = mostrarVagasRestantes ? `${usadas} vaga(s) preenchida(s) de ${disponiveis}; restam ${restantes}` : '';
-            option.disabled = restantes < 1 && !option.selected;
+            option.disabled = !listaReservaAtiva && restantes < 1 && !option.selected;
         });
         if (select.value) anteriores.push(select.value);
     });

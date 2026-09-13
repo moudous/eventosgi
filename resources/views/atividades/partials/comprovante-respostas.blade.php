@@ -7,7 +7,10 @@
     </div>
 </div>
 <div>
-    <h3 class="h6 text-uppercase text-muted">Respostas do formulário</h3>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h3 class="h6 text-uppercase text-muted mb-0">Respostas do formulário</h3>
+        @if(($inscricao ?? null)?->lista_reserva)<span class="badge text-bg-warning">Inscrição além do limite de vagas</span>@endif
+    </div>
     <div class="row g-3">
         @forelse($respostas as $resposta)
             <div class="col-12 col-md-6">

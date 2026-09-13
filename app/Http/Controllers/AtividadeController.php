@@ -139,6 +139,14 @@ class AtividadeController
             'config.criterios_vagas.*' => ['required', 'string', 'distinct'],
             'config.limitar_inscricoes' => ['sometimes', 'boolean'],
             'config.limite_inscricoes' => ['required_if:config.limitar_inscricoes,true', 'nullable', 'integer', 'min:1'],
+            'config.apos_encerrar_vagas' => ['required_if:config.limitar_inscricoes,true', 'in:encerrar,lista_reserva'],
+            'config.lista_reserva_sem_limite' => ['sometimes', 'boolean'],
+            'config.limite_lista_reserva' => [
+                \Illuminate\Validation\Rule::requiredIf(fn () => ! empty($config['limitar_inscricoes'])
+                    && ($config['apos_encerrar_vagas'] ?? 'encerrar') === 'lista_reserva'
+                    && empty($config['lista_reserva_sem_limite'])),
+                'nullable', 'integer', 'min:1',
+            ],
             'config.mostrar_vagas_restantes' => ['sometimes', 'boolean'],
             'config.registrar_presenca_qrcode' => ['sometimes', 'boolean'],
             'config.mensagem_vagas_esgotadas' => ['nullable', 'string', 'max:2000'],
@@ -150,6 +158,9 @@ class AtividadeController
             'config.limite_inscricoes.required_if' => 'Informe a quantidade de inscrições disponíveis ao ativar o limite.',
             'config.limite_inscricoes.integer' => 'A quantidade de inscrições deve ser um número inteiro.',
             'config.limite_inscricoes.min' => 'A quantidade de inscrições deve ser pelo menos 1.',
+            'config.limite_lista_reserva.required' => 'Informe a quantidade de inscrições além do limite ou marque “Sem limite”.',
+            'config.limite_lista_reserva.integer' => 'A quantidade de inscrições além do limite deve ser um número inteiro.',
+            'config.limite_lista_reserva.min' => 'A quantidade de inscrições além do limite deve ser pelo menos 1.',
         ]);
         if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
         $distribuicao->validarConfiguracao($config);
@@ -166,6 +177,11 @@ class AtividadeController
         $config['mensagem_ja_inscrito'] = trim($config['mensagem_ja_inscrito'] ?? '') ?: Atividade::MENSAGEM_JA_INSCRITO;
         $config['mensagem_identificacao'] = trim($config['mensagem_identificacao'] ?? '') ?: Atividade::MENSAGEM_IDENTIFICACAO;
         $config['mostrar_vagas_restantes'] = ! empty($config['limitar_inscricoes']) && ! empty($config['mostrar_vagas_restantes']);
+        if (empty($config['limitar_inscricoes']) || ($config['apos_encerrar_vagas'] ?? 'encerrar') !== 'lista_reserva') {
+            $config['apos_encerrar_vagas'] = 'encerrar';
+            $config['lista_reserva_sem_limite'] = false;
+            $config['limite_lista_reserva'] = null;
+        }
         $config['registrar_presenca_qrcode'] = ! empty($config['registrar_presenca_qrcode']);
         $config['editor']['exibir'] = (bool) ($config['editor']['exibir'] ?? false);
         $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');

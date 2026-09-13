@@ -28,6 +28,7 @@
     .qr img { width:158px; height:158px; }
     .codigo { font-family:DejaVu Sans Mono,monospace; font-size:6.5px; overflow-wrap:anywhere; }
     .rodape { margin:6px 0 0; color:#6c757d; font-size:7px; }
+    .reserva { display:inline-block; margin-left:5px; padding:2px 4px; border:1px solid #b58105; color:#7a5700; background:#fff3cd; font-size:7px; font-weight:bold; text-transform:none; }
     body.compacto { font-size:8px; line-height:1.08; }
     body.compacto h2 { margin-top:6px; }
     body.compacto .itens td { padding:2px 4px; }
@@ -56,7 +57,7 @@
         <td class="qr"><h2>QR Code de presença</h2><p>Apresente este código no credenciamento.</p><img src="{{ $qrPresenca['imagem'] }}" alt="QR Code de presença"><div class="codigo">{{ $qrPresenca['codigo'] }}</div></td>
     @endif
 </tr></table>
-<h2>Respostas do formulário</h2>
+<h2>Respostas do formulário @if($inscricao->lista_reserva)<span class="reserva">Inscrição além do limite de vagas</span>@endif</h2>
 <table class="itens">
     @forelse(array_chunk($respostas, 2) as $linha)
         <tr>@foreach($linha as $resposta)<td><span class="label">{{ $resposta['label'] }}</span>{{ $resposta['valor'] }}</td>@endforeach @if(count($linha) === 1)<td class="vazio"></td>@endif</tr>

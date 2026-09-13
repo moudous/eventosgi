@@ -83,6 +83,37 @@ if (str_contains($htmlIdentificacao, 'Código recebido')
     || ! str_contains($htmlIdentificacao, 'Enviar senha para o e-mail')) {
     throw new RuntimeException('A recuperação deve ficar oculta e usar a senha temporária no campo Senha.');
 }
+$estadoReserva = ['aberto' => true, 'motivo' => null, 'mensagem' => null, 'lista_reserva' => true];
+foreach ([null, ['email' => 'pessoa@example.com']] as $identificacaoReserva) {
+    $htmlReserva = view('atividades.formulario-publico', [
+        'atividade' => $atividade, 'config' => $config,
+        'identificacao' => $identificacaoReserva, 'participante' => $identificacaoReserva ? $participante : null,
+        'estado' => $estadoReserva, 'inscricao' => null,
+        'dadosComprovante' => [], 'respostasComprovante' => [], 'qrPresenca' => null,
+    ])->render();
+    if (! str_contains($htmlReserva, Atividade::MENSAGEM_LISTA_RESERVA)
+        || str_contains($htmlReserva, 'Vagas restantes:')) {
+        throw new RuntimeException('O aviso além do limite deve aparecer antes e depois da identificação, sem saldo de vagas.');
+    }
+    if (preg_match('/value="musica"[^>]*disabled/', $htmlReserva)
+        || preg_match('/name="libras" value="1"[^>]*disabled/', $htmlReserva)) {
+        throw new RuntimeException('Os critérios esgotados devem continuar disponíveis para a lista de reserva.');
+    }
+}
+$inscricaoReserva = new App\Models\InscricaoAtividade(['lista_reserva' => true, 'comprovante_hash' => str_repeat('d', 64)]);
+$inscricaoReserva->id = 99;
+$htmlJaInscrito = view('atividades.formulario-publico', [
+    'atividade' => $atividade, 'config' => $config,
+    'identificacao' => ['email' => 'pessoa@example.com'], 'participante' => $participante,
+    'estado' => ['aberto' => false, 'motivo' => 'duplicada', 'mensagem' => Atividade::MENSAGEM_JA_INSCRITO, 'lista_reserva' => false],
+    'inscricao' => $inscricaoReserva, 'dadosComprovante' => [], 'respostasComprovante' => [], 'qrPresenca' => null,
+])->render();
+if (str_contains($htmlJaInscrito, 'Vagas restantes:')
+    || str_contains($htmlJaInscrito, Atividade::MENSAGEM_LISTA_RESERVA)
+    || ! str_contains($htmlJaInscrito, 'Respostas do formulário')
+    || ! str_contains($htmlJaInscrito, 'Inscrição além do limite de vagas')) {
+    throw new RuntimeException('Quem já se inscreveu deve ver a condição de reserva somente junto às respostas do comprovante.');
+}
 $gerenciadorSessao = app('session');
 $request->session()->put('senha_temporaria_enviada', 'marcelo33@nossafco.com.br');
 $app->instance('session', $request->session());

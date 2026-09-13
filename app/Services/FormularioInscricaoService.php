@@ -40,7 +40,7 @@ class FormularioInscricaoService
      * O participante e opcional porque so o fluxo identificado consegue saber se
      * aquela pessoa ja se inscreveu.
      *
-     * @return array{aberto: bool, motivo: ?string, mensagem: ?string}
+     * @return array{aberto: bool, motivo: ?string, mensagem: ?string, lista_reserva: bool}
      */
     public function estado(Atividade $atividade, ?Participante $participante = null, ?string $email = null): array
     {
@@ -49,22 +49,22 @@ class FormularioInscricaoService
 
         // Antes das datas e das vagas: quem já se inscreveu não deve nem ver o formulário.
         if ($participante && $this->jaInscrito($atividade, $participante, $email)) {
-            return ['aberto' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito()];
+            return ['aberto' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito(), 'lista_reserva' => false];
         }
 
         if (! empty($config['abertura']) && $agora->lt($config['abertura'])) {
-            return ['aberto' => false, 'motivo' => 'antes', 'mensagem' => $config['mensagem_antes'] ?? 'As inscrições ainda não foram abertas.'];
+            return ['aberto' => false, 'motivo' => 'antes', 'mensagem' => $config['mensagem_antes'] ?? 'As inscrições ainda não foram abertas.', 'lista_reserva' => false];
         }
 
         if (! empty($config['fechamento']) && $agora->gt($config['fechamento'])) {
-            return ['aberto' => false, 'motivo' => 'fechado', 'mensagem' => $config['mensagem_fechado'] ?? 'As inscrições estão encerradas.'];
+            return ['aberto' => false, 'motivo' => 'fechado', 'mensagem' => $config['mensagem_fechado'] ?? 'As inscrições estão encerradas.', 'lista_reserva' => false];
         }
 
         if ($atividade->vagasEsgotadas()) {
-            return ['aberto' => false, 'motivo' => 'esgotado', 'mensagem' => $atividade->mensagemVagasEsgotadas()];
+            return ['aberto' => false, 'motivo' => 'esgotado', 'mensagem' => $atividade->mensagemVagasEsgotadas(), 'lista_reserva' => false];
         }
 
-        return ['aberto' => true, 'motivo' => null, 'mensagem' => null];
+        return ['aberto' => true, 'motivo' => null, 'mensagem' => null, 'lista_reserva' => $atividade->aceitandoListaReserva()];
     }
 
     /**
@@ -339,7 +339,7 @@ class FormularioInscricaoService
      * Quando o visitante foi identificado por e-mail, o bloco "Seus dados" tambem e validado,
      * o cadastro em participantes e atualizado e a inscricao guarda a identificacao dele.
      *
-     * @return array{sucesso: bool, motivo: ?string, mensagem: string, inscricao_id: ?int}
+     * @return array{sucesso: bool, motivo: ?string, mensagem: string, inscricao_id: ?int, lista_reserva: bool}
      */
     public function inscrever(Request $request, Atividade $atividade, ?Participante $participante = null, ?string $emailIdentificado = null): array
     {
@@ -349,8 +349,10 @@ class FormularioInscricaoService
 
             $estado = $this->estado($atividade, $participante, $emailIdentificado);
             if (! $estado['aberto']) {
-                return ['sucesso' => false, 'motivo' => $estado['motivo'], 'mensagem' => (string) $estado['mensagem'], 'inscricao_id' => null];
+                return ['sucesso' => false, 'motivo' => $estado['motivo'], 'mensagem' => (string) $estado['mensagem'], 'inscricao_id' => null, 'lista_reserva' => false];
             }
+
+            $listaReserva = ! empty($estado['lista_reserva']);
 
             $this->normalizarCpfs($request, $atividade, $participante !== null);
 
@@ -359,12 +361,13 @@ class FormularioInscricaoService
             $sessao = null;
             if ($atividade->comSessoes()) {
                 $sessao = $atividade->sessoesAtivas()->whereKey((int) $validados['sessao_atividade_id'])->lockForUpdate()->firstOrFail();
-                if ($sessao->limite_vagas !== null && $sessao->inscricoes()->count() >= $sessao->limite_vagas) {
+                if (! $listaReserva && $sessao->limite_vagas !== null
+                    && $sessao->inscricoes()->where('lista_reserva', false)->count() >= $sessao->limite_vagas) {
                     throw \Illuminate\Validation\ValidationException::withMessages(['sessao_atividade_id' => 'Não há mais vagas disponíveis nesta sessão.']);
                 }
             }
             $resposta = Arr::except($validados, ['participante', 'sessao_atividade_id']);
-            $this->distribuicao->conferirDisponibilidade($atividade, $resposta);
+            if (! $listaReserva) $this->distribuicao->conferirDisponibilidade($atividade, $resposta);
 
             // Guarda apenas os arquivos de campos declarados no formulario; qualquer outro upload e descartado.
             // Disco privado: anexos de inscricao so saem por rota assinada, nunca por URL direta.
@@ -385,13 +388,14 @@ class FormularioInscricaoService
                     'sessao_atividade_id' => $sessao?->id,
                     'participante_id' => $participante?->id,
                     'participante_email' => $participante ? ($emailIdentificado ?: $participante->email) : null,
+                    'lista_reserva' => $listaReserva,
                     'resposta' => $resposta,
                     'codigo_qr' => ! empty($atividade->formulario['registrar_presenca_qrcode']) ? $this->presencaQr->novoCodigo() : null,
                     ...$this->dispositivo->capturar($request),
                 ]);
             } catch (UniqueConstraintViolationException) {
                 // Dois envios ao mesmo tempo: o índice único decide qual entra.
-                return ['sucesso' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito(), 'inscricao_id' => null];
+                return ['sucesso' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito(), 'inscricao_id' => null, 'lista_reserva' => false];
             }
 
             $this->distribuicao->recalcular($atividade->refresh());
@@ -401,6 +405,7 @@ class FormularioInscricaoService
                 'motivo' => null,
                 'mensagem' => $atividade->formulario['mensagem_sucesso'] ?? 'Inscrição realizada com sucesso.',
                 'inscricao_id' => $inscricao->id,
+                'lista_reserva' => $listaReserva,
             ];
         });
     }

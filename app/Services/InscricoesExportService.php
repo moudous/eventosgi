@@ -21,6 +21,7 @@ class InscricoesExportService
         $principais = [
             ['id', 'ID'], ['data_inscricao', 'Data da inscrição'], ['participante', 'Participante'],
             ['participante_id', 'ID do participante'], ['email', 'E-mail identificado'],
+            ['lista_reserva', 'Tipo da inscrição'],
             ['sessao_atividade', 'Sessão da atividade'],
             ['presenca', 'Presença'], ['data_presenca', 'Data da presença'],
             ['presenca_validada_por', 'Presença validada pelo usuário GI'],
@@ -63,6 +64,7 @@ class InscricoesExportService
                 'participante' => (string) $participantes->get($inscricao->participante_id, ''),
                 'participante_id' => $inscricao->participante_id ? (string) $inscricao->participante_id : '',
                 'email' => (string) ($inscricao->participante_email ?? ''),
+                'lista_reserva' => $inscricao->lista_reserva ? 'Além do limite' : 'Vaga regular',
                 'sessao_atividade' => $inscricao->sessao?->rotuloPublico() ?? '',
                 'presenca' => $inscricao->presente ? 'Presente' : 'Não',
                 'data_presenca' => $inscricao->data_presenca?->format('d/m/Y H:i:s') ?? '',
