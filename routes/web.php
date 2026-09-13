@@ -210,6 +210,10 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
 
 // Endereço permanente por hash. A disponibilidade segue as datas do formulário.
 Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'previewRedirect'])->whereNumber('atividade')->name('inscricoes.legado');
+Route::get('/a/{atividade:url}', [AtividadeController::class, 'inscricaoPublica'])
+    ->where('atividade', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('inscricoes.publica.amigavel');
+Route::post('/a/{atividade:url}', [AtividadeController::class, 'inscrever'])
+    ->where('atividade', '[a-z0-9]+(?:-[a-z0-9]+)*')->name('inscricoes.publica.amigavel.enviar');
 Route::get('/formularios/{atividade:hash_publica}', [AtividadeController::class, 'inscricaoPublica'])->name('inscricoes.publica');
 Route::post('/formularios/{atividade:hash_publica}', [AtividadeController::class, 'inscrever'])->name('inscricoes.publica.enviar');
 Route::get('/formularios/{atividade:hash_publica}/captcha', CaptchaInscricaoController::class)->name('inscricoes.captcha');

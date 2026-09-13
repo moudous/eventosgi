@@ -105,7 +105,23 @@ class AtividadeController
     public function formulario(Atividade $atividade, GiPermissionService $permissoes, DistribuicaoVagasService $distribuicao): View { $distribuicao->recalcular($atividade); return view('atividades.formulario', ['atividade' => $atividade->refresh(), 'permissoes' => $permissoes]); }
     public function salvarFormulario(Request $request, Atividade $atividade, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao, PresencaQrService $presencaQr): RedirectResponse
     {
-        $dados = $request->validate(['formulario' => ['required', 'json']]);
+        $request->merge([
+            'url' => $request->boolean('usar_url') ? Str::slug((string) $request->input('url')) : null,
+        ]);
+        $dados = $request->validate([
+            'formulario' => ['required', 'json'],
+            'usar_url' => ['required', 'boolean'],
+            'url' => [
+                'nullable', 'required_if:usar_url,1', 'string', 'max:180',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                \Illuminate\Validation\Rule::unique('atividades', 'url')->ignore($atividade->id),
+            ],
+        ], [
+            'url.required_if' => 'Informe a URL que será usada para esta atividade.',
+            'url.regex' => 'A URL deve conter somente letras minúsculas, números e hífens.',
+            'url.unique' => 'Esta URL já está sendo usada por outra atividade.',
+        ]);
+        $url = $request->boolean('usar_url') ? $dados['url'] : null;
         $config = $distribuicao->prepararConfiguracao(json_decode($dados['formulario'], true));
         $validator = validator(['config' => $config], [
             'config' => ['required', 'array'],
@@ -153,7 +169,10 @@ class AtividadeController
         $config['registrar_presenca_qrcode'] = ! empty($config['registrar_presenca_qrcode']);
         $config['editor']['exibir'] = (bool) ($config['editor']['exibir'] ?? false);
         $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');
-        $distribuicao->recalcular($atividade, $config);
+        DB::transaction(function () use ($atividade, $url, $distribuicao, $config): void {
+            $atividade->update(['url' => $url]);
+            $distribuicao->recalcular($atividade, $config);
+        });
         $presencaQr->garantirCodigos($atividade->refresh());
         $editor->sincronizarImagens($atividade, $config['editor']['conteudo']);
         return redirect()->route('atividades.formulario', $atividade)->with('status', 'Formulário salvo com sucesso.');
@@ -239,7 +258,7 @@ class AtividadeController
 
     public function previewRedirect(Atividade $atividade): RedirectResponse
     {
-        return redirect()->to(route('inscricoes.publica', ['atividade' => $atividade->hash_publica]));
+        return redirect()->to($atividade->urlPublica());
     }
 
     /**
@@ -248,7 +267,7 @@ class AtividadeController
     public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, CaptchaInscricaoService $captcha): RedirectResponse
     {
         abort_unless($atividade->formulario, 404);
-        if ($request->routeIs('inscricoes.publica.enviar')) abort_unless($atividade->ativo, 404);
+        if ($request->routeIs('inscricoes.publica.enviar', 'inscricoes.publica.amigavel.enviar')) abort_unless($atividade->ativo, 404);
 
         return match ((string) $request->input('acao')) {
             'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $captcha),
@@ -572,15 +591,20 @@ class AtividadeController
             'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; media-src 'self'; object-src 'self'; style-src 'unsafe-inline'; sandbox",
         ], ($modo === 'baixar' || ! $podeExibir) ? 'attachment' : 'inline');
     }
-    public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica])]); }
+    public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => $atividade->urlPublica()]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
         $campos = ['tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $imagemAnterior = $atividade->estiloImagem()['imagem'];
         $antes = $atividade->only($campos); $dados = $this->validar($request, $atividade); $sessoes = $dados['sessoes'] ?? []; unset($dados['sessoes']);
         DB::transaction(function () use ($atividade, $dados, $sessoes): void {
             $atividade->update($dados);
             $this->sincronizarSessoes($atividade, $sessoes);
         });
+        $imagemAtual = $atividade->fresh()->estiloImagem()['imagem'];
+        if ($imagemAnterior && $imagemAnterior !== $imagemAtual && preg_match('/^[a-f0-9-]{36}\.(?:jpe?g|png|webp)$/i', $imagemAnterior)) {
+            File::delete(storage_path('app/public/personalizacao/'.$imagemAnterior));
+        }
         $mudancas = $historico->alteracoes($antes, $atividade->only($campos));
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade atualizada com sucesso.');
@@ -651,6 +675,7 @@ class AtividadeController
             'personalizacao.alterar_cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'boolean'],
             'personalizacao.cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'remover_imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
         ]);
 
         if ($dados['tipo'] === 'somente_inscricao') {
@@ -669,14 +694,16 @@ class AtividadeController
 
         $dados['personalizacao']['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao']['alterar_cor_fundo_pagina'];
         $dados['personalizacao']['cor_fundo_pagina'] = strtolower($dados['personalizacao']['cor_fundo_pagina']);
-        $dados['personalizacao']['imagem'] = $atividade?->estiloImagem()['imagem'];
+        $dados['personalizacao']['imagem'] = $request->boolean('remover_imagem_atividade')
+            ? null
+            : $atividade?->estiloImagem()['imagem'];
         if ($arquivo = $request->file('imagem_atividade')) {
             $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();
             \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('app/public/personalizacao'));
             $arquivo->move(storage_path('app/public/personalizacao'), $nome);
             $dados['personalizacao']['imagem'] = $nome;
         }
-        unset($dados['imagem_atividade']);
+        unset($dados['imagem_atividade'], $dados['remover_imagem_atividade']);
 
         return $dados;
     }

@@ -27,10 +27,16 @@
                 <div class="row g-3">
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="imagem_atividade">Imagem</label>
+                        <input type="hidden" name="remover_imagem_atividade" value="0" data-remover-imagem-atividade>
                         <input class="form-control @error('imagem_atividade') is-invalid @enderror" type="file" id="imagem_atividade" name="imagem_atividade" accept="image/jpeg,image/png,image/webp" data-imagem-atividade>
                         @error('imagem_atividade')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        <div class="form-text">JPG, PNG ou WebP, até 8 MB.</div>
-                        @if($imagemAtividade)<a class="small" href="{{ route('eventos.personalizacao.imagem', ['arquivo' => $imagemAtividade]) }}" target="_blank" rel="noopener">Abrir imagem salva</a>@endif
+                        <div class="form-text" data-imagem-status>JPG, PNG ou WebP, até 8 MB. Após escolher, arraste sobre a imagem para definir o recorte.</div>
+                        <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
+                            @if($imagemAtividade)<a class="small" href="{{ route('eventos.personalizacao.imagem', ['arquivo' => $imagemAtividade]) }}" target="_blank" rel="noopener" data-imagem-salva-link>Abrir imagem salva</a>@endif
+                            <button type="button" class="btn btn-sm btn-outline-danger {{ $imagemAtividade ? '' : 'd-none' }}" data-remover-imagem>
+                                <i class="bi bi-trash me-1"></i>Remover imagem
+                            </button>
+                        </div>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label" for="imagem_posicao">Posição da imagem</label>
@@ -64,6 +70,27 @@
                         <div data-preview-texto><strong class="d-block">Nome da atividade</strong><span class="small">Evento · Início · Fim</span></div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="recorteImagemAtividade" tabindex="-1" aria-labelledby="recorteImagemAtividadeTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title fs-5" id="recorteImagemAtividadeTitulo">Recortar imagem da atividade</h2>
+                    <p class="small text-muted mb-0">Clique e arraste sobre a imagem para marcar a área que será enviada.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body text-center bg-body-tertiary">
+                <canvas class="mw-100 bg-dark rounded shadow-sm" style="height:auto;cursor:crosshair;touch-action:none" data-recorte-canvas aria-label="Selecione a área de corte arrastando sobre a imagem"></canvas>
+                <div class="small text-muted mt-2" data-recorte-status>Arraste sobre a imagem para selecionar o recorte.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" data-aplicar-recorte disabled><i class="bi bi-crop me-1"></i>Usar área selecionada</button>
             </div>
         </div>
     </div>

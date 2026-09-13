@@ -11,7 +11,7 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
+    protected $fillable = ['tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao', 'url'];
     protected $casts = [
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
@@ -58,6 +58,15 @@ class Atividade extends Model
         }
 
         return $this->evento?->corFundoPagina('atividade') ?? Evento::COR_FUNDO_PAGINA_ATIVIDADE;
+    }
+
+    public function urlPublica(): string
+    {
+        if ($this->url) {
+            return route('inscricoes.publica.amigavel', ['atividade' => $this->url]);
+        }
+
+        return route('inscricoes.publica', ['atividade' => $this->hash_publica]);
     }
 
     public function inscricoes(): \Illuminate\Database\Eloquent\Relations\HasMany

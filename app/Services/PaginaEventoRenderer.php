@@ -97,7 +97,7 @@ class PaginaEventoRenderer
                     'vagas_restantes' => $sessao->vagasRestantes(),
                 ])->all(),
                 // Página pública de inscrição da atividade, para o template linkar direto.
-                'url_inscricao' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica]),
+                'url_inscricao' => $atividade->urlPublica(),
                 // Pronto para o shortcode do WordPress apontar o formulario da atividade.
                 'shortcode' => '[eventosgi_formulario id="'.$atividade->id.'"]',
             ])->all(),
