@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Código temporário global enviado por e-mail para identificar o visitante.
+ * Senha temporária global enviada por e-mail para identificar o visitante.
  */
 class CodigoInscricao extends Model
 {

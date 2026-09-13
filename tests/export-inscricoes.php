@@ -60,6 +60,7 @@ $atividade = (new Atividade)->forceFill([
     'formulario' => ['campos' => [[
         'nome' => 'disponibilidade',
         'label' => 'Declaro ter disponibilidade para participar das reuniões',
+        'texto_opcao' => 'Tenho disponibilidade',
         'tipo' => 'checkbox',
         'opcoes' => [],
     ]]],
@@ -73,8 +74,8 @@ if (! $disponiveis['resposta:disponibilidade']['marcado'] || $disponiveis['codig
 }
 
 $csv = $servico->download($atividade, 'csv', ['id', 'resposta:disponibilidade'])->getContent();
-if (! str_contains($csv, 'Declaro ter disponibilidade para participar das reuniões') || ! str_contains($csv, 'Sim')) {
-    throw new RuntimeException('O checkbox marcado não foi exportado como Sim.');
+if (! str_contains($csv, 'Declaro ter disponibilidade para participar das reuniões') || ! str_contains($csv, 'Tenho disponibilidade')) {
+    throw new RuntimeException('O checkbox marcado não foi exportado com o texto da opção única.');
 }
 if (str_contains($csv, 'Código QR') || str_contains($csv, 'EVGI-TESTE') || str_contains($csv, '127.0.0.1') || str_contains($csv, 'segredo')) {
     throw new RuntimeException('A exportação incluiu campos técnicos que não foram selecionados.');

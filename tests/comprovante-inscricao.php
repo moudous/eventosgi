@@ -23,7 +23,7 @@ $atividade = new Atividade([
             ['nome' => 'turno', 'label' => 'Turno', 'opcoes' => [['valor' => 'M', 'texto' => 'Manhã']]],
             ['nome' => 'observacao', 'label' => 'Observação'],
             ['nome' => 'arquivo', 'label' => 'Documento', 'tipo' => 'file'],
-            ['nome' => 'declaracao', 'label' => 'Declaração', 'tipo' => 'checkbox', 'opcoes' => []],
+            ['nome' => 'declaracao', 'label' => 'Declaração', 'texto_opcao' => 'Aceito a declaração', 'tipo' => 'checkbox', 'opcoes' => []],
         ],
     ],
 ]);
@@ -31,14 +31,16 @@ $inscricao = new InscricaoAtividade([
     'participante_email' => 'pessoa@example.com',
     'resposta' => ['turno' => 'M', 'observacao' => '', 'arquivo' => ['inscricoes/documento.pdf'], 'declaracao' => '1'],
 ]);
+$inscricao->id = 123;
+$inscricao->exists = true;
 $inscricao->setRelation('atividade', $atividade);
 $servico = new ComprovanteInscricaoService;
 $respostas = $servico->respostas($inscricao);
 
 conferirComprovante($respostas[0]['valor'] === 'Manhã', 'O comprovante deve exibir o texto correspondente ao valor do combo.');
 conferirComprovante($respostas[1]['valor'] === 'Não informado', 'Respostas vazias devem ser apresentadas claramente.');
-conferirComprovante($respostas[2]['valor'] === 'Arquivo enviado: documento.pdf', 'Caminhos privados não podem aparecer no comprovante.');
-conferirComprovante($respostas[3]['valor'] === 'Sim', 'Checkbox de declaração única deve aparecer como Sim no comprovante.');
+conferirComprovante($respostas[2]['valor'] === 'documento.pdf', 'Caminhos privados não podem aparecer no comprovante.');
+conferirComprovante($respostas[3]['valor'] === 'Aceito a declaração', 'Checkbox de opção única deve usar seu texto no comprovante.');
 conferirComprovante(strlen((new InscricaoAtividade)->forceFill([])->comprovante_hash ?? '') === 0, 'A hash deve ser criada apenas ao gravar a inscrição.');
 
 // Um comprovante com bastante conteúdo deve continuar cabendo em uma página A4,

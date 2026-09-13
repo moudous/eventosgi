@@ -35,7 +35,7 @@
     <h3 class="h6 fw-bold">Dados disponíveis</h3>
     <div class="row g-3 small text-muted">
         <div class="col-md-6"><code>evento</code> — id, nome, ativo, criado_em</div>
-        <div class="col-md-6"><code>atividades</code> — id, nome, modalidade, data_inicio, data_fim, data_inicio_iso, data_fim_iso, categoria, shortcode</div>
+        <div class="col-md-6"><code>atividades</code> — id, nome, formato, modalidade, datas, categoria, shortcode e sessões (nome, datas, cota e vagas restantes)</div>
         <div class="col-md-6"><code>categorias</code> — id, nome</div>
         <div class="col-md-6"><code>convidados</code> — id, nome, titulacao, descricao, curriculo, local, email, redes_sociais</div>
         <div class="col-md-6"><code>eventos</code> — id, nome (todos os eventos ativos)</div>

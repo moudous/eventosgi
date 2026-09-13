@@ -23,7 +23,7 @@ class PresencaController
         ], ['codigo_qr.required' => 'Leia o QR Code ou informe o código da inscrição.']);
 
         $codigo = mb_strtoupper(trim($dados['codigo_qr']));
-        $inscricao = InscricaoAtividade::query()->with(['atividade.evento'])
+        $inscricao = InscricaoAtividade::query()->with(['atividade.evento', 'sessao'])
             ->where('codigo_qr', $codigo)->first();
 
         if (! $inscricao || empty($inscricao->atividade?->formulario['registrar_presenca_qrcode'])) {
@@ -43,7 +43,7 @@ class PresencaController
             'codigo_qr' => ['required', 'string', 'max:64'],
             'decisao' => ['required', 'in:validar,cancelar'],
         ]);
-        $inscricao = InscricaoAtividade::query()->with(['atividade.evento'])
+        $inscricao = InscricaoAtividade::query()->with(['atividade.evento', 'sessao'])
             ->where('codigo_qr', mb_strtoupper(trim($dados['codigo_qr'])))->firstOrFail();
 
         if ($dados['decisao'] === 'cancelar') {
@@ -94,6 +94,7 @@ class PresencaController
             'email' => $inscricao->participante_email ?: $participante?->email,
             'cpf' => $participante?->cpf,
             'atividade' => $inscricao->atividade->nome,
+            'sessao_atividade' => $inscricao->sessao?->rotuloPublico(),
             'evento' => $inscricao->atividade->evento?->nome,
             'data_inscricao' => $inscricao->created_at?->format('d/m/Y H:i:s'),
             'data_presenca' => $inscricao->data_presenca?->format('d/m/Y H:i:s'),

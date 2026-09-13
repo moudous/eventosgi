@@ -17,8 +17,9 @@ use Throwable;
 /**
  * Identifica o visitante por e-mail antes de liberar o formulario da atividade.
  *
- * Fluxo: o visitante informa o e-mail, recebe um código global temporário e o digita.
- * Com o codigo conferido, o cadastro em participantes e resolvido (encontrado,
+ * Fluxo: o visitante informa o e-mail e entra com sua senha permanente ou recebe uma
+ * senha temporária global. Com a credencial conferida, o cadastro em participantes é
+ * resolvido (encontrado,
  * unificado quando ha duplicidade, ou criado) e fica gravado na sessao.
  */
 class IdentificacaoParticipanteService
@@ -36,7 +37,7 @@ class IdentificacaoParticipanteService
     /** Validade do link de definição da senha global. */
     public const MINUTOS_VALIDADE_LINK_SENHA = 15;
 
-    /** Tentativas de digitacao aceitas antes de o codigo ser invalidado. */
+    /** Tentativas aceitas antes de a senha temporária ser invalidada. */
     public const MAX_TENTATIVAS = 5;
 
     /** Validade do token entregue a consumidores externos apos a conferencia do codigo. */
@@ -63,7 +64,7 @@ class IdentificacaoParticipanteService
     }
 
     /**
-     * Gera e envia um novo código global, invalidando os anteriores do mesmo e-mail.
+     * Gera e envia uma nova senha temporária global, invalidando as anteriores do mesmo e-mail.
      *
      * @return array{email: string, expira_em: \Illuminate\Support\Carbon}
      */
@@ -75,12 +76,10 @@ class IdentificacaoParticipanteService
         // ficam em LimiteEnvioCodigoService, que contabiliza o pedido ao aprova-lo.
         if (! $ignorarLimites) $this->limites->conferir($request, $atividade, $email);
 
-        $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $codigo = $this->gerarSenhaTemporaria();
         $expiraEm = now()->addMinutes(self::MINUTOS_VALIDADE);
-        $expiraSenhaEm = now()->addMinutes(self::MINUTOS_VALIDADE_LINK_SENHA);
-        $tokenRedefinicao = Str::random(64);
 
-        $registro = DB::transaction(function () use ($email, $codigo, $expiraEm, $expiraSenhaEm, $tokenRedefinicao, $request): CodigoInscricao {
+        $registro = DB::transaction(function () use ($email, $codigo, $expiraEm, $request): CodigoInscricao {
             CodigoInscricao::query()->where('email', $email)->where('expira_em', '>', now())
                 ->update(['expira_em' => now()->subSecond(), 'redefinicao_expira_em' => now()->subSecond()]);
 
@@ -88,8 +87,6 @@ class IdentificacaoParticipanteService
                 'email' => $email,
                 'codigo_hash' => hash('sha256', $codigo),
                 'expira_em' => $expiraEm,
-                'redefinicao_token_hash' => hash('sha256', $tokenRedefinicao),
-                'redefinicao_expira_em' => $expiraSenhaEm,
                 'ip' => $request->ip(),
             ]);
         });
@@ -98,8 +95,8 @@ class IdentificacaoParticipanteService
             $this->email->enviar(
                 $email,
                 null,
-                'Código de inscrição — '.$atividade->nome,
-                $this->conteudo($atividade, $codigo, $tokenRedefinicao),
+                'Senha temporária — '.$atividade->nome,
+                $this->conteudo($atividade, $codigo),
                 "eventosgi-codigo-{$registro->id}",
             );
         } catch (Throwable $excecao) {
@@ -113,7 +110,7 @@ class IdentificacaoParticipanteService
             throw ValidationException::withMessages([
                 'email' => $excecao instanceof GiEmailNaoConfiguradoException
                     ? 'O envio de e-mails ainda não foi configurado nesta aplicação. Avise o organizador do evento.'
-                    : 'Não foi possível enviar o código para este e-mail agora. Tente novamente em alguns instantes.',
+                    : 'Não foi possível enviar a senha temporária para este e-mail agora. Tente novamente em alguns instantes.',
             ])->errorBag('identificacao');
         }
 
@@ -159,7 +156,7 @@ class IdentificacaoParticipanteService
         ];
     }
 
-    /** Identifica com a senha global definida pelo link recebido por e-mail. */
+    /** Identifica com a senha permanente ou com a senha temporária recebida por e-mail. */
     public function validarSenha(Request $request, Atividade $atividade, string $email, string $senha): array
     {
         $email = mb_strtolower(trim($email));
@@ -170,17 +167,26 @@ class IdentificacaoParticipanteService
             ])->errorBag('identificacao');
         }
         $credencial = CredencialParticipante::query()->where('email', $email)->first();
+        $temporaria = false;
+        $registroTemporario = null;
+
         if (! $credencial || ! Hash::check($senha, $credencial->senha)) {
-            RateLimiter::hit($chaveLimite, 60);
-            throw ValidationException::withMessages([
-                'senha' => 'E-mail ou senha inválidos.',
-            ])->errorBag('identificacao');
+            try {
+                $registroTemporario = $this->conferirCodigo($atividade, $email, $senha);
+                $temporaria = true;
+            } catch (ValidationException) {
+                RateLimiter::hit($chaveLimite, 60);
+                throw ValidationException::withMessages([
+                    'senha' => 'E-mail ou senha inválidos.',
+                ])->errorBag('identificacao');
+            }
         }
+
         RateLimiter::clear($chaveLimite);
 
         $resolucao = $this->resolverParticipante($email);
         $participante = $resolucao['participante'];
-        if ((int) $credencial->participante_id !== (int) $participante->id) {
+        if ($credencial && (int) $credencial->participante_id !== (int) $participante->id) {
             $credencial->update(['participante_id' => (int) $participante->id]);
         }
         $request->session()->regenerate();
@@ -188,6 +194,7 @@ class IdentificacaoParticipanteService
             'participante_id' => (int) $participante->id,
             'nome' => (string) $participante->nome,
             'email' => $email,
+            'codigo_id' => $registroTemporario?->id,
             'validado_em' => now()->toIso8601String(),
             'ultimo_acesso' => now()->timestamp,
         ]);
@@ -198,7 +205,29 @@ class IdentificacaoParticipanteService
             'email' => $email,
             'criado' => $resolucao['criado'],
             'unificados' => $resolucao['unificados'],
+            'temporaria' => $temporaria,
         ];
+    }
+
+    /** Define a senha permanente para o participante já identificado nesta sessão. */
+    public function definirSenhaDaSessao(Request $request, Atividade $atividade, string $senha): void
+    {
+        $sessao = $this->daSessao($request, $atividade);
+        if (! $sessao) abort(403, 'Sua identificação expirou. Entre novamente.');
+
+        $email = mb_strtolower(trim((string) $sessao['email']));
+        $credencial = CredencialParticipante::query()->where('email', $email)->first();
+        $dados = [
+            'participante_id' => (int) $sessao['participante_id'],
+            'senha' => Hash::make($senha),
+        ];
+
+        if ($credencial) {
+            $dados['credencial_versao'] = $credencial->credencial_versao + 1;
+            $credencial->update($dados);
+        } else {
+            CredencialParticipante::create($dados + ['email' => $email]);
+        }
     }
 
     /**
@@ -207,7 +236,7 @@ class IdentificacaoParticipanteService
     public function conferirCodigo(Atividade $atividade, string $email, string $codigo): CodigoInscricao
     {
         $email = mb_strtolower(trim($email));
-        $codigo = preg_replace('/\D/', '', $codigo) ?? '';
+        $codigo = mb_strtoupper(trim($codigo));
 
         // Sem transacao: as tentativas erradas precisam ficar gravadas, e a corrida por
         // consumir o mesmo codigo duas vezes e resolvida pelo UPDATE condicional abaixo.
@@ -217,7 +246,7 @@ class IdentificacaoParticipanteService
 
         if (! $registro) {
             throw ValidationException::withMessages([
-                'codigo' => 'O código expirou ou ainda não foi enviado para este e-mail. Peça um novo código.',
+                'codigo' => 'A senha temporária expirou ou ainda não foi enviada para este e-mail. Peça uma nova senha.',
             ])->errorBag('identificacao');
         }
 
@@ -225,7 +254,7 @@ class IdentificacaoParticipanteService
             $registro->update(['expira_em' => now()->subSecond()]);
 
             throw ValidationException::withMessages([
-                'codigo' => 'O código foi digitado incorretamente muitas vezes. Peça um novo código.',
+                'codigo' => 'A senha temporária foi digitada incorretamente muitas vezes. Peça uma nova senha.',
             ])->errorBag('identificacao');
         }
 
@@ -233,7 +262,7 @@ class IdentificacaoParticipanteService
             $registro->increment('tentativas');
 
             throw ValidationException::withMessages([
-                'codigo' => 'Código inválido. Restam '.max(0, self::MAX_TENTATIVAS - $registro->tentativas).' tentativas.',
+                'codigo' => 'Senha temporária inválida. Restam '.max(0, self::MAX_TENTATIVAS - $registro->tentativas).' tentativas.',
             ])->errorBag('identificacao');
         }
 
@@ -412,19 +441,32 @@ class IdentificacaoParticipanteService
         return $nome === '' ? 'Participante' : mb_substr(mb_convert_case($nome, MB_CASE_TITLE, 'UTF-8'), 0, 100);
     }
 
-    private function conteudo(Atividade $atividade, string $codigo, string $tokenRedefinicao): string
+    /** Garante letras e números e evita caracteres fáceis de confundir visualmente. */
+    private function gerarSenhaTemporaria(): string
     {
-        $urlSenha = route('senha-participante.editar', ['token' => $tokenRedefinicao]);
+        $letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $numeros = '23456789';
+        $caracteres = [];
+
+        for ($i = 0; $i < 4; $i++) $caracteres[] = $letras[random_int(0, strlen($letras) - 1)];
+        for ($i = 0; $i < 4; $i++) $caracteres[] = $numeros[random_int(0, strlen($numeros) - 1)];
+        for ($i = count($caracteres) - 1; $i > 0; $i--) {
+            $j = random_int(0, $i);
+            [$caracteres[$i], $caracteres[$j]] = [$caracteres[$j], $caracteres[$i]];
+        }
+
+        return implode('', $caracteres);
+    }
+
+    private function conteudo(Atividade $atividade, string $codigo): string
+    {
         return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#22303f;line-height:1.6">'
             .'<p>Olá!</p>'
             .'<p>Recebemos um pedido de inscrição em <strong>'.e($atividade->nome).'</strong>.</p>'
-            .'<p>Use o código abaixo para continuar o preenchimento do formulário:</p>'
+            .'<p>Digite a senha temporária abaixo no campo <strong>Senha</strong> do formulário:</p>'
             .'<p style="font-size:30px;font-weight:bold;letter-spacing:8px;margin:24px 0">'.e($codigo).'</p>'
-            .'<p>O código vale por '.self::MINUTOS_VALIDADE.' minutos e pode ser usado em qualquer atividade ou evento durante esse período.</p>'
-            .'<p>Você também pode definir uma senha para suas próximas inscrições:</p>'
-            .'<p><a href="'.e($urlSenha).'" style="display:inline-block;padding:10px 16px;background:#0d6efd;color:#fff;text-decoration:none;border-radius:6px">Definir nova senha</a></p>'
-            .'<p style="color:#748096;font-size:13px">O link para definir a senha vale por '.self::MINUTOS_VALIDADE_LINK_SENHA.' minutos e funciona uma única vez.</p>'
-            .'<p style="color:#748096;font-size:13px">Se você não pediu este código, ignore esta mensagem.</p>'
+            .'<p>Ela contém letras e números e vale por '.self::MINUTOS_VALIDADE.' minutos. Depois de entrar, você poderá cadastrar uma nova senha permanente ou apenas continuar.</p>'
+            .'<p style="color:#748096;font-size:13px">Se você não pediu esta senha, ignore a mensagem.</p>'
             .'</div>';
     }
 }

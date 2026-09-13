@@ -31,7 +31,7 @@
 <div class="row g-4 mb-4">
     <div class="col-12">
         <div class="card content-card" id="inscricoes-categoria">
-            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Inscrições por categoria</h2>@include('partials.dashboard-exportar', ['titulo' => 'Inscrições por categoria'])</div>
+            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Inscrições por categoria</h2>@include('partials.dashboard-exportar', ['titulo' => 'Inscrições por categoria', 'card' => 'inscricoes-categoria', 'filtros' => $filtrosExportacao['inscricoes-categoria']])</div>
             <div class="card-body p-4">
                 <div class="row g-4">
                     <div class="col-12 col-lg-9">
@@ -76,7 +76,7 @@
 <div class="row g-4 mb-4">
     <div class="col-12 col-lg-6">
         <div class="card content-card h-100 dashboard-card-filtro" id="inscritos-opcao">
-            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Inscritos por opção</h2>@include('partials.dashboard-exportar', ['titulo' => 'Inscritos por opção'])</div>
+            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Inscritos por opção</h2>@include('partials.dashboard-exportar', ['titulo' => 'Inscritos por opção', 'card' => 'inscritos-opcao', 'filtros' => $filtrosExportacao['inscritos-opcao']])</div>
             <div class="card-body p-4">
                 <form method="GET" action="{{ route('dashboard') }}#inscritos-opcao" class="row g-3 mb-4">
                     <input type="hidden" name="dispositivo_evento" value="{{ $dispositivoEventoId }}">
@@ -115,7 +115,7 @@
     </div>
     <div class="col-12 col-lg-6">
         <div class="card content-card h-100 dashboard-card-filtro" id="evolucao-inscricoes">
-            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Evolução do Nº de inscrições</h2>@include('partials.dashboard-exportar', ['titulo' => 'Evolução do Nº de inscrições'])</div>
+            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Evolução do Nº de inscrições</h2>@include('partials.dashboard-exportar', ['titulo' => 'Evolução do Nº de inscrições', 'card' => 'evolucao-inscricoes', 'filtros' => $filtrosExportacao['evolucao-inscricoes']])</div>
             <div class="card-body p-4">
                 <form method="GET" action="{{ route('dashboard') }}#evolucao-inscricoes" class="row g-3 mb-4">
                     <input type="hidden" name="dispositivo_evento" value="{{ $dispositivoEventoId }}">
@@ -150,7 +150,7 @@
     </div>
     <div class="col-12">
         <div class="card content-card h-100 dashboard-card-filtro" id="inscricoes-dispositivo">
-            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Inscrições por dispositivo</h2>@include('partials.dashboard-exportar', ['titulo' => 'Inscrições por dispositivo'])</div>
+            <div class="card-header d-flex justify-content-between align-items-center gap-3"><h2 class="h5 fw-bold mb-0">Inscrições por dispositivo</h2>@include('partials.dashboard-exportar', ['titulo' => 'Inscrições por dispositivo', 'card' => 'inscricoes-dispositivo', 'filtros' => $filtrosExportacao['inscricoes-dispositivo']])</div>
             <div class="card-body p-4">
                 <form method="GET" action="{{ route('dashboard') }}#inscricoes-dispositivo" class="row g-3 mb-4">
                     <input type="hidden" name="evento" value="{{ $eventoId }}">
@@ -228,9 +228,6 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{{ asset('dashboard-filtros.js') }}?v=1"></script>
 <script src="{{ asset('vendor/dashboard-export/chart.umd.min.js') }}"></script>
-<script src="{{ asset('vendor/dashboard-export/html2canvas.min.js') }}"></script>
-<script src="{{ asset('vendor/dashboard-export/jspdf.umd.min.js') }}"></script>
-<script src="{{ asset('dashboard-export.js') }}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
     @if($totalDispositivo)

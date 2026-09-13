@@ -29,6 +29,8 @@
         $respostas = [];
         $anexos = [];
 
+        if ($inscricao->sessao) $respostas[] = ['label' => 'Sessão', 'valores' => [$inscricao->sessao->rotuloPublico()]];
+
         foreach ($nomes as $nome) {
             $campo = $campos->get($nome, []);
             $label = ($campo['label'] ?? '') ?: str_replace('_', ' ', $nome);
@@ -37,6 +39,7 @@
             $textos = [];
             $arquivos = [];
             $checkboxSimples = ($campo['tipo'] ?? '') === 'checkbox' && empty($campo['opcoes']);
+            $textoOpcaoUnica = trim((string) ($campo['texto_opcao'] ?? '')) ?: 'Sim';
 
             $posicao = 0;
             foreach ($valores as $item) {
@@ -55,7 +58,7 @@
                     $posicao++;
                 } else {
                     $textos[] = $checkboxSimples
-                        ? ((string) $item === '1' || $item === true ? 'Sim' : 'Não')
+                        ? ((string) $item === '1' || $item === true ? $textoOpcaoUnica : 'Não')
                         : (is_bool($item) ? ($item ? 'Sim' : 'Não') : (string) $item);
                 }
             }

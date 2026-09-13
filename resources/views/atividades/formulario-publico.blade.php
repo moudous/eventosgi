@@ -10,7 +10,10 @@
     $aberto = $estado['aberto'];
     $errosIdentificacao = $errors->identificacao;
     // Mantém o e-mail digitado entre um passo e outro da identificação.
-    $emailInformado = old('email', session('codigo_enviado', ''));
+    $emailInformado = old('email', session('senha_temporaria_enviada', ''));
+    $recuperacaoAberta = old('acao') === 'solicitar_codigo'
+        || $errosIdentificacao->has('captcha')
+        || session()->has('senha_temporaria_enviada');
 @endphp
 <div class="container py-4" style="max-width: 900px">
     <div class="mb-4 rounded-4 p-4 p-md-5" style="background: {{ $eventoVisual->fundoFormulario('atividade') }}; color: {{ $eventoVisual->estiloFormulario('atividade')['cor_fonte'] }};">
@@ -23,8 +26,12 @@
                 <p class="page-description" style="color: inherit;">{{ $config['subtitulo'] ?? '' }}</p>
                 <div class="small d-flex flex-wrap column-gap-4 row-gap-2">
                     <p class="mb-1"><strong>Evento:</strong> {{ $atividade->evento?->nome ?? 'Não informado' }}</p>
-                    <p class="mb-1"><strong>Início:</strong> {{ $atividade->data_inicio?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
-                    <p class="mb-0"><strong>Fim:</strong> {{ $atividade->data_fim?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
+                    @if($atividade->comSessoes())
+                        <p class="mb-0"><strong>Formato:</strong> escolha uma das sessões disponíveis abaixo</p>
+                    @else
+                        <p class="mb-1"><strong>Início:</strong> {{ $atividade->data_inicio?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
+                        <p class="mb-0"><strong>Fim:</strong> {{ $atividade->data_fim?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
+                    @endif
                 </div>
             </div>
         </div>
@@ -41,11 +48,16 @@
                 'disponiveis' => (int) ($config['limite_inscricoes'] ?? 0),
                 'restantes' => 0,
             ];
+            $inscricoesRealizadas = isset($totalInscricoes)
+                ? (int) $totalInscricoes
+                : (int) ($totalVagas['usadas'] ?? 0);
+            $vagasRestantesGerais = max(0, (int) $totalVagas['disponiveis'] - $inscricoesRealizadas);
         @endphp
-        <div class="d-flex justify-content-end mb-3"><span class="badge text-bg-light border fs-6" title="{{ $totalVagas['usadas'] }} vaga(s) utilizada(s) de {{ $totalVagas['disponiveis'] }}; restam {{ $totalVagas['restantes'] }}">@if(!empty($config['mostrar_vagas_restantes'])) Vagas: {{ $totalVagas['usadas'] }}/{{ $totalVagas['disponiveis'] }} @else Total de vagas: {{ $totalVagas['disponiveis'] }} @endif</span></div>
+        <div class="d-flex justify-content-end mb-3"><span class="badge text-bg-light border fs-6" title="{{ $inscricoesRealizadas }} inscrição(ões) realizada(s) de {{ $totalVagas['disponiveis'] }} vaga(s)">Vagas restantes: {{ $vagasRestantesGerais }}</span></div>
     @endif
 
     @if(session('status'))<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>{{ session('status') }}</div>@endif
+    @if(session('senha_temporaria_enviada'))<div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</div>@endif
     @if(session('vagas_esgotadas'))<div class="alert alert-warning">{{ session('vagas_esgotadas') }}</div>@endif
     @if(session('identificacao_expirada'))<div class="alert alert-warning">{{ session('identificacao_expirada') }}</div>@endif
     @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
@@ -58,6 +70,33 @@
                 <button class="btn btn-link btn-sm" type="submit">Entrar com outro e-mail</button>
             </form>
         </div>
+
+        @if(session('oferecer_nova_senha') || $errosIdentificacao->has('senha_nova'))
+            <div class="modal fade" id="novaSenhaAposEntradaModal" tabindex="-1" aria-labelledby="novaSenhaAposEntradaTitulo" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+                    <div class="modal-header"><h2 class="modal-title fs-5" id="novaSenhaAposEntradaTitulo">Deseja cadastrar uma nova senha?</h2></div>
+                    <div class="modal-body">
+                        <div id="escolhaNovaSenha" @class(['d-none' => $errosIdentificacao->has('senha_nova')])>
+                            <p class="mb-0">Você entrou com uma senha temporária. Pode cadastrar uma senha permanente agora ou continuar sem alterá-la.</p>
+                        </div>
+                        <form method="POST" action="{{ request()->fullUrl() }}" id="formNovaSenha" @class(['d-none' => ! $errosIdentificacao->has('senha_nova')])>
+                            @csrf
+                            <input type="hidden" name="acao" value="salvar_nova_senha">
+                            @if($errosIdentificacao->has('senha_nova'))<div class="alert alert-danger">{{ $errosIdentificacao->first('senha_nova') }}</div>@endif
+                            <div class="mb-3"><label class="form-label fw-semibold" for="senha_nova">Nova senha</label><input class="form-control @if($errosIdentificacao->has('senha_nova')) is-invalid @endif" type="password" id="senha_nova" name="senha_nova" minlength="8" required autocomplete="new-password"><div class="form-text">Use pelo menos 8 caracteres, com letras e números.</div></div>
+                            <div><label class="form-label fw-semibold" for="senha_nova_confirmation">Confirmar nova senha</label><input class="form-control" type="password" id="senha_nova_confirmation" name="senha_nova_confirmation" minlength="8" required autocomplete="new-password"></div>
+                        </form>
+                    </div>
+                    <div class="modal-footer" id="acoesEscolhaNovaSenha" @class(['d-none' => $errosIdentificacao->has('senha_nova')])>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Não, apenas entrar</button>
+                        <button type="button" class="btn btn-primary" id="exibirCadastroNovaSenha">Sim</button>
+                    </div>
+                    <div class="modal-footer @if(! $errosIdentificacao->has('senha_nova')) d-none @endif" id="acoesCadastroNovaSenha">
+                        <button type="submit" form="formNovaSenha" class="btn btn-primary"><i class="bi bi-key me-1"></i>Salvar a senha e entrar</button>
+                    </div>
+                </div></div>
+            </div>
+        @endif
     @endif
 
     @if(! $aberto)
@@ -121,10 +160,6 @@
                 @if(session('ja_inscrito'))
                     <div class="alert alert-warning"><i class="bi bi-person-check me-1"></i>{{ session('ja_inscrito') }}</div>
                 @endif
-                @if(session('codigo_enviado'))
-                    <div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>Enviamos o código para <strong>{{ session('codigo_enviado') }}</strong>. Ele vale por {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</div>
-                @endif
-
                 <form method="POST" action="{{ request()->fullUrl() }}">
                     @csrf
                     <div class="mb-3">
@@ -132,31 +167,27 @@
                         <input class="form-control @if($errosIdentificacao->has('email')) is-invalid @endif" type="email" id="email" name="email" maxlength="150" required autocomplete="email" placeholder="voce@exemplo.com" value="{{ $emailInformado }}">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="senha">Senha de inscrição</label>
+                        <label class="form-label" for="senha">Senha</label>
                         <div class="input-group senha-inscricao">
                             <input class="form-control @if($errosIdentificacao->has('senha')) is-invalid @endif" type="password" id="senha" name="senha" maxlength="200" autocomplete="current-password">
-                            <button class="btn btn-primary" type="submit" name="acao" value="validar_senha"><i class="bi bi-key me-1"></i>Entrar com senha</button>
+                            <button class="btn btn-primary" type="submit" name="acao" value="validar_senha"><i class="bi bi-key me-1"></i>Entrar</button>
                         </div>
                         @if($errosIdentificacao->has('senha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('senha') }}</div>@endif
                     </div>
-                    <div class="d-flex align-items-center gap-3 my-4"><hr class="flex-grow-1 m-0"><span class="text-muted small text-center">Esqueceu ou ainda não tem uma senha?</span><hr class="flex-grow-1 m-0"></div>
-                    <p class="text-muted small">Receba um código temporário por e-mail. A mensagem também terá um link para você definir uma senha.</p>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold" for="captcha">Digite o texto da imagem</label>
-                        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                            <img id="captchaImagem" src="{{ route('inscricoes.captcha', ['atividade' => $atividade->hash_publica]) }}" width="220" height="70" class="border rounded" alt="Imagem com seis caracteres para confirmação">
-                            <button class="btn btn-sm btn-outline-secondary" type="button" id="renovarCaptcha"><i class="bi bi-arrow-clockwise me-1"></i>Nova imagem</button>
+                    <button class="btn btn-link px-0 mb-3" type="button" id="alternarRecuperacaoSenha" aria-expanded="{{ $recuperacaoAberta ? 'true' : 'false' }}" aria-controls="recuperacaoSenha">Esqueceu a senha ou precisa de uma nova?</button>
+                    <div id="recuperacaoSenha" @class(['d-none' => ! $recuperacaoAberta])>
+                        <p class="text-muted small">Enviaremos uma senha temporária com letras e números. Digite-a no campo “Senha” acima em até {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</p>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="captcha">Digite o texto da imagem</label>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                <img id="captchaImagem" src="{{ route('inscricoes.captcha', ['atividade' => $atividade->hash_publica]) }}" width="220" height="70" class="border rounded" alt="Imagem com seis caracteres para confirmação">
+                                <button class="btn btn-sm btn-outline-secondary" type="button" id="renovarCaptcha"><i class="bi bi-arrow-clockwise me-1"></i>Nova imagem</button>
+                            </div>
+                            <input class="form-control @if($errosIdentificacao->has('captcha')) is-invalid @endif" style="max-width:220px;text-transform:uppercase;letter-spacing:.2em" type="text" id="captcha" name="captcha" maxlength="6" autocomplete="off" autocapitalize="characters">
+                            @if($errosIdentificacao->has('captcha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('captcha') }}</div>@endif
+                            @if(session('senha_temporaria_enviada'))<div class="alert alert-success mt-3 mb-0"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</div>@endif
                         </div>
-                        <input class="form-control @if($errosIdentificacao->has('captcha')) is-invalid @endif" style="max-width:220px;text-transform:uppercase;letter-spacing:.2em" type="text" id="captcha" name="captcha" maxlength="6" autocomplete="off" autocapitalize="characters">
-                        @if($errosIdentificacao->has('captcha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('captcha') }}</div>@endif
-                    </div>
-                    <button class="btn btn-outline-primary mb-3" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar código para o e-mail</button>
-                    <div class="mb-3">
-                        <label class="form-label" for="codigo">Código recebido</label>
-                        <div class="input-group">
-                            <input class="form-control @if($errosIdentificacao->has('codigo')) is-invalid @endif" type="text" id="codigo" name="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
-                            <button class="btn btn-outline-primary" type="submit" name="acao" value="validar_codigo"><i class="bi bi-check2 me-1"></i>Confirmar código</button>
-                        </div>
+                        <button class="btn btn-outline-primary mb-3" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar senha para o e-mail</button>
                     </div>
                 </form>
             </div>
@@ -227,6 +258,27 @@
             <div class="card content-card">
                 <div class="card-body p-4">
                     <div class="row g-3">
+                        @if($atividade->comSessoes())
+                            @php
+                                $sessoesPublicas = $atividade->sessoesAtivas()->withCount('inscricoes')->get();
+                            @endphp
+                            <div class="col-12">
+                                <div class="form-label fw-semibold">Sessão *</div>
+                                <div class="d-flex flex-column gap-2" role="radiogroup" aria-label="Sessão">
+                                    @foreach($sessoesPublicas as $sessaoAtividade)
+                                        @php
+                                            $restantesSessao = $sessaoAtividade->vagasRestantes();
+                                            $esgotadaSessao = $restantesSessao !== null && $restantesSessao < 1;
+                                        @endphp
+                                        <div class="form-check border rounded-3 p-3 ps-5">
+                                            <input class="form-check-input" type="radio" name="sessao_atividade_id" id="sessao_atividade_{{ $sessaoAtividade->id }}" value="{{ $sessaoAtividade->id }}" required @checked(!$esgotadaSessao && (int) old('sessao_atividade_id') === $sessaoAtividade->id) @disabled($esgotadaSessao)>
+                                            <label class="form-check-label w-100" for="sessao_atividade_{{ $sessaoAtividade->id }}"><span class="fw-semibold">{{ $sessaoAtividade->nome }}</span>@if($sessaoAtividade->data_inicio)<span class="d-block small text-muted">{{ $sessaoAtividade->data_inicio->format('d/m/Y H:i') }}@if($sessaoAtividade->data_fim) a {{ $sessaoAtividade->data_fim->format('d/m/Y H:i') }}@endif</span>@endif @if($restantesSessao !== null)<span class="d-block small {{ $esgotadaSessao ? 'text-danger' : 'text-muted' }}">{{ $esgotadaSessao ? 'Vagas esgotadas' : $restantesSessao.' vaga(s) restante(s)' }}</span>@endif</label>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                @error('sessao_atividade_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            </div>
+                        @endif
                         @foreach($config['campos'] ?? [] as $campo)
                             @php
                                 $nome = $campo['nome'];
@@ -240,7 +292,7 @@
                                 $reservaCheckbox = collect($config['distribuicao_vagas']['reservas_checkbox'] ?? [])->firstWhere('campo', $nome);
                             @endphp
                             <div class="col-12 col-md-{{ in_array((int) ($campo['grid'] ?? 6), [12, 6, 4]) ? (int) ($campo['grid'] ?? 6) : 6 }}">
-                                @if(in_array($tipo, ['radio', 'checkbox'], true) && ! $checkboxSimples)
+                                @if(in_array($tipo, ['radio', 'checkbox'], true))
                                     <div class="form-label">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</div>
                                 @else
                                     <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
@@ -265,7 +317,7 @@
                                         @endphp
                                         <div class="form-check pt-1">
                                             <input class="form-check-input" type="checkbox" id="campo_{{ $loop->index }}" name="{{ $nome }}" value="1" @checked(!$checkboxSimplesEsgotado && (string) $anterior === '1') @disabled($checkboxSimplesEsgotado) @if(!empty($campo['obrigatorio'])) required @endif>
-                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif @if($cotaCheckboxSimples)<span class="text-muted">— {{ $cotaCheckboxSimples['restantes'] }} vaga(s) restante(s)</span>@endif</label>
+                                            <label class="form-check-label" for="campo_{{ $loop->index }}">{{ trim((string) ($campo['texto_opcao'] ?? '')) ?: 'Sim' }} @if($cotaCheckboxSimples)<span class="text-muted">— {{ $cotaCheckboxSimples['restantes'] }} vaga(s) restante(s)</span>@endif</label>
                                             @if(!empty($campo['obrigatorio']))<div class="invalid-feedback">Marque esta declaração para continuar.</div>@endif
                                         </div>
                                     @else
@@ -377,6 +429,28 @@ document.getElementById('renovarCaptcha')?.addEventListener('click', () => {
     captchaImagem.src = @json(route('inscricoes.captcha', ['atividade' => $atividade->hash_publica])) + '?novo=1&t=' + Date.now();
     document.getElementById('captcha').value = '';
 });
+
+const recuperacaoSenha = document.getElementById('recuperacaoSenha');
+const alternarRecuperacaoSenha = document.getElementById('alternarRecuperacaoSenha');
+alternarRecuperacaoSenha?.addEventListener('click', () => {
+    const abrir = recuperacaoSenha.classList.contains('d-none');
+    recuperacaoSenha.classList.toggle('d-none', !abrir);
+    alternarRecuperacaoSenha.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (abrir) document.getElementById('captcha').focus();
+});
+
+const modalNovaSenhaElemento = document.getElementById('novaSenhaAposEntradaModal');
+if (modalNovaSenhaElemento) {
+    const modalNovaSenha = new bootstrap.Modal(modalNovaSenhaElemento, {backdrop: 'static', keyboard: false});
+    modalNovaSenha.show();
+    document.getElementById('exibirCadastroNovaSenha')?.addEventListener('click', () => {
+        document.getElementById('escolhaNovaSenha').classList.add('d-none');
+        document.getElementById('acoesEscolhaNovaSenha').classList.add('d-none');
+        document.getElementById('formNovaSenha').classList.remove('d-none');
+        document.getElementById('acoesCadastroNovaSenha').classList.remove('d-none');
+        document.getElementById('senha_nova').focus();
+    });
+}
 
 // Conferencia imediata no navegador. O servidor revalida tudo (App\Rules\Cpf e App\Rules\EmailValido),
 // entao aqui o objetivo e so evitar que o visitante envie e volte com erro.

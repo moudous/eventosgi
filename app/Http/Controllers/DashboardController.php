@@ -50,6 +50,13 @@ class DashboardController
         }
         $totalDispositivo = $inscricoesDispositivo->count();
 
+        $filtrosExportacao = [
+            'inscricoes-categoria' => [],
+            'inscritos-opcao' => ['evento' => $eventoId, 'atividade' => $atividadeId, 'campo' => $campo['nome'] ?? ''],
+            'evolucao-inscricoes' => ['evento' => $eventoId, 'atividade' => $atividadeId],
+            'inscricoes-dispositivo' => ['dispositivo_evento' => $dispositivoEventoId, 'dispositivo_atividade' => $dispositivoAtividadeId],
+        ];
+
         $categorias = \App\Models\Categoria::query()->orderBy('nome')->get(['id', 'nome']);
         $atividadesPorCategoria = Atividade::query()->selectRaw('categoria_id, COUNT(*) as total')
             ->groupBy('categoria_id')->pluck('total', 'categoria_id');
@@ -72,6 +79,7 @@ class DashboardController
 
         return view('dashboard', [
             'contagensCategorias' => $contagensCategorias,
+            'filtrosExportacao' => $filtrosExportacao,
             ...compact('dispositivoEventoId', 'dispositivoAtividades', 'dispositivoAtividadeId', 'dimensoesDispositivo', 'graficosDispositivo', 'totalDispositivo'),
             'indicadores' => [
                 ['rotulo' => 'Eventos', 'valor' => Evento::query()->count(), 'icone' => 'bi-calendar-event', 'cor' => 'primary'],

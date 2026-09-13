@@ -15,7 +15,7 @@ class ComprovanteInscricaoService
         $atividade = $inscricao->atividade;
         $respostas = $inscricao->resposta ?? [];
 
-        return array_values(array_map(function (array $campo) use ($respostas, $inscricao): array {
+        $itens = array_values(array_map(function (array $campo) use ($respostas, $inscricao): array {
             $nome = (string) ($campo['nome'] ?? '');
             $valor = $respostas[$nome] ?? null;
             $opcoes = collect($campo['opcoes'] ?? [])->mapWithKeys(function ($opcao): array {
@@ -25,11 +25,12 @@ class ComprovanteInscricaoService
             });
             $valores = is_array($valor) ? $valor : [$valor];
             $checkboxSimples = ($campo['tipo'] ?? '') === 'checkbox' && $opcoes->isEmpty();
-            $texto = collect($valores)->map(function ($item) use ($opcoes, $checkboxSimples): string {
+            $textoOpcaoUnica = trim((string) ($campo['texto_opcao'] ?? '')) ?: 'Sim';
+            $texto = collect($valores)->map(function ($item) use ($opcoes, $checkboxSimples, $textoOpcaoUnica): string {
                 if (is_string($item) && str_starts_with($item, FormularioInscricaoService::PASTA_ANEXOS.'/')) {
                     return $this->nomeDoArquivo($item);
                 }
-                if ($checkboxSimples && (string) $item === '1') return 'Sim';
+                if ($checkboxSimples && (string) $item === '1') return $textoOpcaoUnica;
                 return $opcoes->get((string) $item, is_scalar($item) ? (string) $item : '');
             })->filter(fn ($item) => $item !== '')->implode(', ');
 
@@ -68,6 +69,9 @@ class ComprovanteInscricaoService
 
             return $resultado;
         }, array_filter($atividade->formulario['campos'] ?? [], fn ($campo) => ! empty($campo['nome']))));
+
+        if ($inscricao->sessao) array_unshift($itens, ['label' => 'Sessão', 'valor' => $inscricao->sessao->rotuloPublico()]);
+        return $itens;
     }
 
     /** @return list<array{label: string, valor: string}> */

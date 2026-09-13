@@ -15,6 +15,15 @@ foreach (['Dashboard', 'Eventos', 'Atividades', 'Convidados', 'Trabalhos submeti
     }
 }
 
+foreach (['inscricoes-categoria', 'inscritos-opcao', 'evolucao-inscricoes', 'inscricoes-dispositivo'] as $card) {
+    foreach (['html', 'pdf', 'imagem'] as $formato) {
+        $caminho = "/dashboard/exportar/{$card}/{$formato}";
+        if (! str_contains($html, $caminho)) {
+            throw new RuntimeException("Link de exportação ausente: {$caminho}");
+        }
+    }
+}
+
 $atividadeCombo = App\Models\Atividade::query()->get(['id', 'evento_id', 'formulario'])->first(
     fn (App\Models\Atividade $atividade) => collect($atividade->formulario['campos'] ?? [])->contains(
         fn (array $campo) => ($campo['tipo'] ?? '') === 'select' && ! empty($campo['nome']) && ! empty($campo['opcoes']),
@@ -43,6 +52,49 @@ if ($atividadeCombo) {
         if ($soma !== $dados['grafico']['total'] || ! str_contains($html, 'graficoInscritos')) {
             throw new RuntimeException('Os dados do gráfico não representam todas as inscrições.');
         }
+    }
+}
+
+
+$dados = $view->getData();
+$exportacao = app(App\Services\DashboardExportService::class);
+foreach (['inscricoes-categoria', 'inscritos-opcao', 'evolucao-inscricoes', 'inscricoes-dispositivo'] as $card) {
+    $relatorio = $exportacao->relatorio($card, $dados);
+    $htmlExportado = view('dashboard-exportacao', ['relatorio' => $relatorio, 'pdf' => false])->render();
+    if (! str_contains($htmlExportado, $relatorio['titulo'])) {
+        throw new RuntimeException("HTML da exportação não renderizado: {$card}");
+    }
+}
+
+$imagem = $exportacao->png($exportacao->relatorio('inscricoes-categoria', $dados));
+if (! str_starts_with($imagem, "\x89PNG\r\n\x1a\n")) {
+    throw new RuntimeException('A exportação de imagem não gerou um PNG válido.');
+}
+
+$urlAssinada = Illuminate\Support\Facades\URL::temporarySignedRoute('dashboard.exportar', now()->addMinutes(5), [
+    'card' => 'inscricoes-categoria',
+    'formato' => 'pdf',
+]);
+if (! Illuminate\Support\Facades\URL::hasValidSignature(Illuminate\Http\Request::create($urlAssinada))) {
+    throw new RuntimeException('A URL temporária da exportação não possui assinatura válida.');
+}
+
+$controladorExportacao = new App\Http\Controllers\DashboardExportController;
+foreach ([
+    'html' => ['text/html', '<!doctype html>'],
+    'pdf' => ['application/pdf', '%PDF-'],
+    'imagem' => ['image/png', "\x89PNG\r\n\x1a\n"],
+] as $formato => [$tipo, $assinatura]) {
+    $resposta = $controladorExportacao->show(
+        Illuminate\Http\Request::create('/dashboard/exportacoes/inscricoes-categoria/'.$formato, 'GET'),
+        'inscricoes-categoria',
+        $formato,
+        $exportacao,
+    );
+    if (! str_starts_with((string) $resposta->headers->get('Content-Type'), $tipo)
+        || ! str_starts_with($resposta->getContent(), $assinatura)
+        || ! str_starts_with((string) $resposta->headers->get('Content-Disposition'), 'attachment;')) {
+        throw new RuntimeException("Resposta inválida na exportação {$formato}.");
     }
 }
 

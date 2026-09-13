@@ -64,7 +64,7 @@ class PaginaEventoRenderer
     public function contexto(Evento $evento): array
     {
         $atividades = Atividade::query()
-            ->with('categoria')
+            ->with(['categoria', 'sessoes' => fn ($query) => $query->where('ativo', true)->withCount('inscricoes')])
             ->where('evento_id', $evento->id)
             ->where('ativo', true)
             ->orderByRaw('data_inicio is null, data_inicio')->orderBy('nome')
@@ -80,6 +80,7 @@ class PaginaEventoRenderer
             'atividades' => $atividades->map(fn (Atividade $atividade) => [
                 'id' => $atividade->id,
                 'nome' => (string) $atividade->nome,
+                'formato' => $atividade->formato,
                 'modalidade' => $atividade->modalidade ? strtoupper($atividade->modalidade) : '',
                 'data_inicio' => $atividade->data_inicio?->format('d/m/Y H:i') ?? '',
                 'data_fim' => $atividade->data_fim?->format('d/m/Y H:i') ?? '',
@@ -87,6 +88,14 @@ class PaginaEventoRenderer
                 'data_fim_iso' => $atividade->data_fim?->toIso8601String() ?? '',
                 'categoria' => (string) ($atividade->categoria?->nome ?? ''),
                 'categoria_id' => (int) ($atividade->categoria_id ?? 0),
+                'sessoes' => $atividade->sessoes->map(fn ($sessao) => [
+                    'id' => $sessao->id,
+                    'nome' => $sessao->nome,
+                    'data_inicio' => $sessao->data_inicio?->format('d/m/Y H:i') ?? '',
+                    'data_fim' => $sessao->data_fim?->format('d/m/Y H:i') ?? '',
+                    'limite_vagas' => $sessao->limite_vagas,
+                    'vagas_restantes' => $sessao->vagasRestantes(),
+                ])->all(),
                 // Página pública de inscrição da atividade, para o template linkar direto.
                 'url_inscricao' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica]),
                 // Pronto para o shortcode do WordPress apontar o formulario da atividade.

@@ -36,6 +36,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rules\Password;
 use Throwable;
 
 class AtividadeController
@@ -46,27 +48,26 @@ class AtividadeController
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
         $apagados = $request->boolean('apagados');
-        $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with(['evento', 'criador:id,nome'])->withCount('inscricoes');
+        $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with('evento')->withCount('inscricoes');
         $total = (clone $query)->count();
         $filtroEvento = max(0, (int) $request->input('filtro_evento', 0));
         if ($filtroEvento > 0) $query->where('evento_id', $filtroEvento);
         $busca = trim((string) $request->input('search.value', ''));
-        if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%"))->orWhereHas('criador', fn ($u) => $u->where('nome', 'like', "%{$busca}%")));
+        if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%")));
         $filtrados = (clone $query)->count();
-        $colunas = ['id', 'nome', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'inscricoes_count', 'ativo', 'criado_por', 'created_at', 'updated_at', 'deleted_at'];
+        $colunas = ['id', 'nome', 'evento_id', 'data_inicio', 'data_fim', 'inscricoes_count', 'ativo', 'updated_at', 'deleted_at'];
         $coluna = $colunas[(int) $request->input('order.0.column', 0)] ?? 'id';
-        if ($coluna === 'criado_por') $coluna = \App\Models\Usuario::select('nome')->whereColumn('usuarios.id', 'atividades.criado_por')->limit(1);
         $direcao = $request->input('order.0.dir') === 'asc' ? 'asc' : 'desc';
         $inicio = max(0, (int) $request->input('start', 0));
         $tamanho = min(100, max(1, (int) $request->input('length', 10)));
         $armazem->salvar('atividades', $request, intdiv($inicio, $tamanho) + 1, $busca, $tamanho, ['filtro_evento' => $filtroEvento]);
         $permissoes = app(GiPermissionService::class);
         $dados = $query->orderBy($coluna, $direcao)->skip($inicio)->take($tamanho)->get()->map(fn (Atividade $atividade) => [
-            'inscricoes_count' => $atividade->inscricoes_count, 'id' => $atividade->id, 'nome' => e($atividade->nome), 'evento' => e($atividade->evento?->nome ?? '—'),
-            'modalidade' => $atividade->modalidade ? strtoupper($atividade->modalidade) : '—',
+            'inscricoes_count' => $atividade->inscricoes_count, 'id' => $atividade->id, 'nome' => e($atividade->nome),
+            'evento' => e($atividade->evento?->nome ?? '—'),
             'data_inicio' => $atividade->data_inicio?->format('d/m/Y H:i') ?? '—', 'data_fim' => $atividade->data_fim?->format('d/m/Y H:i') ?? '—',
-            'ativo' => view('eventos.partials.status', ['evento' => $atividade])->render(), 'criado_por' => e($atividade->criador?->nome ?? 'Usuário não encontrado'),
-            'created_at' => $atividade->created_at?->format('d/m/Y H:i') ?? '—', 'updated_at' => $atividade->updated_at?->format('d/m/Y H:i') ?? '—',
+            'ativo' => view('eventos.partials.status', ['evento' => $atividade])->render(),
+            'updated_at' => $atividade->updated_at?->format('d/m/Y H:i') ?? '—',
             'deleted_at' => $atividade->deleted_at?->format('d/m/Y H:i') ?? '—',
             'acoes' => view('atividades.partials.acoes', ['atividade' => $atividade, 'apagados' => $apagados, 'permissoes' => $permissoes])->render(),
         ]);
@@ -76,12 +77,18 @@ class AtividadeController
     public function create(): View { return view('atividades.create', ['eventos' => Evento::query()->where('ativo', true)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis()]); }
     public function store(Request $request, HistoricoService $historico): RedirectResponse
     {
-        $dados = $this->validar($request); $dados['criado_por'] = (int) $request->session()->get('gi_context.usuario.id');
-        $atividade = Atividade::create($dados); $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'tipo', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim']), $request);
+        $dados = $this->validar($request); $sessoes = $dados['sessoes'] ?? []; unset($dados['sessoes']);
+        $dados['criado_por'] = (int) $request->session()->get('gi_context.usuario.id');
+        $atividade = DB::transaction(function () use ($dados, $sessoes): Atividade {
+            $atividade = Atividade::create($dados);
+            $this->sincronizarSessoes($atividade, $sessoes);
+            return $atividade;
+        });
+        $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'tipo', 'formato', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim']), $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade cadastrada com sucesso.');
     }
-    public function show(Atividade $atividade): View { $atividade->load(['evento', 'categoria']); return view('atividades.show', compact('atividade')); }
-    public function edit(Atividade $atividade): View { return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis($atividade)]); }
+    public function show(Atividade $atividade): View { $atividade->load(['evento', 'categoria', 'sessoes' => fn ($q) => $q->withCount('inscricoes')]); return view('atividades.show', compact('atividade')); }
+    public function edit(Atividade $atividade): View { $atividade->load('sessoes'); return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis($atividade)]); }
 
     /**
      * Categorias oferecidas no combo: as ativas e, na edicao, tambem a que ja esta
@@ -105,6 +112,7 @@ class AtividadeController
             'config.campos' => ['sometimes', 'array'],
             'config.campos.*.nome' => ['required', 'string', 'max:150', 'distinct'],
             'config.campos.*.label' => ['required', 'string', 'max:255'],
+            'config.campos.*.texto_opcao' => ['nullable', 'string', 'max:255'],
             'config.campos.*.grid' => ['sometimes', 'integer', 'in:12,6,4'],
             'config.campos.*.opcoes' => ['sometimes', 'array'],
             'config.campos.*.opcoes.*.valor' => ['required_with:config.campos.*.opcoes.*.texto', 'string', 'max:255'],
@@ -195,6 +203,7 @@ class AtividadeController
         }
 
         $inscricao = $sessao ? $servico->inscricaoDoParticipante($atividade, $participante, $sessao['email']) : null;
+        $totalInscricoes = $atividade->inscricoes()->count();
 
         $config = $distribuicao->recalcular($atividade);
         $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');
@@ -206,6 +215,7 @@ class AtividadeController
             'participante' => $participante,
             'estado' => $servico->estado($atividade, $participante, $sessao['email'] ?? null),
             'inscricao' => $inscricao,
+            'totalInscricoes' => $totalInscricoes,
             'dadosComprovante' => $inscricao ? $comprovante->participante($inscricao) : [],
             'respostasComprovante' => $inscricao ? $comprovante->respostas($inscricao) : [],
             'qrPresenca' => $inscricao ? $comprovante->qrPresenca($inscricao) : null,
@@ -244,6 +254,7 @@ class AtividadeController
             'solicitar_codigo' => $this->solicitarCodigo($request, $atividade, $identificacao, $captcha),
             'validar_codigo' => $this->validarCodigo($request, $atividade, $identificacao),
             'validar_senha' => $this->validarSenha($request, $atividade, $identificacao),
+            'salvar_nova_senha' => $this->salvarNovaSenha($request, $atividade, $identificacao),
             'trocar_email' => $this->trocarEmail($request, $atividade, $identificacao),
             default => $this->registrarInscricao($request, $atividade, $servico, $identificacao),
         };
@@ -271,7 +282,7 @@ class AtividadeController
         // e a recusa por inscrição já existente neste fluxo público.
         $identificacao->solicitarCodigo($request, $atividade, $email, ignorarLimites: true);
 
-        return back()->with('codigo_enviado', $email);
+        return back()->with('senha_temporaria_enviada', $email);
     }
 
     private function validarCodigo(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
@@ -309,11 +320,32 @@ class AtividadeController
         ]);
         $resultado = $identificacao->validarSenha($request, $atividade, $dados['email'], $dados['senha']);
 
+        if ($resultado['temporaria']) {
+            $request->session()->flash('oferecer_nova_senha', true);
+        }
+
         $aviso = $resultado['criado']
             ? 'E-mail confirmado. Complete seus dados para continuar.'
             : 'Olá, '.$resultado['nome'].'. Sua identificação foi confirmada pela senha.';
 
         return $this->voltarAoInicioFormulario($request, $aviso);
+    }
+
+    private function salvarNovaSenha(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    {
+        // Se a validação falhar, o modal volta aberto para o visitante corrigir os campos.
+        $request->session()->flash('oferecer_nova_senha', true);
+        $dados = $request->validateWithBag('identificacao', [
+            'senha_nova' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ], [
+            'senha_nova.required' => 'Digite a nova senha.',
+            'senha_nova.confirmed' => 'A confirmação da nova senha não confere.',
+        ]);
+
+        $identificacao->definirSenhaDaSessao($request, $atividade, $dados['senha_nova']);
+        $request->session()->forget('oferecer_nova_senha');
+
+        return $this->voltarAoInicioFormulario($request, 'Nova senha cadastrada. Você já está identificado.');
     }
 
     private function voltarAoInicioFormulario(Request $request, string $mensagem): RedirectResponse
@@ -456,7 +488,7 @@ class AtividadeController
             ? max(1, $request->integer('page'))
             : ($request->exists('pesquisar') ? 1 : $estado['page']);
         $porPagina = 20;
-        $query = InscricaoAtividade::query()->where('atividade_id', $atividade->id);
+        $query = InscricaoAtividade::query()->with('sessao')->where('atividade_id', $atividade->id);
 
         if ($pesquisar !== '') {
             $participantes = Participante::query()->where('nome', 'like', "%{$pesquisar}%")
@@ -464,7 +496,8 @@ class AtividadeController
             $query->where(function ($consulta) use ($pesquisar, $participantes): void {
                 $consulta->where('participante_email', 'like', "%{$pesquisar}%")
                     ->orWhere('ip', 'like', "%{$pesquisar}%")
-                    ->orWhere('resposta', 'like', "%{$pesquisar}%");
+                    ->orWhere('resposta', 'like', "%{$pesquisar}%")
+                    ->orWhereHas('sessao', fn ($sessao) => $sessao->where('nome', 'like', "%{$pesquisar}%"));
                 if ($participantes !== []) $consulta->orWhereIn('participante_id', $participantes);
                 if (ctype_digit($pesquisar)) $consulta->orWhere('id', (int) $pesquisar);
             });
@@ -542,8 +575,12 @@ class AtividadeController
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => route('inscricoes.publica', ['atividade' => $atividade->hash_publica])]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
-        $campos = ['tipo', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
-        $antes = $atividade->only($campos); $atividade->update($this->validar($request, $atividade));
+        $campos = ['tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $antes = $atividade->only($campos); $dados = $this->validar($request, $atividade); $sessoes = $dados['sessoes'] ?? []; unset($dados['sessoes']);
+        DB::transaction(function () use ($atividade, $dados, $sessoes): void {
+            $atividade->update($dados);
+            $this->sincronizarSessoes($atividade, $sessoes);
+        });
         $mudancas = $historico->alteracoes($antes, $atividade->only($campos));
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade atualizada com sucesso.');
@@ -590,15 +627,23 @@ class AtividadeController
         $podePersonalizar = app(GiPermissionService::class)->permite('atividades.personalizar', $request);
         $ignorarPersonalizacao = \Illuminate\Validation\Rule::excludeIf(!$podePersonalizar);
         $request->mergeIfMissing(['tipo' => $atividade?->tipo ?? 'somente_inscricao']);
+        $request->mergeIfMissing(['formato' => $atividade?->formato ?? 'simples']);
         $dados = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
             'tipo' => ['required', 'in:somente_inscricao,atividade_evento'],
+            'formato' => ['required', 'in:simples,com_sessoes'],
             'ativo' => ['required', 'boolean'],
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'categoria_id' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'integer', 'exists:categorias,id'],
             'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],
             'data_inicio' => ['nullable', 'date'],
             'data_fim' => ['nullable', 'date'],
+            'sessoes' => ['exclude_unless:formato,com_sessoes', 'required_if:formato,com_sessoes', 'array', 'min:1', 'max:100'],
+            'sessoes.*.id' => ['nullable', 'integer'],
+            'sessoes.*.nome' => ['required', 'string', 'max:255'],
+            'sessoes.*.data_inicio' => ['required', 'date'],
+            'sessoes.*.data_fim' => ['required', 'date', 'after_or_equal:sessoes.*.data_inicio'],
+            'sessoes.*.limite_vagas' => ['nullable', 'integer', 'min:1'],
             'personalizacao' => [$ignorarPersonalizacao, 'required', 'array:posicao,borda,cor_borda,alterar_cor_fundo_pagina,cor_fundo_pagina'],
             'personalizacao.posicao' => [$ignorarPersonalizacao, 'required', 'in:esquerda,direita'],
             'personalizacao.borda' => [$ignorarPersonalizacao, 'required', 'boolean'],
@@ -610,6 +655,14 @@ class AtividadeController
 
         if ($dados['tipo'] === 'somente_inscricao') {
             $dados['categoria_id'] = $dados['modalidade'] = null;
+        }
+
+        if (($dados['formato'] ?? 'simples') === 'com_sessoes' && $atividade) {
+            $ids = collect($dados['sessoes'] ?? [])->pluck('id')->filter()->map(fn ($id) => (int) $id);
+            if ($ids->count() !== $ids->unique()->count()
+                || $atividade->sessoes()->withTrashed()->whereIn('id', $ids)->count() !== $ids->count()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['sessoes' => 'Uma das sessões informadas não pertence a esta atividade.']);
+            }
         }
 
         if (!$podePersonalizar) return $dados;
@@ -626,5 +679,37 @@ class AtividadeController
         unset($dados['imagem_atividade']);
 
         return $dados;
+    }
+
+    private function sincronizarSessoes(Atividade $atividade, array $sessoes): void
+    {
+        // No formato simples as sessoes antigas ficam guardadas, mas deixam de participar
+        // das inscricoes. Assim uma troca acidental de formato nao apaga dados historicos.
+        if (! $atividade->comSessoes()) return;
+
+        $mantidas = [];
+        foreach (array_values($sessoes) as $ordem => $dados) {
+            $id = isset($dados['id']) ? (int) $dados['id'] : null;
+            $sessao = $id ? $atividade->sessoes()->withTrashed()->findOrFail($id) : $atividade->sessoes()->make();
+            if ($sessao->trashed()) $sessao->restore();
+            $sessao->fill([
+                'nome' => trim($dados['nome']),
+                'data_inicio' => $dados['data_inicio'] ?? null,
+                'data_fim' => $dados['data_fim'] ?? null,
+                'limite_vagas' => $dados['limite_vagas'] ?? null,
+                'ativo' => true,
+                'ordem' => $ordem,
+            ])->save();
+            $mantidas[] = $sessao->id;
+        }
+
+        $atividade->sessoes()->whereNotIn('id', $mantidas)->each(fn ($sessao) => $sessao->delete());
+
+        // Mantem as colunas historicas preenchidas com o intervalo completo. Listagens,
+        // templates e integracoes antigas continuam entendendo a agenda da atividade.
+        $atividade->update([
+            'data_inicio' => $atividade->sessoes()->min('data_inicio'),
+            'data_fim' => $atividade->sessoes()->max('data_fim'),
+        ]);
     }
 }

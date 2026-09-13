@@ -21,6 +21,7 @@ use App\Http\Controllers\CaptchaInscricaoController;
 use App\Http\Controllers\CaptchaSubmissaoController;
 use App\Http\Controllers\PresencaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardExportController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -86,6 +87,14 @@ Route::get('/', function (Request $request) {
 
 Route::get('/dashboard', DashboardController::class)
     ->middleware('gi.permission:dashboard.visualizar')->name('dashboard');
+Route::get('/dashboard/exportar/{card}/{formato}', [DashboardExportController::class, 'link'])
+    ->middleware('gi.permission:dashboard.visualizar')
+    ->whereIn('card', ['inscricoes-categoria', 'inscritos-opcao', 'evolucao-inscricoes', 'inscricoes-dispositivo'])
+    ->whereIn('formato', ['html', 'pdf', 'imagem'])->name('dashboard.exportar-link');
+Route::get('/dashboard/exportacoes/{card}/{formato}', [DashboardExportController::class, 'show'])
+    ->middleware('signed')
+    ->whereIn('card', ['inscricoes-categoria', 'inscritos-opcao', 'evolucao-inscricoes', 'inscricoes-dispositivo'])
+    ->whereIn('formato', ['html', 'pdf', 'imagem'])->name('dashboard.exportar');
 
 Route::prefix('usuarios')->name('usuarios.')->group(function (): void {
     Route::get('/', [UsuarioController::class, 'index'])

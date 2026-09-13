@@ -4,13 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['tipo', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
+    protected $fillable = ['tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao'];
     protected $casts = [
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
         'data_inicio' => 'datetime', 'data_fim' => 'datetime', 'deleted_at' => 'datetime', 'formulario' => 'array',
@@ -28,7 +29,12 @@ class Atividade extends Model
 
     public const MENSAGEM_JA_INSCRITO = 'Você já está inscrito nesta atividade. Cada participante pode se inscrever uma única vez.';
 
-    public const MENSAGEM_IDENTIFICACAO = 'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite um código temporário por e-mail.';
+    public const MENSAGEM_IDENTIFICACAO = 'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite uma senha temporária por e-mail.';
+
+    private const MENSAGENS_IDENTIFICACAO_ANTIGAS = [
+        'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite um código temporário por e-mail.',
+        'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.',
+    ];
 
     public function estiloImagem(): array
     {
@@ -59,6 +65,21 @@ class Atividade extends Model
         return $this->hasMany(InscricaoAtividade::class);
     }
 
+    public function sessoes(): HasMany
+    {
+        return $this->hasMany(SessaoAtividade::class)->orderBy('ordem')->orderBy('data_inicio')->orderBy('id');
+    }
+
+    public function sessoesAtivas(): HasMany
+    {
+        return $this->sessoes()->where('ativo', true);
+    }
+
+    public function comSessoes(): bool
+    {
+        return $this->formato === 'com_sessoes';
+    }
+
     public function temInscricoes(): bool
     {
         return $this->inscricoes()->exists();
@@ -66,6 +87,12 @@ class Atividade extends Model
 
     public function vagasEsgotadas(): bool
     {
+        if ($this->comSessoes()) {
+            $sessoes = $this->sessoesAtivas()->withCount('inscricoes')->get();
+            if ($sessoes->isEmpty()) return true;
+            if ($sessoes->every(fn (SessaoAtividade $sessao) => $sessao->limite_vagas !== null && $sessao->vagasRestantes() < 1)) return true;
+        }
+
         if (empty($this->formulario['limitar_inscricoes'])) return false;
 
         $config = app(\App\Services\DistribuicaoVagasService::class)->recalcular($this, salvar: false);
@@ -86,7 +113,11 @@ class Atividade extends Model
     /** Texto de apoio da etapa em que o visitante confirma o e-mail. */
     public function mensagemIdentificacao(): string
     {
-        return trim($this->formulario['mensagem_identificacao'] ?? '') ?: self::MENSAGEM_IDENTIFICACAO;
+        $mensagem = trim($this->formulario['mensagem_identificacao'] ?? '');
+
+        return $mensagem === '' || in_array($mensagem, self::MENSAGENS_IDENTIFICACAO_ANTIGAS, true)
+            ? self::MENSAGEM_IDENTIFICACAO
+            : $mensagem;
     }
 
     public function evento(): BelongsTo

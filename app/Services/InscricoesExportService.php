@@ -21,6 +21,7 @@ class InscricoesExportService
         $principais = [
             ['id', 'ID'], ['data_inscricao', 'Data da inscrição'], ['participante', 'Participante'],
             ['participante_id', 'ID do participante'], ['email', 'E-mail identificado'],
+            ['sessao_atividade', 'Sessão da atividade'],
             ['presenca', 'Presença'], ['data_presenca', 'Data da presença'],
             ['presenca_validada_por', 'Presença validada pelo usuário GI'],
         ];
@@ -42,7 +43,7 @@ class InscricoesExportService
     public function download(Atividade $atividade, string $formato, ?array $selecionados = null)
     {
         abort_unless(in_array($formato, ['csv', 'ods', 'xls', 'xlsx'], true), 404);
-        $inscricoes = InscricaoAtividade::where('atividade_id', $atividade->id)->orderBy('id')->get();
+        $inscricoes = InscricaoAtividade::with('sessao')->where('atividade_id', $atividade->id)->orderBy('id')->get();
         $campos = $this->camposFormulario($atividade, $inscricoes);
         $disponiveis = collect($this->camposDisponiveis($atividade))->keyBy('chave');
         $selecionados ??= $disponiveis->where('marcado', true)->keys()->all();
@@ -62,6 +63,7 @@ class InscricoesExportService
                 'participante' => (string) $participantes->get($inscricao->participante_id, ''),
                 'participante_id' => $inscricao->participante_id ? (string) $inscricao->participante_id : '',
                 'email' => (string) ($inscricao->participante_email ?? ''),
+                'sessao_atividade' => $inscricao->sessao?->rotuloPublico() ?? '',
                 'presenca' => $inscricao->presente ? 'Presente' : 'Não',
                 'data_presenca' => $inscricao->data_presenca?->format('d/m/Y H:i:s') ?? '',
                 'presenca_validada_por' => $inscricao->presenca_validada_por ? (string) $inscricao->presenca_validada_por : '',
@@ -113,7 +115,7 @@ class InscricoesExportService
             $valores = is_array($valor) ? $valor : [$valor];
             $marcado = collect($valores)->contains(fn ($item) => $item === true || (string) $item === '1');
 
-            return $marcado ? 'Sim' : 'Não';
+            return $marcado ? (trim((string) ($campo['texto_opcao'] ?? '')) ?: 'Sim') : 'Não';
         }
 
         return $this->texto($valor ?? '');

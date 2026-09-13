@@ -74,6 +74,14 @@ class FormularioInscricaoService
     {
         $regras = [];
 
+        if ($atividade->comSessoes()) {
+            $regras['sessao_atividade_id'] = [
+                'required', 'integer',
+                Rule::exists('sessoes_atividade', 'id')->where(fn ($q) => $q
+                    ->where('atividade_id', $atividade->id)->where('ativo', true)->whereNull('deleted_at')),
+            ];
+        }
+
         foreach (($atividade->formulario['campos'] ?? []) as $campo) {
             if (empty($campo['nome'])) continue;
 
@@ -284,6 +292,7 @@ class FormularioInscricaoService
         }
 
         return $atributos + [
+            'sessao_atividade_id' => 'sessão',
             'participante.nome' => 'nome completo',
             'participante.cpf' => 'CPF',
             'participante.sexo' => 'sexo',
@@ -347,7 +356,14 @@ class FormularioInscricaoService
 
             $regras = $this->regras($atividade) + ($participante ? $this->regrasParticipante() : []);
             $validados = $request->validate($regras, $this->mensagens(), $this->atributos($atividade));
-            $resposta = Arr::except($validados, ['participante']);
+            $sessao = null;
+            if ($atividade->comSessoes()) {
+                $sessao = $atividade->sessoesAtivas()->whereKey((int) $validados['sessao_atividade_id'])->lockForUpdate()->firstOrFail();
+                if ($sessao->limite_vagas !== null && $sessao->inscricoes()->count() >= $sessao->limite_vagas) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['sessao_atividade_id' => 'Não há mais vagas disponíveis nesta sessão.']);
+                }
+            }
+            $resposta = Arr::except($validados, ['participante', 'sessao_atividade_id']);
             $this->distribuicao->conferirDisponibilidade($atividade, $resposta);
 
             // Guarda apenas os arquivos de campos declarados no formulario; qualquer outro upload e descartado.
@@ -366,6 +382,7 @@ class FormularioInscricaoService
             try {
                 $inscricao = InscricaoAtividade::create([
                     'atividade_id' => $atividade->id,
+                    'sessao_atividade_id' => $sessao?->id,
                     'participante_id' => $participante?->id,
                     'participante_email' => $participante ? ($emailIdentificado ?: $participante->email) : null,
                     'resposta' => $resposta,

@@ -34,11 +34,38 @@ class FormularioPublicoController
         $config = $this->distribuicao->recalcular($atividade);
         $estado = $this->inscricoes->estado($atividade);
         $identificado = $this->identificado($request, $atividade);
+        $campos = array_values(array_map(fn (array $campo) => [
+            'nome' => $campo['nome'] ?? '',
+            'label' => $campo['label'] ?? ($campo['nome'] ?? ''),
+            'tipo' => $campo['tipo'] ?? 'text',
+            'placeholder' => $campo['placeholder'] ?? '',
+            'texto_opcao' => $campo['texto_opcao'] ?? null,
+            'obrigatorio' => (bool) ($campo['obrigatorio'] ?? false),
+            'criterio_vagas' => (bool) ($campo['criterio_vagas'] ?? false),
+            'opcoes' => array_values($campo['opcoes'] ?? []),
+            'grid' => (int) ($campo['grid'] ?? 6),
+            'aceitos' => array_values($campo['aceitos'] ?? []),
+            'max_arquivos' => min(10, max(1, (int) ($campo['max_arquivos'] ?? 1))),
+            'validacao' => $campo['validacao'] ?? '',
+        ], array_filter($config['campos'] ?? [], fn ($campo) => ! empty($campo['nome']))));
+        if ($atividade->comSessoes()) {
+            $sessoes = $atividade->sessoesAtivas()->withCount('inscricoes')->get();
+            array_unshift($campos, [
+                'nome' => 'sessao_atividade_id', 'label' => 'Sessão', 'tipo' => 'radio',
+                'placeholder' => '', 'obrigatorio' => true, 'criterio_vagas' => false,
+                'opcoes' => $sessoes->filter(fn ($sessao) => $sessao->vagasRestantes() !== 0)->map(fn ($sessao) => [
+                    'valor' => (string) $sessao->id,
+                    'texto' => $sessao->rotuloPublico().($sessao->vagasRestantes() === null ? '' : ' — '.$sessao->vagasRestantes().' vaga(s) restante(s)'),
+                ])->values()->all(),
+                'grid' => 12, 'aceitos' => [], 'max_arquivos' => 1, 'validacao' => '',
+            ]);
+        }
 
         return response()->json([
             'atividade' => [
                 'id' => $atividade->id,
                 'nome' => $atividade->nome,
+                'formato' => $atividade->formato,
                 'modalidade' => $atividade->modalidade,
                 'data_inicio' => $atividade->data_inicio?->toIso8601String(),
                 'data_fim' => $atividade->data_fim?->toIso8601String(),
@@ -50,19 +77,7 @@ class FormularioPublicoController
                 'conteudo' => $this->editor->sanitizar($config['editor']['conteudo'] ?? ''),
             ],
             'distribuicao_vagas' => $config['distribuicao_vagas'] ?? null,
-            'campos' => array_values(array_map(fn (array $campo) => [
-                'nome' => $campo['nome'] ?? '',
-                'label' => $campo['label'] ?? ($campo['nome'] ?? ''),
-                'tipo' => $campo['tipo'] ?? 'text',
-                'placeholder' => $campo['placeholder'] ?? '',
-                'obrigatorio' => (bool) ($campo['obrigatorio'] ?? false),
-                'criterio_vagas' => (bool) ($campo['criterio_vagas'] ?? false),
-                'opcoes' => array_values($campo['opcoes'] ?? []),
-                'grid' => (int) ($campo['grid'] ?? 6),
-                'aceitos' => array_values($campo['aceitos'] ?? []),
-                'max_arquivos' => min(10, max(1, (int) ($campo['max_arquivos'] ?? 1))),
-                'validacao' => $campo['validacao'] ?? '',
-            ], array_filter($config['campos'] ?? [], fn ($campo) => ! empty($campo['nome'])))),
+            'campos' => $campos,
             'estado' => $estado,
             // Identificacao por e-mail: o consumidor externo exibe esta etapa antes dos campos.
             //
@@ -83,7 +98,7 @@ class FormularioPublicoController
         ]);
     }
 
-    /** Gera e envia por e-mail o codigo de inscricao. */
+    /** Gera e envia por e-mail a senha temporária de inscrição. */
     public function solicitarCodigo(Request $request, Atividade $atividade): JsonResponse
     {
         $this->conferirAtividade($atividade);
@@ -101,7 +116,7 @@ class FormularioPublicoController
             return response()->json([
                 'email' => $email,
                 'expira_em' => now()->addMinutes(IdentificacaoParticipanteService::MINUTOS_VALIDADE)->toIso8601String(),
-                'mensagem' => 'O código de inscrição foi enviado para seu email.',
+                'mensagem' => 'A senha temporária foi enviada para seu e-mail.',
             ], 202);
         }
 
@@ -109,7 +124,7 @@ class FormularioPublicoController
         // endereco esta inscrito, e sem cota isso viraria uma sondagem gratuita.
         $this->limites->conferir($request, $atividade, $email);
 
-        // Duplicidade antes do envio: quem ja se inscreveu recebe o aviso, nao um codigo.
+        // Duplicidade antes do envio: quem já se inscreveu recebe o aviso, não uma senha.
         if ($this->inscricoes->jaInscritoPorEmail($atividade, $email)) {
             throw ValidationException::withMessages(['email' => $atividade->mensagemJaInscrito()]);
         }
@@ -119,12 +134,12 @@ class FormularioPublicoController
         return response()->json([
             'email' => $resultado['email'],
             'expira_em' => $resultado['expira_em']->toIso8601String(),
-            'mensagem' => 'O código de inscrição foi enviado para seu email.',
+            'mensagem' => 'A senha temporária foi enviada para seu e-mail.',
         ], 202);
     }
 
     /**
-     * Confere o codigo e devolve o token que identifica o visitante nas chamadas seguintes.
+     * Confere a senha temporária e devolve o token das chamadas seguintes.
      */
     public function identificar(Request $request, Atividade $atividade): JsonResponse
     {
@@ -132,8 +147,8 @@ class FormularioPublicoController
 
         $dados = $request->validate(
             ['email' => ['required', 'max:150', new EmailValido], 'codigo' => ['required', 'string', 'max:10']],
-            ['required' => 'Informe o e-mail e o código recebido.'],
-            ['email' => 'e-mail', 'codigo' => 'código'],
+            ['required' => 'Informe o e-mail e a senha temporária recebida.'],
+            ['email' => 'e-mail', 'codigo' => 'senha temporária'],
         );
 
         $resultado = $this->identificacao->emitirToken($request, $atividade, $dados['email'], $dados['codigo']);
