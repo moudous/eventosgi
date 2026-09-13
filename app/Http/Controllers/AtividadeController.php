@@ -88,7 +88,7 @@ class AtividadeController
         return redirect()->route('atividades.index')->with('status', 'Atividade cadastrada com sucesso.');
     }
     public function show(Atividade $atividade): View { $atividade->load(['evento', 'categoria', 'sessoes' => fn ($q) => $q->withCount('inscricoes')]); return view('atividades.show', compact('atividade')); }
-    public function edit(Atividade $atividade): View { $atividade->load('sessoes'); return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis($atividade)]); }
+    public function edit(Atividade $atividade): View { $atividade->load(['sessoes', 'evento']); return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis($atividade)]); }
 
     /**
      * Categorias oferecidas no combo: as ativas e, na edicao, tambem a que ja esta
@@ -130,6 +130,7 @@ class AtividadeController
             'config.campos.*.label' => ['required', 'string', 'max:255'],
             'config.campos.*.texto_opcao' => ['nullable', 'string', 'max:255'],
             'config.campos.*.grid' => ['sometimes', 'integer', 'in:12,6,4'],
+            'config.campos.*.campos_por_linha' => ['sometimes', 'integer', 'between:1,12'],
             'config.campos.*.opcoes' => ['sometimes', 'array'],
             'config.campos.*.opcoes.*.valor' => ['required_with:config.campos.*.opcoes.*.texto', 'string', 'max:255'],
             'config.campos.*.opcoes.*.texto' => ['required_with:config.campos.*.opcoes.*.valor', 'string', 'max:255'],
@@ -611,15 +612,19 @@ class AtividadeController
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
         $campos = ['tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
-        $imagemAnterior = $atividade->estiloImagem()['imagem'];
+        $arquivosAnteriores = collect(['imagem', 'imagem_fundo_card', 'imagem_fundo_pagina'])
+            ->map(fn ($chave) => $atividade->personalizacao[$chave] ?? null)->filter()->all();
         $antes = $atividade->only($campos); $dados = $this->validar($request, $atividade); $sessoes = $dados['sessoes'] ?? []; unset($dados['sessoes']);
         DB::transaction(function () use ($atividade, $dados, $sessoes): void {
             $atividade->update($dados);
             $this->sincronizarSessoes($atividade, $sessoes);
         });
-        $imagemAtual = $atividade->fresh()->estiloImagem()['imagem'];
-        if ($imagemAnterior && $imagemAnterior !== $imagemAtual && preg_match('/^[a-f0-9-]{36}\.(?:jpe?g|png|webp)$/i', $imagemAnterior)) {
-            File::delete(storage_path('app/public/personalizacao/'.$imagemAnterior));
+        $personalizacaoAtual = $atividade->fresh()->personalizacao ?? [];
+        $arquivosAtuais = array_filter([$personalizacaoAtual['imagem'] ?? null, $personalizacaoAtual['imagem_fundo_card'] ?? null, $personalizacaoAtual['imagem_fundo_pagina'] ?? null]);
+        foreach (array_diff($arquivosAnteriores, $arquivosAtuais) as $arquivoAnterior) {
+            if (preg_match('/^[a-f0-9-]{36}\.(?:jpe?g|png|webp)$/i', $arquivoAnterior)) {
+                File::delete(storage_path('app/public/personalizacao/'.$arquivoAnterior));
+            }
         }
         $mudancas = $historico->alteracoes($antes, $atividade->only($campos));
         if ($mudancas !== []) $historico->atividade($atividade, 'Atividade alterada', $mudancas, $request);
@@ -684,14 +689,26 @@ class AtividadeController
             'sessoes.*.data_inicio' => ['required', 'date'],
             'sessoes.*.data_fim' => ['required', 'date', 'after_or_equal:sessoes.*.data_inicio'],
             'sessoes.*.limite_vagas' => ['nullable', 'integer', 'min:1'],
-            'personalizacao' => [$ignorarPersonalizacao, 'required', 'array:posicao,borda,cor_borda,alterar_cor_fundo_pagina,cor_fundo_pagina'],
+            'personalizacao' => [$ignorarPersonalizacao, 'required', 'array:posicao,borda,cor_borda,usar_formatacao_evento,tipo,degrade_inicio,degrade_fim,cor_solida,cor_fonte,cor_borda_card,alterar_cor_fundo_pagina,cor_fundo_pagina,fundo_pagina_tipo'],
             'personalizacao.posicao' => [$ignorarPersonalizacao, 'required', 'in:esquerda,direita'],
             'personalizacao.borda' => [$ignorarPersonalizacao, 'required', 'boolean'],
             'personalizacao.cor_borda' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.usar_formatacao_evento' => [$ignorarPersonalizacao, 'required', 'boolean'],
+            'personalizacao.tipo' => [$ignorarPersonalizacao, 'required', 'in:degrade,solida,imagem,transparente,transparente_borda'],
+            'personalizacao.degrade_inicio' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.degrade_fim' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.cor_solida' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.cor_fonte' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.cor_borda_card' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'personalizacao.alterar_cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'boolean'],
             'personalizacao.cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
+            'personalizacao.fundo_pagina_tipo' => [$ignorarPersonalizacao, 'required', 'in:cor,imagem'],
             'imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'imagem_fundo_card_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'imagem_fundo_pagina_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
             'remover_imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
+            'remover_imagem_fundo_card_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
+            'remover_imagem_fundo_pagina_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
         ]);
 
         if ($dados['tipo'] === 'somente_inscricao') {
@@ -708,18 +725,41 @@ class AtividadeController
 
         if (!$podePersonalizar) return $dados;
 
-        $dados['personalizacao']['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao']['alterar_cor_fundo_pagina'];
-        $dados['personalizacao']['cor_fundo_pagina'] = strtolower($dados['personalizacao']['cor_fundo_pagina']);
+        foreach (['usar_formatacao_evento', 'alterar_cor_fundo_pagina', 'borda'] as $booleano) {
+            $dados['personalizacao'][$booleano] = (bool) $dados['personalizacao'][$booleano];
+        }
+        foreach (['cor_borda', 'degrade_inicio', 'degrade_fim', 'cor_solida', 'cor_fonte', 'cor_borda_card', 'cor_fundo_pagina'] as $cor) {
+            $dados['personalizacao'][$cor] = strtolower($dados['personalizacao'][$cor]);
+        }
         $dados['personalizacao']['imagem'] = $request->boolean('remover_imagem_atividade')
             ? null
             : $atividade?->estiloImagem()['imagem'];
-        if ($arquivo = $request->file('imagem_atividade')) {
+        $dados['personalizacao']['imagem_fundo_card'] = $request->boolean('remover_imagem_fundo_card_atividade')
+            ? null
+            : ($atividade?->personalizacao['imagem_fundo_card'] ?? null);
+        $dados['personalizacao']['imagem_fundo_pagina'] = $request->boolean('remover_imagem_fundo_pagina_atividade')
+            ? null
+            : ($atividade?->personalizacao['imagem_fundo_pagina'] ?? null);
+        foreach (['imagem_atividade' => 'imagem', 'imagem_fundo_card_atividade' => 'imagem_fundo_card', 'imagem_fundo_pagina_atividade' => 'imagem_fundo_pagina'] as $campo => $chave) {
+            $arquivo = $request->file($campo);
+            if (! $arquivo) continue;
             $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();
             \Illuminate\Support\Facades\File::ensureDirectoryExists(storage_path('app/public/personalizacao'));
             $arquivo->move(storage_path('app/public/personalizacao'), $nome);
-            $dados['personalizacao']['imagem'] = $nome;
+            $dados['personalizacao'][$chave] = $nome;
         }
-        unset($dados['imagem_atividade'], $dados['remover_imagem_atividade']);
+        if (! $dados['personalizacao']['usar_formatacao_evento']
+            && $dados['personalizacao']['tipo'] === 'imagem'
+            && ! $dados['personalizacao']['imagem_fundo_card']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['imagem_fundo_card_atividade' => 'Selecione uma imagem para o fundo do card de título.']);
+        }
+        if ($dados['personalizacao']['alterar_cor_fundo_pagina']
+            && $dados['personalizacao']['fundo_pagina_tipo'] === 'imagem'
+            && ! $dados['personalizacao']['imagem_fundo_pagina']) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['imagem_fundo_pagina_atividade' => 'Selecione uma imagem para o fundo da página.']);
+        }
+        unset($dados['imagem_atividade'], $dados['imagem_fundo_card_atividade'], $dados['imagem_fundo_pagina_atividade'],
+            $dados['remover_imagem_atividade'], $dados['remover_imagem_fundo_card_atividade'], $dados['remover_imagem_fundo_pagina_atividade']);
 
         return $dados;
     }

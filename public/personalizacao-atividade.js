@@ -197,3 +197,118 @@ document.addEventListener('DOMContentLoaded', () => {
     modalElement.addEventListener('hidden.bs.modal', resetCrop);
     update();
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+    'use strict';
+    const root = document.querySelector('[data-personalizacao-atividade]');
+    const pageRoot = document.querySelector('[data-fundo-pagina-card]');
+    if (!root || !pageRoot) return;
+
+    const useEvent = root.querySelector('[data-usar-formatacao-evento]');
+    const ownFormatting = root.querySelector('[data-formatacao-propria]');
+    const previewPage = root.querySelector('[data-preview-pagina]');
+    const previewCard = root.querySelector('[data-preview-card]');
+    let eventStyle = JSON.parse(root.dataset.eventoEstilo || '{}');
+    let eventImage = root.dataset.imagemEvento;
+    const eventStyles = JSON.parse(document.getElementById('estilosEventosAtividade')?.textContent || '{}');
+    const validColor = value => /^#[0-9a-f]{6}$/i.test(value);
+    const value = key => root.querySelector(`[data-card-field="${key}"]`)?.value || '';
+
+    root.querySelectorAll('.color-pareada').forEach(group => {
+        const picker = group.querySelector('input[type="color"]');
+        const text = group.querySelector('input[type="text"]');
+        if (!picker || !text) return;
+        picker.addEventListener('input', () => {
+            text.value = picker.value.toUpperCase();
+            text.dispatchEvent(new Event('input', {bubbles: true}));
+        });
+        text.addEventListener('input', () => { if (validColor(text.value)) picker.value = text.value; });
+    });
+
+    const cardStyle = () => useEvent.checked ? eventStyle : {
+        tipo: value('tipo'), degrade_inicio: value('degrade_inicio'), degrade_fim: value('degrade_fim'),
+        cor_solida: value('cor_solida'), cor_fonte: value('cor_fonte'), cor_borda_card: value('cor_borda_card'),
+    };
+    const updatePreview = () => {
+        ownFormatting.hidden = useEvent.checked;
+        const style = cardStyle();
+        const image = useEvent.checked ? eventImage : root.dataset.imagemFundoCard;
+        root.querySelector('[data-cor-borda-card-container]').hidden = useEvent.checked || style.tipo !== 'transparente_borda';
+        previewCard.style.color = style.cor_fonte || '#ffffff';
+        previewCard.style.background = ['transparente', 'transparente_borda'].includes(style.tipo)
+            ? 'transparent'
+            : style.tipo === 'degrade'
+            ? `linear-gradient(135deg, ${style.degrade_inicio}, ${style.degrade_fim})`
+            : style.tipo === 'imagem' && image
+                ? `url("${image}") center / cover no-repeat`
+                : style.cor_solida || '#102a43';
+        previewCard.style.border = style.tipo === 'transparente_borda'
+            ? `1px solid ${style.cor_borda_card || '#ffffff'}`
+            : 'none';
+
+        const changePage = pageRoot.querySelector('[data-alterar-fundo-pagina]').checked;
+        const pageType = pageRoot.querySelector('[data-fundo-pagina-tipo]').value;
+        const pageColor = pageRoot.querySelector('[data-fundo-color-text]').value;
+        previewPage.style.background = changePage
+            ? pageType === 'imagem' && pageRoot.dataset.imagemFundoPagina
+                ? `url("${pageRoot.dataset.imagemFundoPagina}") center / cover no-repeat`
+                : pageColor
+            : pageRoot.dataset.fundoPaginaEvento;
+        previewPage.style.border = '1px solid rgba(0,0,0,.12)';
+    };
+
+    useEvent.addEventListener('change', updatePreview);
+    const changeEventStyle = eventId => {
+        const selected = eventStyles[eventId];
+        if (!selected) return;
+        eventStyle = selected.estilo;
+        eventImage = selected.imagem;
+        pageRoot.dataset.fundoPaginaEvento = selected.fundo_pagina;
+        updatePreview();
+    };
+    const eventSelect = document.getElementById('evento_id');
+    eventSelect?.addEventListener('change', event => changeEventStyle(event.target.value));
+    window.jQuery?.(eventSelect).on('change', event => changeEventStyle(event.target.value));
+    root.querySelectorAll('[data-card-field]').forEach(input => input.addEventListener('input', updatePreview));
+    document.getElementById('nome')?.addEventListener('input', event => {
+        const title = previewCard.querySelector('strong');
+        if (title) title.textContent = event.target.value || 'Nome da atividade';
+    });
+    pageRoot.querySelectorAll('[data-alterar-fundo-pagina], [data-fundo-pagina-tipo], [data-fundo-color-text]').forEach(input => input.addEventListener('input', updatePreview));
+
+    document.querySelectorAll('[data-background-upload]').forEach(upload => {
+        upload.addEventListener('change', () => {
+            const file = upload.files[0];
+            if (!file) return;
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
+                upload.value = '';
+                upload.setCustomValidity('Escolha uma imagem JPG, PNG ou WebP de até 8 MB.');
+                upload.reportValidity();
+                return;
+            }
+            upload.setCustomValidity('');
+            const url = URL.createObjectURL(file);
+            if (upload.dataset.backgroundUpload === 'card') root.dataset.imagemFundoCard = url;
+            else pageRoot.dataset.imagemFundoPagina = url;
+            const scope = upload.closest('[data-formatacao-propria], [data-fundo-pagina-card]');
+            scope.querySelector('[data-remove-background-input]').value = '0';
+            scope.querySelector('[data-remove-background]').classList.remove('d-none');
+            scope.querySelector('[data-background-link]')?.classList.add('d-none');
+            updatePreview();
+        });
+    });
+    document.querySelectorAll('[data-remove-background]').forEach(button => {
+        button.addEventListener('click', () => {
+            const scope = button.closest('[data-formatacao-propria], [data-fundo-pagina-card]');
+            const upload = scope.querySelector('[data-background-upload]');
+            upload.value = '';
+            scope.querySelector('[data-remove-background-input]').value = '1';
+            scope.querySelector('[data-background-link]')?.classList.add('d-none');
+            button.classList.add('d-none');
+            if (upload.dataset.backgroundUpload === 'card') root.dataset.imagemFundoCard = '';
+            else pageRoot.dataset.imagemFundoPagina = '';
+            updatePreview();
+        });
+    });
+    updatePreview();
+});

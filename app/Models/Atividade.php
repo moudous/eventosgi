@@ -45,9 +45,62 @@ class Atividade extends Model
             'posicao' => 'esquerda',
             'borda' => false,
             'cor_borda' => '#ffffff',
+            'usar_formatacao_evento' => true,
+            'tipo' => 'degrade',
+            'degrade_inicio' => '#102a43',
+            'degrade_fim' => '#176b87',
+            'cor_solida' => '#102a43',
+            'cor_fonte' => '#ffffff',
+            'cor_borda_card' => '#ffffff',
+            'imagem_fundo_card' => null,
             'alterar_cor_fundo_pagina' => false,
             'cor_fundo_pagina' => Evento::COR_FUNDO_PAGINA_ATIVIDADE,
+            'fundo_pagina_tipo' => 'cor',
+            'imagem_fundo_pagina' => null,
         ], $this->personalizacao ?? []);
+    }
+
+    /** Formatação efetiva do card de título, herdada do evento ou própria da atividade. */
+    public function estiloFormulario(): array
+    {
+        $evento = $this->evento?->estiloFormulario('atividade') ?? (new Evento)->estiloFormulario('atividade');
+        $estilo = $this->estiloImagem();
+        if (! array_key_exists('usar_formatacao_evento', $this->personalizacao ?? []) || $estilo['usar_formatacao_evento']) {
+            return $evento;
+        }
+
+        return [
+            'tipo' => in_array($estilo['tipo'], ['degrade', 'solida', 'imagem', 'transparente', 'transparente_borda'], true) ? $estilo['tipo'] : 'degrade',
+            'degrade_inicio' => $estilo['degrade_inicio'],
+            'degrade_fim' => $estilo['degrade_fim'],
+            'cor_solida' => $estilo['cor_solida'],
+            'cor_fonte' => $estilo['cor_fonte'],
+            'cor_borda_card' => $estilo['cor_borda_card'],
+            'imagem' => $estilo['imagem_fundo_card'],
+        ];
+    }
+
+    public function fundoFormulario(): string
+    {
+        $estilo = $this->estiloFormulario();
+
+        return match ($estilo['tipo']) {
+            'solida' => $estilo['cor_solida'],
+            'transparente', 'transparente_borda' => 'transparent',
+            'imagem' => $estilo['imagem']
+                ? 'url("'.route('eventos.personalizacao.imagem', ['arquivo' => $estilo['imagem']]).'") center / cover no-repeat'
+                : $estilo['cor_solida'],
+            default => "linear-gradient(135deg, {$estilo['degrade_inicio']}, {$estilo['degrade_fim']})",
+        };
+    }
+
+    public function bordaFormulario(): string
+    {
+        $estilo = $this->estiloFormulario();
+
+        return ($estilo['tipo'] ?? '') === 'transparente_borda'
+            ? '1px solid '.($estilo['cor_borda_card'] ?? '#ffffff')
+            : 'none';
     }
 
     public function corFundoPagina(): string
@@ -60,6 +113,18 @@ class Atividade extends Model
         }
 
         return $this->evento?->corFundoPagina('atividade') ?? Evento::COR_FUNDO_PAGINA_ATIVIDADE;
+    }
+
+    public function fundoPagina(): string
+    {
+        $estilo = $this->estiloImagem();
+        if (! empty($estilo['alterar_cor_fundo_pagina'])
+            && ($estilo['fundo_pagina_tipo'] ?? 'cor') === 'imagem'
+            && ! empty($estilo['imagem_fundo_pagina'])) {
+            return 'url("'.route('eventos.personalizacao.imagem', ['arquivo' => $estilo['imagem_fundo_pagina']]).'") center / cover fixed no-repeat';
+        }
+
+        return $this->corFundoPagina();
     }
 
     public function urlPublica(): string

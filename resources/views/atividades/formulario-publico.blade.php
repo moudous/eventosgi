@@ -1,12 +1,14 @@
 @extends('layouts.app')
 @section('title', $config['titulo'] ?? $atividade->nome)
-@push('styles')<style>body{background:{{ $atividade->corFundoPagina() }}}</style>@endpush
+{{-- fundoPagina() só retorna cores hexadecimais validadas ou uma URL gerada pelo servidor. Em uma tag style,
+     escapar as aspas como &quot; invalida a função CSS url(). --}}
+@push('styles')<style>body{background:{!! $atividade->fundoPagina() !!}}</style>@endpush
 @section('content')
 @php
     // O estado vem do controller (FormularioInscricaoService::estado), que também conhece
     // o participante identificado e por isso sabe dizer se ele já se inscreveu.
-    $eventoVisual = $atividade->evento ?? new \App\Models\Evento;
     $imagemVisual = $atividade->estiloImagem();
+    $estiloCard = $atividade->estiloFormulario();
     $aberto = $estado['aberto'];
     $listaReservaAtiva = $aberto && !empty($estado['lista_reserva']);
     $errosIdentificacao = $errors->identificacao;
@@ -17,7 +19,7 @@
         || session()->has('senha_temporaria_enviada');
 @endphp
 <div class="container py-4" style="max-width: 900px">
-    <div class="mb-4 rounded-4 p-4 p-md-5" style="background: {{ $eventoVisual->fundoFormulario('atividade') }}; color: {{ $eventoVisual->estiloFormulario('atividade')['cor_fonte'] }};">
+    <div class="mb-4 rounded-4 p-4 p-md-5" style="background: {{ $atividade->fundoFormulario() }}; color: {{ $estiloCard['cor_fonte'] }}; border: {{ $atividade->bordaFormulario() }};">
         <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-4 {{ $imagemVisual['imagem'] && $imagemVisual['posicao'] === 'direita' ? 'flex-sm-row-reverse justify-content-sm-between' : '' }}">
             @if($imagemVisual['imagem'])
                 <img src="{{ route('eventos.personalizacao.imagem', ['arquivo' => $imagemVisual['imagem']]) }}" alt="Imagem da atividade {{ $atividade->nome }}" width="150" height="108" class="rounded object-fit-cover flex-shrink-0" style="{{ $imagemVisual['borda'] ? 'border: 3px solid '.$imagemVisual['cor_borda'].';' : '' }}">
@@ -297,8 +299,10 @@
                                 $criterioVagas = !empty($campo['criterio_vagas']);
                                 $nivelVagas = collect($config['distribuicao_vagas']['niveis'] ?? [])->firstWhere('campo', $nome);
                                 $reservaCheckbox = collect($config['distribuicao_vagas']['reservas_checkbox'] ?? [])->firstWhere('campo', $nome);
+                                $camposPorLinha = (int) ($campo['campos_por_linha'] ?? match ((int) ($campo['grid'] ?? 6)) { 12 => 1, 6 => 2, 4 => 3, default => 2 });
+                                $camposPorLinha = min(12, max(1, $camposPorLinha));
                             @endphp
-                            <div class="col-12 col-md-{{ in_array((int) ($campo['grid'] ?? 6), [12, 6, 4]) ? (int) ($campo['grid'] ?? 6) : 6 }}">
+                            <div class="col-12 campo-formulario-publico" style="--campos-por-linha: {{ $camposPorLinha }}; --largura-campo: {{ 100 / $camposPorLinha }}%">
                                 @if(in_array($tipo, ['radio', 'checkbox'], true))
                                     <div class="form-label">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</div>
                                 @else
@@ -419,6 +423,9 @@
     .comprovante-anexo-icone { width: 72px; height: 72px; border-radius: .5rem; flex: 0 0 72px; display: inline-flex; align-items: center; justify-content: center; background: var(--bs-body-bg); font-size: 2.25rem; }
     .comprovante-anexos-nomes { display: none; }
     .ancora-formulario { scroll-margin-top: 1rem; }
+    @media (min-width: 768px) {
+        .campo-formulario-publico { flex: 0 0 var(--largura-campo, 50%); max-width: var(--largura-campo, 50%); }
+    }
     @media (max-width: 575.98px) {
         .senha-inscricao { flex-direction: column; align-items: stretch; gap: .5rem; }
         .senha-inscricao > .form-control,

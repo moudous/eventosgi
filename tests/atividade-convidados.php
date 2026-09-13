@@ -51,7 +51,12 @@ $request = Illuminate\Http\Request::create('/', 'POST', [
     'nome' => 'Teste', 'ativo' => 1, 'evento_id' => 1,
     'personalizacao' => [
         'posicao' => 'direita', 'borda' => 1, 'cor_borda' => '#123456',
+        'usar_formatacao_evento' => 1, 'tipo' => 'degrade',
+        'degrade_inicio' => '#102a43', 'degrade_fim' => '#176b87',
+        'cor_solida' => '#102a43', 'cor_fonte' => '#ffffff',
+        'cor_borda_card' => '#ffffff',
         'alterar_cor_fundo_pagina' => 1, 'cor_fundo_pagina' => '#ABCDEF',
+        'fundo_pagina_tipo' => 'cor',
     ],
 ]);
 $request->setLaravelSession(app('session.store'));

@@ -9,6 +9,15 @@
     const quotaTypes = ['select', 'radio', 'checkbox'];
     const hierarchicalTypes = ['select', 'radio'];
     const slug = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const fieldsPerRow = field => {
+        const explicit = Number(field.campos_por_linha);
+        if (Number.isInteger(explicit) && explicit >= 1 && explicit <= 12) return explicit;
+        return ({12: 1, 6: 2, 4: 3})[Number(field.grid)] || 2;
+    };
+    const fieldsPerRowOptions = Array.from({length: 12}, (_, index) => {
+        const amount = index + 1;
+        return `<option value="${amount}">${amount} ${amount === 1 ? 'Campo' : 'Campos'} por linha</option>`;
+    }).join('');
     function optionHtml(option = {valor: '', texto: ''}) {
         const item = typeof option === 'object' && option !== null ? option : {valor: String(option), texto: String(option)};
         const percentual = item.percentual_vagas === null || item.percentual_vagas === undefined ? '' : `${Number(item.percentual_vagas)}%`;
@@ -22,8 +31,10 @@
             el.querySelector('.field-title').textContent = el.querySelector('.f-label').value || 'Novo campo';
             el.querySelector('.move-up').disabled = index === 0;
             el.querySelector('.move-down').disabled = index === fields.length - 1;
-            const grid = Number(el.querySelector('.f-grid').value);
-            el.className = `col-12 col-lg-${grid} field`;
+            const amount = Number(el.querySelector('.f-grid').value);
+            el.className = 'col-12 field';
+            el.style.setProperty('--campos-por-linha', amount);
+            el.style.setProperty('--largura-campo', `${100 / amount}%`);
             const type = el.querySelector('.f-type').value;
             const criterio = el.querySelector('.f-criterion');
             const checkboxSimples = type === 'checkbox' && !el.querySelector('.option-item');
@@ -64,14 +75,14 @@
         <div class="col-12"><label class="form-label" for="${id}">Título do campo</label><input id="${id}" class="form-control f-label" value="${esc(field.label)}" required placeholder="Ex.: Turno de participação"></div>
         <div class="col-12"><label class="form-label">Nome único<input class="form-control f-name" value="${esc(field.nome)}" placeholder="Ex.: turno" required></label></div>
         <div class="col-12"><label class="form-label">Tipo<select class="form-select f-type">${Object.entries({text:'Texto',date:'Data','datetime-local':'Data e hora',textarea:'Texto longo',file:'Arquivo',select:'Combo',radio:'Radio',checkbox:'Checkbox',multiselect:'Seleção múltipla'}).map(([value,text]) => `<option value="${value}">${text}</option>`).join('')}</select></label></div>
-        <div class="col-12"><label class="form-label">Grid — largura do campo<select class="form-select f-grid"><option value="12">12 — 1 campo por linha</option><option value="6">6 — 2 campos por linha</option><option value="4">4 — 3 campos por linha</option></select></label></div>
+        <div class="col-12"><label class="form-label">Campos por linha<select class="form-select f-grid">${fieldsPerRowOptions}</select></label></div>
         <div class="col-12"><label class="form-label">Texto de exemplo<input class="form-control f-placeholder" value="${esc(field.placeholder)}"></label></div>
         <div class="col-12"><label class="form-label">Validação<select class="form-select f-validation"><option value="">Nenhuma</option><option value="cpf">CPF</option><option value="telefone">Telefone</option><option value="email">E-mail</option></select></label></div>
         <div class="col-12"><label class="form-check"><input class="form-check-input f-required" type="checkbox" ${field.obrigatorio ? 'checked' : ''}><span class="form-check-label">Preenchimento obrigatório</span></label></div>
         </div><div class="field-options border-top mt-3 pt-3"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h3 class="h6 mb-0">Itens da lista</h3><label class="form-check criterion-toggle"><input class="form-check-input f-criterion" type="checkbox" ${field.criterio_vagas ? 'checked' : ''}><span class="form-check-label fw-semibold">Habilitar % de vaga</span></label></div><p class="small text-muted mt-2">O valor é sugerido pelo texto e pode ser editado. Em um checkbox de declaração única, deixe os itens vazios e informe abaixo o texto mostrado ao lado da caixa. Ao habilitar vagas, informe uma porcentagem ou um número inteiro de vagas. As reservas de checkbox são independentes e não tornam o preenchimento obrigatório.</p><div class="single-checkbox-option mb-3"><label class="form-label small mb-1">Texto da opção única<input class="form-control f-single-option-text" maxlength="255" value="${esc(field.texto_opcao || 'Sim')}" placeholder="Ex.: Sim, desejo participar"></label><div class="form-text">Este texto aparece ao lado da caixa de seleção.</div></div><div class="field-percent-column mb-3"><label class="form-label small mb-1">% de vagas deste checkbox<input class="form-control f-field-percent quota-percent" inputmode="decimal" value="${field.percentual_vagas === null || field.percentual_vagas === undefined ? '' : `${Number(field.percentual_vagas)}%`}" placeholder="Ex.: 25% ou 3"></label><div class="small text-muted field-quota-number"></div></div><div class="option-items">${(field.opcoes || []).map(optionHtml).join('')}</div><button type="button" class="btn btn-outline-primary btn-sm add-option"><i class="bi bi-plus-lg me-1"></i>Adicionar item da lista</button></div>
         <div class="field-upload border-top mt-3 pt-3"><label class="form-label">Extensões aceitas<input class="form-control f-accept" placeholder="pdf,jpg" value="${esc((field.aceitos || []).join(','))}"></label><label class="form-label">Máximo de arquivos<input class="form-control f-max" type="number" min="1" max="10" value="${Number(field.max_arquivos) || 1}"></label></div></div></section>`;
         el.querySelector('.f-type').value = field.tipo || 'text';
-        el.querySelector('.f-grid').value = [12,6,4].includes(Number(field.grid)) ? field.grid : 6;
+        el.querySelector('.f-grid').value = fieldsPerRow(field);
         el.querySelector('.f-validation').value = field.validacao || '';
         el.querySelectorAll('.option-value').forEach(input => {
             if (input.value && input.value !== slug(input.closest('.option-item').querySelector('.option-text').value)) input.dataset.edited = '1';
@@ -139,14 +150,14 @@
     });
     window.readBuilderFields = () => [...root.children].map(el => {
         const value = selector => el.querySelector(selector).value;
-        return {...el._original, label:value('.f-label'), nome:value('.f-name'), tipo:value('.f-type'), grid:Number(value('.f-grid')), placeholder:value('.f-placeholder'), obrigatorio:el.querySelector('.f-required').checked,
+        return {...el._original, grid:undefined, label:value('.f-label'), nome:value('.f-name'), tipo:value('.f-type'), campos_por_linha:Number(value('.f-grid')), placeholder:value('.f-placeholder'), obrigatorio:el.querySelector('.f-required').checked,
             criterio_vagas:el.querySelector('.f-criterion').checked,
             percentual_vagas:el.querySelector('.f-field-percent').disabled?null:parsePercent(el.querySelector('.f-field-percent').value),
             texto_opcao:el.querySelector('.f-single-option-text').disabled?null:value('.f-single-option-text'),
             opcoes:[...el.querySelectorAll('.option-item')].map(item => ({texto:item.querySelector('.option-text').value,valor:item.querySelector('.option-value').value,percentual_vagas:item.querySelector('.option-percent').disabled?null:parsePercent(item.querySelector('.option-percent').value)})),
             aceitos:value('.f-accept').split(',').map(v => v.trim()).filter(Boolean), max_arquivos:Number(value('.f-max')) || 1, validacao:value('.f-validation')};
     });
-    document.getElementById('addField').onclick = () => add({grid:12}, true);
+    document.getElementById('addField').onclick = () => add({campos_por_linha:1}, true);
     const fields = initial.campos ?? (initial.rows || []).flatMap(row => row.columns.flatMap(col => col.fields));
     fields.forEach(field => add(field));
     criteriaUids = (initial.criterios_vagas || []).map(nome => [...root.children].find(el => el.querySelector('.f-name').value === nome)?.dataset.builderId).filter(Boolean);
