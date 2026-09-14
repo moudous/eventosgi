@@ -125,11 +125,13 @@ Route::prefix('eventos')->name('eventos.')->group(function (): void {
 // A edição exige permissão; a visualização é pública para sites externos poderem
 // incorporá-la diretamente em um iframe.
 Route::prefix('eventos/{evento}/pagina')->name('eventos.pagina.')->group(function (): void {
-    Route::get('/', [PaginaEventoController::class, 'editar'])->middleware('gi.permission:eventos.pagina.editar')->name('editar');
-    Route::put('/', [PaginaEventoController::class, 'salvar'])->middleware('gi.permission:eventos.pagina.editar')->name('salvar');
-    Route::get('/codigo-fonte', [PaginaEventoController::class, 'arquivoCodigo'])->middleware('gi.permission:eventos.pagina.editar')->name('codigo-fonte');
-    Route::put('/codigo-fonte', [PaginaEventoController::class, 'salvarCodigo'])->middleware('gi.permission:eventos.pagina.editar')->name('codigo-fonte.salvar');
-    Route::post('/codigo-fonte/nova-versao', [PaginaEventoController::class, 'novaVersao'])->middleware('gi.permission:eventos.pagina.editar')->name('codigo-fonte.nova-versao');
+    // eventos.pagina.editar permanece como compatibilidade para perfis antigos. As
+    // permissões novas permitem liberar apenas variáveis ou apenas código-fonte.
+    Route::get('/', [PaginaEventoController::class, 'editar'])->middleware('gi.permission:eventos.pagina.editar,templates.variaveis.visualizar,templates.variaveis.editar,templates.codigo_fonte.visualizar,templates.codigo_fonte.editar')->name('editar');
+    Route::put('/', [PaginaEventoController::class, 'salvar'])->middleware('gi.permission:eventos.pagina.editar,templates.variaveis.editar')->name('salvar');
+    Route::get('/codigo-fonte', [PaginaEventoController::class, 'arquivoCodigo'])->middleware('gi.permission:eventos.pagina.editar,templates.codigo_fonte.visualizar,templates.codigo_fonte.editar')->name('codigo-fonte');
+    Route::put('/codigo-fonte', [PaginaEventoController::class, 'salvarCodigo'])->middleware('gi.permission:eventos.pagina.editar,templates.codigo_fonte.editar')->name('codigo-fonte.salvar');
+    Route::post('/codigo-fonte/nova-versao', [PaginaEventoController::class, 'novaVersao'])->middleware('gi.permission:eventos.pagina.editar,templates.codigo_fonte.editar')->name('codigo-fonte.nova-versao');
     Route::get('/visualizar', [PaginaEventoController::class, 'visualizar'])->name('visualizar');
 });
 

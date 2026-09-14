@@ -9,9 +9,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RequireGiPermission
 {
-    public function handle(Request $request, Closure $next, string $permissao): Response
+    public function handle(Request $request, Closure $next, string ...$permissoes): Response
     {
-        app(GiPermissionService::class)->exigir($permissao, $request);
+        app(GiPermissionService::class)->exigirAlguma($permissoes, $request);
 
         return $next($request);
     }

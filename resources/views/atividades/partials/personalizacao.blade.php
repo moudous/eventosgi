@@ -24,9 +24,10 @@
 @endphp
 <script type="application/json" id="estilosEventosAtividade">@json($estilosEventos)</script>
 
-<div class="card content-card mt-4" data-fundo-pagina-card data-imagem-fundo-pagina="{{ $urlImagem($imagemFundoPagina) }}" data-fundo-pagina-evento="{{ $atividade?->evento?->corFundoPagina('atividade') ?? \App\Models\Evento::COR_FUNDO_PAGINA_ATIVIDADE }}">
-    <div class="card-header"><h2 class="h5 fw-bold mb-0">Fundo da página do formulário</h2></div>
+<div class="card content-card mt-4 {{ $podeVerFundoPagina ? '' : 'd-none' }}" data-fundo-pagina-card data-imagem-fundo-pagina="{{ $urlImagem($imagemFundoPagina) }}" data-fundo-pagina-evento="{{ $atividade?->evento?->corFundoPagina('atividade') ?? \App\Models\Evento::COR_FUNDO_PAGINA_ATIVIDADE }}">
+    <div class="card-header d-flex align-items-center justify-content-between gap-2"><h2 class="h5 fw-bold mb-0">Fundo da página do formulário</h2>@unless($podeEditarFundoPagina)<span class="badge text-bg-secondary"><i class="bi bi-eye me-1"></i>Somente visualização</span>@endunless</div>
     <div class="card-body p-4">
+        <fieldset class="border-0 m-0 p-0 w-100" @disabled(!$podeEditarFundoPagina)>
         <p class="text-muted">Altera a área externa ao card de título e ao formulário. A cor e a imagem ficam salvas para você alternar entre elas.</p>
         <input type="hidden" name="personalizacao[alterar_cor_fundo_pagina]" value="0">
         <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" role="switch" id="alterar_cor_fundo_pagina" name="personalizacao[alterar_cor_fundo_pagina]" value="1" @checked($alterarPagina) data-alterar-fundo-pagina><label class="form-check-label fw-semibold" for="alterar_cor_fundo_pagina">Alterar cor de fundo da página</label></div>
@@ -38,12 +39,14 @@
             </div>
         </div>
         <div class="form-text mt-2">Quando desativado, o fundo da página segue a configuração do evento.</div>
+        </fieldset>
     </div>
 </div>
 
-<div class="card content-card mt-4" data-personalizacao-atividade data-imagem-fundo-card="{{ $urlImagem($imagemFundoCard) }}" data-imagem-evento="{{ $urlImagem($estiloEvento['imagem']) }}" data-evento-estilo='@json($estiloEvento)'>
-    <div class="card-header"><h2 class="h5 fw-bold mb-0">Personalização da atividade</h2></div>
+<div class="card content-card mt-4 {{ $podeVerPersonalizacao ? '' : 'd-none' }}" data-personalizacao-atividade data-imagem-fundo-card="{{ $urlImagem($imagemFundoCard) }}" data-imagem-evento="{{ $urlImagem($estiloEvento['imagem']) }}" data-evento-estilo='@json($estiloEvento)'>
+    <div class="card-header d-flex align-items-center justify-content-between gap-2"><h2 class="h5 fw-bold mb-0">Personalização da atividade</h2>@unless($podeEditarPersonalizacao)<span class="badge text-bg-secondary"><i class="bi bi-eye me-1"></i>Somente visualização</span>@endunless</div>
     <div class="card-body p-4">
+        <fieldset class="border-0 m-0 p-0 w-100" @disabled(!$podeEditarPersonalizacao)>
         <input type="hidden" name="personalizacao[usar_formatacao_evento]" value="0">
         <div class="form-check form-switch mb-1"><input class="form-check-input" type="checkbox" role="switch" id="usar_formatacao_evento" name="personalizacao[usar_formatacao_evento]" value="1" @checked($usarEvento) data-usar-formatacao-evento><label class="form-check-label fw-semibold" for="usar_formatacao_evento">Usar formatação do evento</label></div>
         <p class="form-text mb-4">As configurações próprias permanecem salvas quando você volta a usar a formatação do evento.</p>
@@ -71,9 +74,12 @@
             </div>
             <div class="col-12 col-lg-5"><div class="rounded-3 p-3" data-preview-pagina><div class="small mb-2" data-preview-label>Prévia do fundo da página e do card de título</div><div class="rounded-3 p-4" data-preview-card><div class="d-flex gap-3 align-items-center" data-preview-atividade><img src="{{ $urlImagem($imagemAtividade) }}" alt="Prévia da atividade" width="120" height="86" class="rounded object-fit-cover flex-shrink-0 {{ $imagemAtividade ? '' : 'd-none' }}" data-preview-imagem><div data-preview-texto><strong class="d-block">{{ old('nome', $atividade?->nome ?? 'Nome da atividade') }}</strong><span class="small">Evento · Início · Fim</span></div></div></div></div></div>
         </div>
+        </fieldset>
     </div>
 </div>
 
+@if($podeEditarPersonalizacao)
 <div class="modal fade" id="recorteImagemAtividade" tabindex="-1" aria-labelledby="recorteImagemAtividadeTitulo" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><h2 class="modal-title fs-5" id="recorteImagemAtividadeTitulo">Recortar imagem da atividade</h2><p class="small text-muted mb-0">Clique e arraste sobre a imagem para marcar a área que será enviada.</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div><div class="modal-body text-center bg-body-tertiary"><canvas class="mw-100 bg-dark rounded shadow-sm" style="height:auto;cursor:crosshair;touch-action:none" data-recorte-canvas></canvas><div class="small text-muted mt-2" data-recorte-status>Arraste sobre a imagem para selecionar o recorte.</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-primary" data-aplicar-recorte disabled><i class="bi bi-crop me-1"></i>Usar área selecionada</button></div></div></div></div>
+@endif
 
 @push('scripts')<script src="{{ asset('personalizacao-atividade.js') }}?v={{ filemtime(public_path('personalizacao-atividade.js')) }}" defer></script><script src="{{ asset('cor-fundo-pagina.js') }}?v={{ filemtime(public_path('cor-fundo-pagina.js')) }}" defer></script>@endpush

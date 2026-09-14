@@ -669,10 +669,33 @@ class AtividadeController
     }
     private function validar(Request $request, ?Atividade $atividade = null): array
     {
-        $podePersonalizar = app(GiPermissionService::class)->permite('atividades.personalizar', $request);
+        $permissoes = app(GiPermissionService::class);
+        $podePersonalizarLegado = $permissoes->permite('atividades.personalizar', $request);
+        $podeEditarFundoPagina = $podePersonalizarLegado || $permissoes->permite('atividades.fundo_pagina.editar', $request);
+        $podeEditarPersonalizacao = $podePersonalizarLegado || $permissoes->permite('atividades.personalizacao.editar', $request);
+        $podePersonalizar = $podeEditarFundoPagina || $podeEditarPersonalizacao;
         $ignorarPersonalizacao = \Illuminate\Validation\Rule::excludeIf(!$podePersonalizar);
+        $ignorarFundoPagina = \Illuminate\Validation\Rule::excludeIf(!$podeEditarFundoPagina);
+        $ignorarEstiloAtividade = \Illuminate\Validation\Rule::excludeIf(!$podeEditarPersonalizacao);
         $request->mergeIfMissing(['tipo' => $atividade?->tipo ?? 'somente_inscricao']);
         $request->mergeIfMissing(['formato' => $atividade?->formato ?? 'simples']);
+
+        if ($podePersonalizar) {
+            // Campos que o perfil não pode editar sempre vêm do modelo, nunca do payload.
+            // Isso também torna seguro um POST montado manualmente fora da interface.
+            $personalizacao = (array) $request->input('personalizacao', []);
+            $salva = ($atividade ?? new Atividade)->estiloImagem();
+            $camposFundoPagina = ['alterar_cor_fundo_pagina', 'cor_fundo_pagina', 'fundo_pagina_tipo'];
+            $camposEstiloAtividade = ['posicao', 'borda', 'cor_borda', 'usar_formatacao_evento', 'tipo', 'degrade_inicio', 'degrade_fim', 'cor_solida', 'cor_fonte', 'cor_borda_card'];
+            if (! $podeEditarFundoPagina) {
+                foreach ($camposFundoPagina as $campo) $personalizacao[$campo] = $salva[$campo];
+            }
+            if (! $podeEditarPersonalizacao) {
+                foreach ($camposEstiloAtividade as $campo) $personalizacao[$campo] = $salva[$campo];
+            }
+            $request->merge(['personalizacao' => $personalizacao]);
+        }
+
         $dados = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
             'tipo' => ['required', 'in:somente_inscricao,atividade_evento'],
@@ -703,12 +726,12 @@ class AtividadeController
             'personalizacao.alterar_cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'boolean'],
             'personalizacao.cor_fundo_pagina' => [$ignorarPersonalizacao, 'required', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'personalizacao.fundo_pagina_tipo' => [$ignorarPersonalizacao, 'required', 'in:cor,imagem'],
-            'imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
-            'imagem_fundo_card_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
-            'imagem_fundo_pagina_atividade' => [$ignorarPersonalizacao, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
-            'remover_imagem_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
-            'remover_imagem_fundo_card_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
-            'remover_imagem_fundo_pagina_atividade' => [$ignorarPersonalizacao, 'nullable', 'boolean'],
+            'imagem_atividade' => [$ignorarEstiloAtividade, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'imagem_fundo_card_atividade' => [$ignorarEstiloAtividade, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'imagem_fundo_pagina_atividade' => [$ignorarFundoPagina, 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192', 'dimensions:max_width=12000,max_height=12000'],
+            'remover_imagem_atividade' => [$ignorarEstiloAtividade, 'nullable', 'boolean'],
+            'remover_imagem_fundo_card_atividade' => [$ignorarEstiloAtividade, 'nullable', 'boolean'],
+            'remover_imagem_fundo_pagina_atividade' => [$ignorarFundoPagina, 'nullable', 'boolean'],
         ]);
 
         if ($dados['tipo'] === 'somente_inscricao') {
@@ -731,16 +754,17 @@ class AtividadeController
         foreach (['cor_borda', 'degrade_inicio', 'degrade_fim', 'cor_solida', 'cor_fonte', 'cor_borda_card', 'cor_fundo_pagina'] as $cor) {
             $dados['personalizacao'][$cor] = strtolower($dados['personalizacao'][$cor]);
         }
-        $dados['personalizacao']['imagem'] = $request->boolean('remover_imagem_atividade')
+        $dados['personalizacao']['imagem'] = $podeEditarPersonalizacao && $request->boolean('remover_imagem_atividade')
             ? null
             : $atividade?->estiloImagem()['imagem'];
-        $dados['personalizacao']['imagem_fundo_card'] = $request->boolean('remover_imagem_fundo_card_atividade')
+        $dados['personalizacao']['imagem_fundo_card'] = $podeEditarPersonalizacao && $request->boolean('remover_imagem_fundo_card_atividade')
             ? null
             : ($atividade?->personalizacao['imagem_fundo_card'] ?? null);
-        $dados['personalizacao']['imagem_fundo_pagina'] = $request->boolean('remover_imagem_fundo_pagina_atividade')
+        $dados['personalizacao']['imagem_fundo_pagina'] = $podeEditarFundoPagina && $request->boolean('remover_imagem_fundo_pagina_atividade')
             ? null
             : ($atividade?->personalizacao['imagem_fundo_pagina'] ?? null);
         foreach (['imagem_atividade' => 'imagem', 'imagem_fundo_card_atividade' => 'imagem_fundo_card', 'imagem_fundo_pagina_atividade' => 'imagem_fundo_pagina'] as $campo => $chave) {
+            if ($campo === 'imagem_fundo_pagina_atividade' ? ! $podeEditarFundoPagina : ! $podeEditarPersonalizacao) continue;
             $arquivo = $request->file($campo);
             if (! $arquivo) continue;
             $nome = \Illuminate\Support\Str::uuid().'.'.$arquivo->extension();
@@ -748,12 +772,14 @@ class AtividadeController
             $arquivo->move(storage_path('app/public/personalizacao'), $nome);
             $dados['personalizacao'][$chave] = $nome;
         }
-        if (! $dados['personalizacao']['usar_formatacao_evento']
+        if ($podeEditarPersonalizacao
+            && ! $dados['personalizacao']['usar_formatacao_evento']
             && $dados['personalizacao']['tipo'] === 'imagem'
             && ! $dados['personalizacao']['imagem_fundo_card']) {
             throw \Illuminate\Validation\ValidationException::withMessages(['imagem_fundo_card_atividade' => 'Selecione uma imagem para o fundo do card de título.']);
         }
-        if ($dados['personalizacao']['alterar_cor_fundo_pagina']
+        if ($podeEditarFundoPagina
+            && $dados['personalizacao']['alterar_cor_fundo_pagina']
             && $dados['personalizacao']['fundo_pagina_tipo'] === 'imagem'
             && ! $dados['personalizacao']['imagem_fundo_pagina']) {
             throw \Illuminate\Validation\ValidationException::withMessages(['imagem_fundo_pagina_atividade' => 'Selecione uma imagem para o fundo da página.']);

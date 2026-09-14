@@ -7,6 +7,7 @@ use App\Models\Atividade;
 use App\Models\Convidado;
 use App\Models\PaginaPadraoEvento;
 use App\Models\TemplatePagina;
+use App\Services\GiPermissionService;
 use App\Services\PaginaEventoRenderer;
 use App\Services\TemplatePaginaService;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +36,12 @@ class PaginaEventoController
         // os valores já escolhidos pelo evento permanecem em pagina_variaveis.
         $this->templates->sincronizar();
         $evento->load(['templatePagina', 'submissoes']);
+        $permissoes = app(GiPermissionService::class);
+        $podeEditarPagina = $permissoes->permite('eventos.pagina.editar');
+        $podeVerVariaveis = $podeEditarPagina || $permissoes->permiteAlguma(['templates.variaveis.visualizar', 'templates.variaveis.editar']);
+        $podeEditarVariaveis = $podeEditarPagina || $permissoes->permite('templates.variaveis.editar');
+        $podeVerCodigo = $podeEditarPagina || $permissoes->permiteAlguma(['templates.codigo_fonte.visualizar', 'templates.codigo_fonte.editar']);
+        $podeEditarCodigo = $podeEditarPagina || $permissoes->permite('templates.codigo_fonte.editar');
 
         $paginaPadrao = $evento->paginaPadrao;
 
@@ -49,11 +56,24 @@ class PaginaEventoController
             'proximaVersao' => $evento->templatePagina ? $this->templates->proximaVersao($evento->templatePagina->versao) : '1.0.0',
             'configuracaoPadrao' => $paginaPadrao?->configuracaoCompleta() ?? PaginaPadraoEvento::padrao(),
             'submissoes' => $evento->submissoes,
+            'permissoes' => $permissoes,
+            'podeEditarPagina' => $podeEditarPagina,
+            'podeVerVariaveis' => $podeVerVariaveis,
+            'podeEditarVariaveis' => $podeEditarVariaveis,
+            'podeVerCodigo' => $podeVerCodigo,
+            'podeEditarCodigo' => $podeEditarCodigo,
         ]);
     }
 
     public function salvar(Request $request, Evento $evento): RedirectResponse
     {
+        $permissoes = app(GiPermissionService::class);
+        $podeEditarPagina = $permissoes->permite('eventos.pagina.editar', $request);
+        if (! $podeEditarPagina) {
+            // A permissão de variáveis não autoriza trocar ou remover o template.
+            $request->merge(['template_pagina_id' => $evento->template_pagina_id]);
+        }
+
         $dados = $request->validate(
             ['template_pagina_id' => ['nullable', 'integer', 'exists:templates_pagina,id']],
             [],

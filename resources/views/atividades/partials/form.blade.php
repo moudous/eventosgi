@@ -29,8 +29,16 @@
 <div id="listaSessoes" class="d-flex flex-column gap-3"></div>
 </div>
 </div></div></div>
-@if(app(\App\Services\GiPermissionService::class)->permite('atividades.personalizar'))
-@include('atividades.partials.personalizacao')
+@php
+    $permissoesPersonalizacao = app(\App\Services\GiPermissionService::class);
+    $podePersonalizarLegado = $permissoesPersonalizacao->permite('atividades.personalizar');
+    $podeVerFundoPagina = $podePersonalizarLegado || $permissoesPersonalizacao->permiteAlguma(['atividades.fundo_pagina.visualizar', 'atividades.fundo_pagina.editar']);
+    $podeEditarFundoPagina = $podePersonalizarLegado || $permissoesPersonalizacao->permite('atividades.fundo_pagina.editar');
+    $podeVerPersonalizacao = $podePersonalizarLegado || $permissoesPersonalizacao->permiteAlguma(['atividades.personalizacao.visualizar', 'atividades.personalizacao.editar']);
+    $podeEditarPersonalizacao = $podePersonalizarLegado || $permissoesPersonalizacao->permite('atividades.personalizacao.editar');
+@endphp
+@if($podeVerFundoPagina || $podeVerPersonalizacao)
+@include('atividades.partials.personalizacao', compact('podeVerFundoPagina', 'podeEditarFundoPagina', 'podeVerPersonalizacao', 'podeEditarPersonalizacao'))
 @endif
 <div class="mt-4 d-flex justify-content-end gap-2"><a href="{{route('atividades.index')}}" class="btn btn-outline-secondary">Cancelar</a><button class="btn btn-primary"><i class="bi bi-check-lg me-2"></i>Salvar</button></div>
 @push('scripts')
