@@ -9,6 +9,7 @@ use App\Models\PaginaPadraoEvento;
 use App\Models\TemplatePagina;
 use App\Services\PaginaEventoRenderer;
 use App\Services\TemplatePaginaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -44,6 +45,8 @@ class PaginaEventoController
             'variaveis' => $evento->templatePagina?->variaveis ?? [],
             'valores' => (array) ($evento->pagina_variaveis ?? []),
             'arquivos' => $evento->templatePagina ? $this->templates->arquivos($evento->templatePagina) : [],
+            'arquivosCodigo' => $evento->templatePagina ? $this->templates->arquivosEditaveis($evento->templatePagina) : [],
+            'proximaVersao' => $evento->templatePagina ? $this->templates->proximaVersao($evento->templatePagina->versao) : '1.0.0',
             'configuracaoPadrao' => $paginaPadrao?->configuracaoCompleta() ?? PaginaPadraoEvento::padrao(),
             'submissoes' => $evento->submissoes,
         ]);
@@ -80,6 +83,71 @@ class PaginaEventoController
         ]);
 
         return back()->with('status', 'Página do evento salva com sucesso.');
+    }
+
+    public function arquivoCodigo(Request $request, Evento $evento): JsonResponse
+    {
+        $dados = $request->validate(['arquivo' => ['required', 'string', 'max:500']]);
+        $template = $evento->templatePagina;
+        if (! $template) return response()->json(['message' => 'Selecione um template antes de abrir o editor.'], 422);
+
+        try {
+            return response()->json([
+                'arquivo' => $dados['arquivo'],
+                'conteudo' => $this->templates->lerArquivoEditavel($template, $dados['arquivo']),
+            ]);
+        } catch (\RuntimeException $excecao) {
+            return response()->json(['message' => $excecao->getMessage()], 422);
+        }
+    }
+
+    public function salvarCodigo(Request $request, Evento $evento): JsonResponse
+    {
+        $dados = $request->validate([
+            'arquivo' => ['required', 'string', 'max:500'],
+            'conteudo' => ['present', 'string', 'max:'.TemplatePaginaService::TAMANHO_MAXIMO_EDITOR],
+        ]);
+        $template = $evento->templatePagina;
+        if (! $template) return response()->json(['message' => 'Selecione um template antes de salvar.'], 422);
+
+        try {
+            $this->templates->salvarArquivoEditavel($template, $dados['arquivo'], $dados['conteudo']);
+
+            return response()->json(['message' => 'Arquivo salvo com sucesso.']);
+        } catch (\RuntimeException $excecao) {
+            return response()->json(['message' => $excecao->getMessage()], 422);
+        }
+    }
+
+    public function novaVersao(Request $request, Evento $evento): JsonResponse
+    {
+        $dados = $request->validate([
+            'nome' => ['required', 'string', 'max:150'],
+            'versao' => ['required', 'string', 'max:20', 'regex:/^[0-9A-Za-z][0-9A-Za-z._-]*$/'],
+            'arquivo' => ['required', 'string', 'max:500'],
+            'conteudo' => ['present', 'string', 'max:'.TemplatePaginaService::TAMANHO_MAXIMO_EDITOR],
+        ], ['versao.regex' => 'Use apenas letras, números, ponto, hífen e sublinhado na versão.']);
+        $template = $evento->templatePagina;
+        if (! $template) return response()->json(['message' => 'Selecione um template antes de criar uma versão.'], 422);
+
+        try {
+            $nova = $this->templates->criarVersao(
+                $template,
+                $dados['nome'],
+                $dados['versao'],
+                $dados['arquivo'],
+                $dados['conteudo'],
+                $request->session()->get('gi_context.usuario.id'),
+            );
+            $evento->update(['template_pagina_id' => $nova->id]);
+
+            return response()->json([
+                'message' => "Nova versão {$nova->versao} criada e aplicada a este evento.",
+                'redirect' => route('eventos.pagina.editar', $evento).'#codigo-fonte',
+            ]);
+        } catch (\RuntimeException $excecao) {
+            return response()->json(['message' => $excecao->getMessage()], 422);
+        }
     }
 
     /**

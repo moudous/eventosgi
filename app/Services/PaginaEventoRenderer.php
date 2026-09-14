@@ -28,7 +28,7 @@ use App\Models\Evento;
 class PaginaEventoRenderer
 {
     /** Nomes reservados: uma variavel do evento nao pode encobrir os dados do sistema. */
-    public const RESERVADOS = ['evento', 'atividades', 'categorias', 'convidados', 'eventos', 'dias', 'menu', 'loop'];
+    public const RESERVADOS = ['evento', 'atividades', 'categorias', 'convidados', 'submissoes', 'eventos', 'dias', 'menu', 'loop', 'programacao_dias', 'hands_on', 'total_convidados', 'total_programacao'];
 
     /** Teto de itens por coleção, para um template não derrubar a página pedindo tudo. */
     private const MAX_ITENS = 500;
@@ -63,8 +63,9 @@ class PaginaEventoRenderer
      */
     public function contexto(Evento $evento): array
     {
+        $template = $evento->templatePagina;
         $atividades = Atividade::query()
-            ->with(['categoria', 'sessoes' => fn ($query) => $query->where('ativo', true)->withCount('inscricoes')])
+            ->with(['categoria', 'convidados', 'sessoes' => fn ($query) => $query->where('ativo', true)->withCount('inscricoes')])
             ->where('evento_id', $evento->id)
             ->where('ativo', true)
             ->orderByRaw('data_inicio is null, data_inicio')->orderBy('nome')
@@ -80,8 +81,17 @@ class PaginaEventoRenderer
             'atividades' => $atividades->map(fn (Atividade $atividade) => [
                 'id' => $atividade->id,
                 'nome' => (string) $atividade->nome,
+                'subtitulo' => (string) ($atividade->formulario['subtitulo'] ?? ''),
+                'local' => (string) ($atividade->formulario['local'] ?? ''),
+                'hora_inicio' => $atividade->data_inicio?->format('H:i') ?? '',
+                'hora_fim' => $atividade->data_fim?->format('H:i') ?? '',
+                'dia' => $atividade->data_inicio?->format('d/m') ?? '',
+                'hands_on' => \Illuminate\Support\Str::slug($atividade->categoria?->nome ?? '') === 'hands-on',
+                'inscricao_geral' => \Illuminate\Support\Str::slug($atividade->categoria?->nome ?? '') === 'inscricao-no-evento',
+                'convidados' => $atividade->convidados->map(fn ($convidado) => $this->dadosConvidado($convidado))->all(),
+                ...$this->dadosInscricao($atividade),
                 'formato' => $atividade->formato,
-                'modalidade' => $atividade->modalidade ? strtoupper($atividade->modalidade) : '',
+                'modalidade' => match ($atividade->modalidade) { 'ead' => 'ONLINE', 'presencial' => 'PRESENCIAL', default => '' },
                 'data_inicio' => $atividade->data_inicio?->format('d/m/Y H:i') ?? '',
                 'data_fim' => $atividade->data_fim?->format('d/m/Y H:i') ?? '',
                 'data_inicio_iso' => $atividade->data_inicio?->toIso8601String() ?? '',
@@ -104,17 +114,18 @@ class PaginaEventoRenderer
             'categorias' => Categoria::query()->where('ativo', true)->orderBy('nome')
                 ->limit(self::MAX_ITENS)->get()
                 ->map(fn (Categoria $categoria) => ['id' => $categoria->id, 'nome' => (string) $categoria->nome])->all(),
-            'convidados' => Convidado::query()->orderBy('nome')->limit(self::MAX_ITENS)->get()
-                ->map(fn (Convidado $convidado) => [
-                    'id' => $convidado->id,
-                    'nome' => trim($convidado->nome.' '.(string) $convidado->sobrenome),
-                    'titulacao' => (string) $convidado->titulacao,
-                    'descricao' => (string) $convidado->descricao,
-                    'curriculo' => (string) $convidado->curriculo,
-                    'local' => (string) $convidado->local,
-                    'email' => (string) $convidado->email,
-                    'foto' => $convidado->foto_nome ? route('convidados.foto', $convidado->foto_nome) : null,
-                    'redes_sociais' => array_values((array) ($convidado->redes_sociais ?? [])),
+            'convidados' => Convidado::query()->whereHas('eventos', fn ($query) => $query->where('eventos.id', $evento->id))
+                ->orderBy('nome')->limit(self::MAX_ITENS)->get()
+                ->map(fn (Convidado $convidado) => $this->dadosConvidado($convidado))->all(),
+            'submissoes' => $evento->submissoes()->where('ativo', true)->orderBy('data_inicio')->orderBy('id')
+                ->limit(self::MAX_ITENS)->get()
+                ->map(fn ($submissao) => [
+                    'id' => $submissao->id,
+                    'titulo' => (string) $submissao->titulo,
+                    'data_inicio' => $submissao->data_inicio?->format('d/m/Y H:i') ?? '',
+                    'data_fim' => $submissao->data_fim?->format('d/m/Y H:i') ?? '',
+                    'aberta' => $submissao->aberta(),
+                    'url' => route('submissoes.publicas.formulario', $submissao).'?pagina_evento='.urlencode(route('eventos.pagina.visualizar', $evento)),
                 ])->all(),
             'eventos' => Evento::query()->where('ativo', true)->orderBy('nome')
                 ->limit(self::MAX_ITENS)->get()
@@ -125,6 +136,17 @@ class PaginaEventoRenderer
         // agrupa nem filtra, entao quem monta o contexto entrega o agrupamento feito.
         $dados['dias'] = $this->porDia($dados['atividades']);
         $dados['menu'] = $this->porCategoria($dados['atividades']);
+        $programacao = array_values(array_filter($dados['atividades'], function ($item) use ($evento) {
+            if ($item['inscricao_geral'] || ! $item['data_inicio_iso']) return false;
+            $data = substr($item['data_inicio_iso'], 0, 10);
+            $inicio = $evento->pagina_variaveis['agenda_inicio'] ?? '';
+            $fim = $evento->pagina_variaveis['agenda_fim'] ?? '';
+            return (! $inicio || $data >= $inicio) && (! $fim || $data <= $fim);
+        }));
+        $dados['programacao_dias'] = $this->porDia($programacao);
+        $dados['hands_on'] = array_values(array_filter($programacao, fn ($item) => $item['hands_on']));
+        $dados['total_convidados'] = count($dados['convidados']);
+        $dados['total_programacao'] = count($programacao);
 
         // Os padrões do manifesto também entram no contexto: assim uma página recém
         // criada já renderiza corretamente antes de o usuário clicar em Salvar.
@@ -141,6 +163,41 @@ class PaginaEventoRenderer
         }
 
         return $dados;
+    }
+
+    private function dadosConvidado(Convidado $convidado): array
+    {
+        preg_match_all('/<li\b[^>]*>(.*?)<\/li>/is', (string) $convidado->curriculo, $itens);
+
+        return [
+            'id' => $convidado->id,
+            'nome' => trim($convidado->nome.' '.(string) $convidado->sobrenome),
+            'titulacao' => (string) $convidado->titulacao,
+            'descricao' => (string) $convidado->descricao,
+            'curriculo' => (string) $convidado->curriculo,
+            'curriculo_texto' => trim(html_entity_decode(strip_tags(preg_replace('/<\/(p|li|h[1-6])>/i', ' ', (string) $convidado->curriculo)), ENT_QUOTES, 'UTF-8')),
+            'curriculo_itens' => array_values(array_filter(array_map(
+                fn (string $item) => trim(html_entity_decode(strip_tags($item), ENT_QUOTES, 'UTF-8')),
+                $itens[1] ?? [],
+            ))),
+            'local' => (string) $convidado->local,
+            'email' => (string) $convidado->email,
+            'foto' => $convidado->foto_nome ? route('convidados.foto', $convidado->foto_nome) : null,
+            'redes_sociais' => array_values((array) ($convidado->redes_sociais ?? [])),
+        ];
+    }
+
+    private function dadosInscricao(Atividade $atividade): array
+    {
+        if (! $atividade->formulario) return ['pode_inscrever' => false, 'inscricao_rotulo' => 'Inscrições em breve', 'lista_reserva' => false];
+        $estado = app(FormularioInscricaoService::class)->estado($atividade);
+        return [
+            'pode_inscrever' => $estado['aberto'],
+            'lista_reserva' => $estado['lista_reserva'],
+            'inscricao_rotulo' => $estado['aberto']
+                ? ($estado['lista_reserva'] ? 'Inscrever além do limite' : 'Inscreva-se')
+                : match ($estado['motivo']) { 'esgotado' => 'Vagas esgotadas', 'antes' => 'Inscrições em breve', default => 'Inscrições encerradas' },
+        ];
     }
 
     /**

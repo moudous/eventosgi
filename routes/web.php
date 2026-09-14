@@ -127,6 +127,9 @@ Route::prefix('eventos')->name('eventos.')->group(function (): void {
 Route::prefix('eventos/{evento}/pagina')->name('eventos.pagina.')->group(function (): void {
     Route::get('/', [PaginaEventoController::class, 'editar'])->middleware('gi.permission:eventos.pagina.editar')->name('editar');
     Route::put('/', [PaginaEventoController::class, 'salvar'])->middleware('gi.permission:eventos.pagina.editar')->name('salvar');
+    Route::get('/codigo-fonte', [PaginaEventoController::class, 'arquivoCodigo'])->middleware('gi.permission:eventos.pagina.editar')->name('codigo-fonte');
+    Route::put('/codigo-fonte', [PaginaEventoController::class, 'salvarCodigo'])->middleware('gi.permission:eventos.pagina.editar')->name('codigo-fonte.salvar');
+    Route::post('/codigo-fonte/nova-versao', [PaginaEventoController::class, 'novaVersao'])->middleware('gi.permission:eventos.pagina.editar')->name('codigo-fonte.nova-versao');
     Route::get('/visualizar', [PaginaEventoController::class, 'visualizar'])->name('visualizar');
 });
 

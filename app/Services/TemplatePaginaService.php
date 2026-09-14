@@ -47,6 +47,12 @@ class TemplatePaginaService
      */
     private const EXTENSOES = ['html', 'css', 'js', 'json', 'map', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot', 'txt', 'md'];
 
+    /** Arquivos que podem ser tratados como código-fonte no editor administrativo. */
+    private const EXTENSOES_EDITAVEIS = ['html', 'css', 'js', 'json', 'map', 'svg', 'txt', 'md'];
+
+    /** Evita carregar ou gravar acidentalmente arquivos de código excessivamente grandes. */
+    public const TAMANHO_MAXIMO_EDITOR = 2_000_000;
+
     public function __construct(
         private readonly ZipLeitorService $zip,
         private readonly ZipEscritorService $escritor,
@@ -147,7 +153,20 @@ class TemplatePaginaService
 
     public function urlDoAsset(TemplatePagina $template, string $arquivo): string
     {
-        return route('templates.asset', ['template' => $template->id, 'caminho' => ltrim($arquivo, '/')]);
+        $arquivo = ltrim(str_replace('\\', '/', $arquivo), '/');
+        $url = route('templates.asset', ['template' => $template->id, 'caminho' => $arquivo]);
+
+        // Os assets têm cache público. Vincular a URL à data de alteração evita que o
+        // navegador mantenha CSS/JS antigos depois de uma edição no editor do template.
+        if ($arquivo === '' || str_contains($arquivo, '..')) return $url;
+
+        $raiz = realpath($this->caminho($template));
+        $real = realpath($this->caminho($template).'/'.$arquivo);
+        if ($raiz === false || $real === false || ! str_starts_with($real, $raiz.DIRECTORY_SEPARATOR)) return $url;
+
+        $alteradoEm = filemtime($real);
+
+        return $url.($alteradoEm === false ? '' : '?v='.$alteradoEm);
     }
 
     /**
@@ -169,6 +188,133 @@ class TemplatePaginaService
         }
 
         return $arquivos;
+    }
+
+    /** @return list<string> */
+    public function arquivosEditaveis(TemplatePagina $template): array
+    {
+        return array_values(array_filter(
+            $this->arquivos($template),
+            fn (string $arquivo): bool => in_array(strtolower(pathinfo($arquivo, PATHINFO_EXTENSION)), self::EXTENSOES_EDITAVEIS, true),
+        ));
+    }
+
+    /** Lê um arquivo textual depois de garantir que ele continua dentro do template. */
+    public function lerArquivoEditavel(TemplatePagina $template, string $arquivo): string
+    {
+        $caminho = $this->caminhoEditavel($template, $arquivo);
+        if (filesize($caminho) > self::TAMANHO_MAXIMO_EDITOR) {
+            throw new RuntimeException('O arquivo ultrapassa o limite de 2 MB do editor.');
+        }
+
+        return (string) File::get($caminho);
+    }
+
+    /** Grava somente arquivos textuais já existentes na pasta do template. */
+    public function salvarArquivoEditavel(TemplatePagina $template, string $arquivo, string $conteudo): void
+    {
+        if (strlen($conteudo) > self::TAMANHO_MAXIMO_EDITOR) {
+            throw new RuntimeException('O conteúdo ultrapassa o limite de 2 MB do editor.');
+        }
+        if ($arquivo === self::MANIFESTO) {
+            $manifesto = json_decode($conteudo, true);
+            if (! is_array($manifesto)) throw new RuntimeException('O arquivo template.json precisa conter um JSON válido.');
+        }
+
+        File::put($this->caminhoEditavel($template, $arquivo), $conteudo);
+
+        // O manifesto é a fonte dos metadados; reflete nome, versão e variáveis no banco.
+        if ($arquivo === self::MANIFESTO) $this->sincronizar();
+    }
+
+    /**
+     * Copia o template inteiro para outra pasta, aplica o conteúdo aberto no editor e
+     * registra a cópia como uma versão independente.
+     */
+    public function criarVersao(
+        TemplatePagina $origem,
+        string $nome,
+        string $versao,
+        string $arquivo,
+        string $conteudo,
+        ?int $usuarioId = null,
+    ): TemplatePagina {
+        // Valida o arquivo contra a origem antes de criar qualquer pasta.
+        $this->caminhoEditavel($origem, $arquivo);
+        if (strlen($conteudo) > self::TAMANHO_MAXIMO_EDITOR) {
+            throw new RuntimeException('O conteúdo ultrapassa o limite de 2 MB do editor.');
+        }
+
+        $pasta = $this->pastaDisponivel(trim($nome).' v'.trim($versao));
+        $destino = $this->caminho($pasta);
+        if (! File::copyDirectory($this->caminho($origem), $destino)) {
+            throw new RuntimeException('Não foi possível copiar os arquivos para a nova versão.');
+        }
+
+        try {
+            $destinoArquivo = $this->caminhoEditavelNaPasta($destino, $arquivo);
+            File::put($destinoArquivo, $conteudo);
+
+            $manifestoArquivo = $destino.'/'.self::MANIFESTO;
+            $manifesto = is_readable($manifestoArquivo)
+                ? json_decode((string) File::get($manifestoArquivo), true)
+                : [];
+            if (! is_array($manifesto)) throw new RuntimeException('O template.json da cópia não contém um JSON válido.');
+            $manifesto['nome'] = trim($nome);
+            $manifesto['versao'] = trim($versao);
+            $manifesto['descricao'] ??= $origem->descricao;
+            $manifesto['variaveis'] ??= $origem->variaveis ?? [];
+            File::put($manifestoArquivo, json_encode($manifesto, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n");
+
+            return TemplatePagina::create([
+                'nome' => mb_substr(trim($nome), 0, 150),
+                'pasta' => $pasta,
+                'descricao' => isset($manifesto['descricao']) ? mb_substr((string) $manifesto['descricao'], 0, 500) : $origem->descricao,
+                'versao' => mb_substr(trim($versao), 0, 20),
+                'variaveis' => $this->variaveis($manifesto),
+                'ativo' => true,
+                'importado_por' => $usuarioId,
+            ]);
+        } catch (\Throwable $excecao) {
+            File::deleteDirectory($destino);
+            throw $excecao;
+        }
+    }
+
+    public function proximaVersao(?string $versao): string
+    {
+        $versao = trim((string) $versao);
+        if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $versao, $partes)) {
+            return $partes[1].'.'.$partes[2].'.'.((int) $partes[3] + 1);
+        }
+        if (preg_match('/^(\d+)\.(\d+)$/', $versao, $partes)) return $partes[1].'.'.$partes[2].'.1';
+        if (preg_match('/^\d+$/', $versao)) return $versao.'.0.1';
+
+        return '1.0.0';
+    }
+
+    private function caminhoEditavel(TemplatePagina $template, string $arquivo): string
+    {
+        return $this->caminhoEditavelNaPasta($this->caminho($template), $arquivo);
+    }
+
+    private function caminhoEditavelNaPasta(string $raiz, string $arquivo): string
+    {
+        $arquivo = ltrim(str_replace('\\', '/', trim($arquivo)), '/');
+        $extensao = strtolower(pathinfo($arquivo, PATHINFO_EXTENSION));
+        if ($arquivo === '' || str_contains($arquivo, '..')
+            || ! in_array($extensao, self::EXTENSOES_EDITAVEIS, true)) {
+            throw new RuntimeException('Arquivo não permitido no editor de código-fonte.');
+        }
+
+        $raizReal = realpath($raiz);
+        $arquivoReal = realpath($raiz.'/'.$arquivo);
+        if ($raizReal === false || $arquivoReal === false || ! is_file($arquivoReal)
+            || ! str_starts_with($arquivoReal, $raizReal.DIRECTORY_SEPARATOR)) {
+            throw new RuntimeException('O arquivo não existe ou está fora da pasta do template.');
+        }
+
+        return $arquivoReal;
     }
 
     /**
