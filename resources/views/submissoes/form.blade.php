@@ -17,6 +17,13 @@
     <div class="col-12 col-md-2"><label class="form-label fw-semibold" for="ativo">Status *</label><select class="form-select" id="ativo" name="ativo" required><option value="1" @selected((int)old('ativo',$submissao->exists?(int)$submissao->ativo:1)===1)>Ativo</option><option value="0" @selected((int)old('ativo',$submissao->exists?(int)$submissao->ativo:1)===0)>Inativo</option></select></div>
     <div class="col-12 col-md-4"><label class="form-label fw-semibold" for="qtde_resumo">Quantidade máxima de caracteres do resumo *</label><input type="number" class="form-control @error('qtde_resumo') is-invalid @enderror" id="qtde_resumo" name="qtde_resumo" min="1" max="100000" step="1" required value="{{ old('qtde_resumo', $submissao->qtde_resumo ?? 1600) }}">@error('qtde_resumo')<div class="invalid-feedback">{{ $message }}</div>@enderror<div class="form-text">O valor inicial é 1600 caracteres.</div></div>
     <div class="col-12 col-md-4"><label class="form-label fw-semibold" for="qtde_autores">Quantidade máxima de autores *</label><input type="number" class="form-control @error('qtde_autores') is-invalid @enderror" id="qtde_autores" name="qtde_autores" min="1" max="100" step="1" required value="{{ old('qtde_autores', $submissao->qtde_autores ?? 8) }}">@error('qtde_autores')<div class="invalid-feedback">{{ $message }}</div>@enderror<div class="form-text">Inclui o primeiro autor. O valor inicial é 8.</div></div>
+<div class="col-12">
+    <input type="hidden" name="mostrar_link_evento" value="0">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="mostrar_link_evento" name="mostrar_link_evento" value="1" @checked(old('mostrar_link_evento', $submissao?->mostrar_link_evento ?? false))>
+        <label class="form-check-label" for="mostrar_link_evento">Mostrar link “Voltar para a página do evento” no formulário público</label>
+    </div>
+</div>
     <div class="col-12 modelo-editor-wrapper"><label class="form-label fw-semibold">Modelo de trabalho</label><input type="hidden" id="modelo_trabalho" name="modelo_trabalho"><div id="modeloEditor" class="bg-white">{!! old('modelo_trabalho',$submissao->modelo_trabalho) !!}</div><div class="form-text">O modelo ocupará toda a largura do formulário público e será carregado inicialmente para cada novo trabalho.</div></div>
 </div></div></div>
 @php($estiloPagina = old('personalizacao', $submissao->estiloPagina()))

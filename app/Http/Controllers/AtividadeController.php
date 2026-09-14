@@ -373,6 +373,7 @@ class AtividadeController
         $request->session()->flash('oferecer_nova_senha', true);
         $dados = $request->validateWithBag('identificacao', [
             'senha_nova' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+            'usar_na_submissao' => ['sometimes', 'boolean'],
         ], [
             'senha_nova.required' => 'Digite a nova senha.',
             'senha_nova.confirmed' => 'A confirmação da nova senha não confere.',
@@ -611,7 +612,7 @@ class AtividadeController
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => $atividade->urlPublica()]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
-        $campos = ['tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $campos = ['mostrar_link_evento', 'tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
         $arquivosAnteriores = collect(['imagem', 'imagem_fundo_card', 'imagem_fundo_pagina'])
             ->map(fn ($chave) => $atividade->personalizacao[$chave] ?? null)->filter()->all();
         $antes = $atividade->only($campos); $dados = $this->validar($request, $atividade); $sessoes = $dados['sessoes'] ?? []; unset($dados['sessoes']);
@@ -701,6 +702,7 @@ class AtividadeController
             'tipo' => ['required', 'in:somente_inscricao,atividade_evento'],
             'formato' => ['required', 'in:simples,com_sessoes'],
             'ativo' => ['required', 'boolean'],
+            'mostrar_link_evento' => ['sometimes', 'boolean'],
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'categoria_id' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'integer', 'exists:categorias,id'],
             'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],

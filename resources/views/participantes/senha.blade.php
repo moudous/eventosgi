@@ -8,7 +8,7 @@
                 <i class="bi bi-check-circle-fill text-success fs-1"></i>
                 <h1 class="h3 mt-3">Senha definida com sucesso</h1>
                 <p class="text-muted mb-0">{{ $nome }}, sua nova senha já pode ser usada para se identificar nas inscrições de outros eventos e atividades.</p>
-                @if($submissoesAtualizadas > 0)<p class="alert alert-info mt-4 mb-0">A senha também foi atualizada em {{ $submissoesAtualizadas }} {{ $submissoesAtualizadas === 1 ? 'cadastro de submissão' : 'cadastros de submissão' }}.</p>@endif
+                @if($submissoesAtualizadas > 0)<p class="alert alert-info mt-4 mb-0">A senha de inscrição em submissão também foi alterada.</p>@endif
             </div>
         @elseif(!$valido)
             <div class="text-center">
@@ -25,7 +25,7 @@
                 <div class="mb-3"><label class="form-label fw-semibold" for="senha">Nova senha</label><input class="form-control" type="password" id="senha" name="senha" minlength="8" required autocomplete="new-password"><div class="form-text">Use pelo menos 8 caracteres, com letras e números.</div></div>
                 <div class="mb-4"><label class="form-label fw-semibold" for="senha_confirmation">Confirmar nova senha</label><input class="form-control" type="password" id="senha_confirmation" name="senha_confirmation" minlength="8" required autocomplete="new-password"></div>
                 <input type="hidden" name="usar_na_submissao" value="0">
-                <div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="usar_na_submissao" name="usar_na_submissao" value="1" @checked(old('usar_na_submissao'))><label class="form-check-label" for="usar_na_submissao">Usar esta senha também nas submissões vinculadas a este e-mail</label></div>
+                <div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="usar_na_submissao" name="usar_na_submissao" value="1" @checked(old('usar_na_submissao', true))><label class="form-check-label" for="usar_na_submissao">Alterar senha de inscrição em submissão, caso exista.</label></div>
                 <button class="btn btn-primary w-100" type="submit"><i class="bi bi-key me-2"></i>Salvar nova senha</button>
             </form>
         @endif

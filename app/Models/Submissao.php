@@ -11,7 +11,7 @@ class Submissao extends Model
 {
     protected $table = 'submissoes';
 
-    protected $fillable = ['evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
+    protected $fillable = ['mostrar_link_evento', 'evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
 
     protected $attributes = [
         'qtde_resumo' => 1600,
@@ -19,6 +19,7 @@ class Submissao extends Model
     ];
 
     protected $casts = [
+        'mostrar_link_evento' => 'boolean',
         'evento_id' => 'integer',
         'data_inicio' => 'datetime',
         'data_fim' => 'datetime',
@@ -86,6 +87,7 @@ class Submissao extends Model
     public function aberta(): bool
     {
         return $this->ativo && (bool) $this->evento?->ativo
+            && $this->data_inicio !== null && $this->data_fim !== null
             && ! $this->aindaNaoAbriu() && ! $this->encerrada();
     }
 

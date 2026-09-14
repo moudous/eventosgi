@@ -36,6 +36,9 @@
                         <p class="mb-0"><strong>Fim:</strong> {{ $atividade->data_fim?->format('d/m/Y \à\s H:i') ?? 'Não informado' }}</p>
                     @endif
                 </div>
+                @if($atividade->mostrar_link_evento && $atividade->evento?->ativo)
+                    <a href="{{ route('eventos.pagina.visualizar', $atividade->evento) }}" class="btn btn-light btn-sm mt-3"><i class="bi bi-arrow-left me-1"></i>Voltar para a página do evento</a>
+                @endif
             </div>
         </div>
     </div>
@@ -92,6 +95,8 @@
                             @if($errosIdentificacao->has('senha_nova'))<div class="alert alert-danger">{{ $errosIdentificacao->first('senha_nova') }}</div>@endif
                             <div class="mb-3"><label class="form-label fw-semibold" for="senha_nova">Nova senha</label><input class="form-control @if($errosIdentificacao->has('senha_nova')) is-invalid @endif" type="password" id="senha_nova" name="senha_nova" minlength="8" required autocomplete="new-password"><div class="form-text">Use pelo menos 8 caracteres, com letras e números.</div></div>
                             <div><label class="form-label fw-semibold" for="senha_nova_confirmation">Confirmar nova senha</label><input class="form-control" type="password" id="senha_nova_confirmation" name="senha_nova_confirmation" minlength="8" required autocomplete="new-password"></div>
+                            <input type="hidden" name="usar_na_submissao" value="0">
+                            <div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="usar_na_submissao" name="usar_na_submissao" value="1" @checked(old('usar_na_submissao', true))><label class="form-check-label" for="usar_na_submissao">Alterar senha de inscrição em submissão, caso exista.</label></div>
                         </form>
                     </div>
                     <div class="modal-footer" id="acoesEscolhaNovaSenha" @class(['d-none' => $errosIdentificacao->has('senha_nova')])>

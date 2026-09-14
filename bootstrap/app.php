@@ -23,5 +23,5 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['senha', 'senha_confirmation']);
+        $exceptions->dontFlash(['senha', 'senha_confirmation', 'senha_login', 'senha_atual', 'senha_nova', 'senha_nova_confirmation']);
     })->create();

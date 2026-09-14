@@ -231,6 +231,11 @@ Route::get('/comprovantes/{inscricao:comprovante_hash}.pdf/visualizar', [Ativida
 
 // A posse do token recebido por e-mail autoriza a definição da senha. O servidor guarda
 // somente o hash, limita o link a 15 minutos e o invalida depois do primeiro uso.
+Route::get('/senha/submissao/{token}', [\App\Http\Controllers\SenhaSubmissaoController::class, 'edit'])
+    ->where('token', '[A-Za-z0-9]{64}')->name('senha-submissao.editar');
+Route::post('/senha/submissao/{token}', [\App\Http\Controllers\SenhaSubmissaoController::class, 'update'])
+    ->where('token', '[A-Za-z0-9]{64}')->name('senha-submissao.atualizar');
+
 Route::get('/senha/definir/{token}', [SenhaParticipanteController::class, 'edit'])
     ->where('token', '[A-Za-z0-9]{64}')->name('senha-participante.editar');
 Route::post('/senha/definir/{token}', [SenhaParticipanteController::class, 'update'])
@@ -304,7 +309,7 @@ Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     Route::put('/{submissao}/formulario/trabalhos/{trabalho}', [SubmissaoPublicaController::class, 'atualizar'])->name('publicas.atualizar');
     Route::get('/{submissao}/formulario/trabalhos/{trabalho}/exportar-doc', [SubmissaoPublicaController::class, 'exportarDocumento'])->name('publicas.exportar-documento');
     Route::delete('/{submissao}/formulario/trabalhos/{trabalho}', [SubmissaoPublicaController::class, 'excluir'])->name('publicas.excluir');
-    Route::patch('/{submissao}/formulario/trabalhos/{trabalho}/senha', [SubmissaoPublicaController::class, 'alterarSenha'])->name('publicas.senha');
+    Route::patch('/{submissao}/formulario/senha', [SubmissaoPublicaController::class, 'alterarSenha'])->name('publicas.senha');
     Route::post('/{submissao}/formulario/esqueci-senha', [SubmissaoPublicaController::class, 'esqueciSenha'])->name('publicas.esqueci-senha');
     Route::post('/{submissao}/formulario/sair', [SubmissaoPublicaController::class, 'sair'])->name('publicas.sair');
 });

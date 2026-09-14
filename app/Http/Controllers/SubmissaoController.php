@@ -240,6 +240,7 @@ class SubmissaoController
             'data_inicio' => ['required', 'date'],
             'data_fim' => ['required', 'date', 'after:data_inicio'],
             'ativo' => ['required', 'boolean'],
+            'mostrar_link_evento' => ['sometimes', 'boolean'],
             'qtde_resumo' => ['required', 'integer', 'min:1', 'max:100000'],
             'qtde_autores' => ['required', 'integer', 'min:1', 'max:100'],
             'modelo_trabalho' => ['nullable', 'string', 'max:1000000'],

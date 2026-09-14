@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CodigoInscricao;
 use App\Models\CredencialParticipante;
-use App\Models\InscricaoSubmissao;
+use App\Services\SenhaCompartilhadaService;
 use App\Services\IdentificacaoParticipanteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -74,15 +74,10 @@ class SenhaParticipanteController
             }
 
             if ((bool) $dados['usar_na_submissao']) {
-                $submissoesAtualizadas = InscricaoSubmissao::query()
-                    ->whereRaw('LOWER(email) = ?', [mb_strtolower((string) $bloqueado->email)])
-                    ->update([
-                        'senha' => $senhaHash,
-                        'credencial_versao' => DB::raw('credencial_versao + 1'),
-                        'updated_at' => now(),
-                    ]);
+                $submissoesAtualizadas = app(SenhaCompartilhadaService::class)->atualizarSubmissao($bloqueado->email, $senhaHash);
             }
 
+            app(SenhaCompartilhadaService::class)->invalidarCodigosAtividade($bloqueado->email);
             $bloqueado->update([
                 'participante_id' => (int) $participante->id,
                 'redefinicao_usado_em' => now(),

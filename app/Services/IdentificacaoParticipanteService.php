@@ -35,7 +35,7 @@ class IdentificacaoParticipanteService
     public const MINUTOS_VALIDADE = 15;
 
     /** Validade do link de definição da senha global. */
-    public const MINUTOS_VALIDADE_LINK_SENHA = 15;
+    public const MINUTOS_VALIDADE_LINK_SENHA = 60;
 
     /** Tentativas aceitas antes de a senha temporária ser invalidada. */
     public const MAX_TENTATIVAS = 5;
@@ -78,14 +78,17 @@ class IdentificacaoParticipanteService
 
         $codigo = $this->gerarSenhaTemporaria();
         $expiraEm = now()->addMinutes(self::MINUTOS_VALIDADE);
+        $tokenRedefinicao = \Illuminate\Support\Str::random(64);
 
-        $registro = DB::transaction(function () use ($email, $codigo, $expiraEm, $request): CodigoInscricao {
-            CodigoInscricao::query()->where('email', $email)->where('expira_em', '>', now())
+        $registro = DB::transaction(function () use ($email, $codigo, $expiraEm, $request, $tokenRedefinicao): CodigoInscricao {
+            CodigoInscricao::query()->where('email', $email)
                 ->update(['expira_em' => now()->subSecond(), 'redefinicao_expira_em' => now()->subSecond()]);
 
             return CodigoInscricao::create([
                 'email' => $email,
                 'codigo_hash' => hash('sha256', $codigo),
+                'redefinicao_token_hash' => hash('sha256', $tokenRedefinicao),
+                'redefinicao_expira_em' => now()->addMinutes(self::MINUTOS_VALIDADE_LINK_SENHA),
                 'expira_em' => $expiraEm,
                 'ip' => $request->ip(),
             ]);
@@ -96,7 +99,7 @@ class IdentificacaoParticipanteService
                 $email,
                 null,
                 'Senha temporária — '.$atividade->nome,
-                $this->conteudo($atividade, $codigo),
+                $this->conteudo($atividade, $codigo, route('senha-participante.editar', ['token' => $tokenRedefinicao])),
                 "eventosgi-codigo-{$registro->id}",
             );
         } catch (Throwable $excecao) {
@@ -216,18 +219,16 @@ class IdentificacaoParticipanteService
         if (! $sessao) abort(403, 'Sua identificação expirou. Entre novamente.');
 
         $email = mb_strtolower(trim((string) $sessao['email']));
-        $credencial = CredencialParticipante::query()->where('email', $email)->first();
-        $dados = [
-            'participante_id' => (int) $sessao['participante_id'],
-            'senha' => Hash::make($senha),
-        ];
-
-        if ($credencial) {
-            $dados['credencial_versao'] = $credencial->credencial_versao + 1;
-            $credencial->update($dados);
-        } else {
-            CredencialParticipante::create($dados + ['email' => $email]);
-        }
+        DB::transaction(function () use ($request, $email, $sessao, $senha): void {
+            $credencial = CredencialParticipante::where('email', $email)->lockForUpdate()->first();
+            $hash = Hash::make($senha);
+            $dados = ['participante_id' => (int) $sessao['participante_id'], 'senha' => $hash];
+            if ($credencial) $credencial->update($dados + ['credencial_versao' => $credencial->credencial_versao + 1]);
+            else CredencialParticipante::create($dados + ['email' => $email]);
+            $senhas = app(SenhaCompartilhadaService::class);
+            $senhas->invalidarCodigosAtividade($email);
+            if ($request->boolean('usar_na_submissao', true)) $senhas->atualizarSubmissao($email, $hash);
+        });
     }
 
     /**
@@ -458,7 +459,7 @@ class IdentificacaoParticipanteService
         return implode('', $caracteres);
     }
 
-    private function conteudo(Atividade $atividade, string $codigo): string
+    private function conteudo(Atividade $atividade, string $codigo, string $urlSenha): string
     {
         return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#22303f;line-height:1.6">'
             .'<p>Olá!</p>'
@@ -466,6 +467,7 @@ class IdentificacaoParticipanteService
             .'<p>Digite a senha temporária abaixo no campo <strong>Senha</strong> do formulário:</p>'
             .'<p style="font-size:30px;font-weight:bold;letter-spacing:8px;margin:24px 0">'.e($codigo).'</p>'
             .'<p>Ela contém letras e números e vale por '.self::MINUTOS_VALIDADE.' minutos. Depois de entrar, você poderá cadastrar uma nova senha permanente ou apenas continuar.</p>'
+            .'<p><a href="'.e($urlSenha).'">Alterar senha de inscrição em atividade</a> (link válido por 60 minutos e para um único uso).</p>'
             .'<p style="color:#748096;font-size:13px">Se você não pediu esta senha, ignore a mensagem.</p>'
             .'</div>';
     }

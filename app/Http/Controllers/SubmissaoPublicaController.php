@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\InscricaoSubmissao;
+use App\Models\CredencialSubmissao;
+use App\Services\SenhaCompartilhadaService;
 use App\Models\InscricaoSubmissaoTrabalho;
 use App\Models\Submissao;
 use App\Services\GiEmailService;
@@ -35,30 +36,15 @@ class SubmissaoPublicaController
         $trabalho = null;
 
         if ($acesso) {
-            $inscricao = InscricaoSubmissao::query()->with('trabalhos.autores')
-                ->where('submissao_id', $submissao->id)->find($acesso['inscricao_id']);
-
-            if (! $inscricao || $inscricao->credencial_versao !== (int) $acesso['versao']) {
-                $request->session()->forget($this->chaveSessao($submissao));
-                $acesso = null;
-                $inscricao = null;
-            } else {
-                $trabalhos = $inscricao->trabalhos->values();
-                if ($acesso['trabalho_atual']) {
-                    $trabalho = $trabalhos->firstWhere('id', (int) $acesso['trabalho_atual']);
-                } elseif ($trabalhos->isNotEmpty()) {
-                    $trabalho = $trabalhos->first();
-                    $acesso['trabalho_atual'] = $trabalho->id;
-                    $request->session()->put($this->chaveSessao($submissao), $acesso);
-                }
-            }
+            $inscricao = $submissao->inscricoes()->where('email', $acesso['email'])->first();
+            $trabalhos = $this->trabalhosAcessiveis($submissao, $acesso['email'])->with(['autores', 'inscricao'])->get();
+            $trabalho = $trabalhos->firstWhere('id', (int) ($acesso['trabalho_atual'] ?? 0)) ?? $trabalhos->first();
         }
 
-        $primeiroCadastro = ! $acesso && $request->boolean('cadastro') && $submissao->aberta();
-        $novo = $submissao->aberta() && ($primeiroCadastro || ((bool) $acesso && $request->boolean('novo')));
+        $novo = $acesso && $submissao->aberta() && ($request->boolean('novo') || $trabalhos->isEmpty());
 
         return view('submissoes.publico', compact(
-            'submissao', 'acesso', 'trabalhos', 'inscricao', 'trabalho', 'novo', 'primeiroCadastro'
+            'submissao', 'acesso', 'trabalhos', 'inscricao', 'trabalho', 'novo'
         ));
     }
 
@@ -66,39 +52,15 @@ class SubmissaoPublicaController
     {
         $this->exigirAberta($submissao);
         $acesso = $this->acessoValido($request, $submissao);
-        $primeiroCadastro = ! $acesso;
-        $inscricao = null;
+        abort_unless($acesso, 403);
+        [$dados, $autores] = $this->validarTrabalho($request, $submissao, $acesso['email']);
+        $this->limitarCriacao($request, $submissao, $acesso['email']);
 
-        if (! $primeiroCadastro) {
-            $inscricao = $submissao->inscricoes()->find($acesso['inscricao_id']);
-            abort_unless($inscricao && $inscricao->credencial_versao === (int) $acesso['versao'], 403);
-        }
-
-        [$dados, $autores] = $this->validarTrabalho(
-            $request,
-            $submissao,
-            $primeiroCadastro,
-            $inscricao?->email,
-        );
-
-        if ($primeiroCadastro) {
-            $email = $dados['email'];
-            if ($submissao->inscricoes()->where('email', $email)->exists()) {
-                throw ValidationException::withMessages(['email' => 'Este e-mail já possui cadastro. Entre com sua senha para adicionar outro trabalho.']);
-            }
-        } else {
-            $email = $inscricao->email;
-        }
-
-        $this->limitarCriacao($request, $submissao, $email);
-
-        [$inscricao, $trabalho] = DB::transaction(function () use ($dados, $autores, $submissao, $primeiroCadastro, $inscricao): array {
-            if ($primeiroCadastro) {
-                $inscricao = $submissao->inscricoes()->create([
-                    'email' => $dados['email'],
-                    'senha' => Hash::make($dados['senha']),
-                ]);
-            }
+        [$inscricao, $trabalho] = DB::transaction(function () use ($dados, $autores, $submissao, $acesso): array {
+            $inscricao = $submissao->inscricoes()->firstOrCreate(['email' => $acesso['email']], [
+                // Campo legado obrigatório; a autenticação usa apenas credenciais_submissao.
+                'senha' => Hash::make(Str::random(64)),
+            ]);
             $trabalho = $inscricao->trabalhos()->create([
                 'titulo_trabalho' => $dados['titulo_trabalho'],
                 'conteudo' => $dados['conteudo'],
@@ -114,7 +76,7 @@ class SubmissaoPublicaController
             return [$inscricao, $trabalho];
         });
 
-        $this->iniciarAcesso($request, $submissao, $inscricao, $trabalho->id);
+        $this->iniciarAcesso($request, $submissao, CredencialSubmissao::findOrFail($acesso['credencial_id']), $trabalho->id);
 
         return redirect()->route('submissoes.publicas.formulario', $submissao)
             ->with('status', 'Trabalho salvo. Você poderá alterá-lo enquanto o período de submissão estiver aberto.');
@@ -130,15 +92,16 @@ class SubmissaoPublicaController
         $email = mb_strtolower(trim($dados['email_login']));
         $this->limitarLogin($request, $submissao, $email);
 
-        $inscricao = $submissao->inscricoes()->withCount('trabalhos')->where('email', $email)->first();
-
-        if (! $inscricao || ! Hash::check($dados['senha_login'], $inscricao->senha)) {
+        $credencial = CredencialSubmissao::where('email', $email)->first();
+        $permanente = $credencial?->senha && Hash::check($dados['senha_login'], $credencial->senha);
+        $temporaria = $credencial?->temporaria_expira_em?->isFuture()
+            && $credencial->temporaria_hash && Hash::check($dados['senha_login'], $credencial->temporaria_hash);
+        if (! $permanente && ! $temporaria) {
             throw ValidationException::withMessages(['email_login' => 'E-mail ou senha inválidos.']);
         }
 
         $this->limparLimitesLogin($request, $submissao, $email);
-        $trabalhoAtual = $inscricao->trabalhos_count === 1 ? $inscricao->trabalhos()->value('id') : null;
-        $this->iniciarAcesso($request, $submissao, $inscricao, $trabalhoAtual);
+        $this->iniciarAcesso($request, $submissao, $credencial, null);
 
         return redirect()->route('submissoes.publicas.formulario', $submissao);
     }
@@ -148,8 +111,7 @@ class SubmissaoPublicaController
         $dados = $request->validate(['trabalho_id' => ['required', 'integer']]);
         $acesso = $this->acessoValido($request, $submissao);
         abort_unless($acesso, 403);
-        $inscricao = $submissao->inscricoes()->find($acesso['inscricao_id']);
-        abort_unless($inscricao && $inscricao->trabalhos()->whereKey($dados['trabalho_id'])->exists(), 403);
+        abort_unless($this->trabalhosAcessiveis($submissao, $acesso['email'])->whereKey($dados['trabalho_id'])->exists(), 403);
         $acesso['trabalho_atual'] = (int) $dados['trabalho_id'];
         $acesso['ultimo_acesso'] = now()->timestamp;
         $request->session()->put($this->chaveSessao($submissao), $acesso);
@@ -159,9 +121,9 @@ class SubmissaoPublicaController
 
     public function atualizar(Request $request, Submissao $submissao, InscricaoSubmissaoTrabalho $trabalho): RedirectResponse
     {
-        $this->exigirAcesso($request, $submissao, $trabalho);
+        $this->exigirAcesso($request, $submissao, $trabalho, true);
         $this->exigirEditavel($submissao, $trabalho);
-        [$dados, $autores] = $this->validarTrabalho($request, $submissao, false, $trabalho->inscricao->email);
+        [$dados, $autores] = $this->validarTrabalho($request, $submissao, $trabalho->inscricao->email);
 
         DB::transaction(function () use ($dados, $autores, $trabalho): void {
             $trabalho->update([
@@ -230,7 +192,7 @@ class SubmissaoPublicaController
 
     public function excluir(Request $request, Submissao $submissao, InscricaoSubmissaoTrabalho $trabalho): RedirectResponse
     {
-        $this->exigirAcesso($request, $submissao, $trabalho);
+        $this->exigirAcesso($request, $submissao, $trabalho, true);
         $this->exigirEditavel($submissao, $trabalho);
         $titulo = $trabalho->titulo_trabalho;
         $inscricao = $trabalho->inscricao;
@@ -247,31 +209,29 @@ class SubmissaoPublicaController
             ->with('status', "O trabalho \"{$titulo}\" foi apagado.");
     }
 
-    public function alterarSenha(Request $request, Submissao $submissao, InscricaoSubmissaoTrabalho $trabalho): RedirectResponse
+    public function alterarSenha(Request $request, Submissao $submissao): RedirectResponse
     {
         $acesso = $this->acessoValido($request, $submissao);
         abort_unless($acesso, 403);
-        $inscricao = $trabalho->inscricao;
-        abort_unless($inscricao->submissao_id === $submissao->id
-            && $inscricao->id === (int) $acesso['inscricao_id']
-            && $inscricao->credencial_versao === (int) $acesso['versao'], 403);
         $dados = $request->validate([
             'senha_atual' => ['required', 'string'],
             'senha' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
-        ], ['senha.confirmed' => 'A confirmação da nova senha não confere.']);
-
-        if (! Hash::check($dados['senha_atual'], $inscricao->senha)) {
-            throw ValidationException::withMessages(['senha_atual' => 'A senha atual está incorreta.']);
-        }
-
-        $inscricao->update(['senha' => Hash::make($dados['senha']), 'credencial_versao' => $inscricao->credencial_versao + 1]);
-        $inscricao->refresh();
-        $acesso['versao'] = $inscricao->credencial_versao;
-        $acesso['trabalho_atual'] = $trabalho->id;
-        $acesso['ultimo_acesso'] = now()->timestamp;
-        $request->session()->regenerate();
-        $request->session()->put($this->chaveSessao($submissao), $acesso);
-
+            'usar_na_atividade' => ['required', 'boolean'],
+        ]);
+        $this->limitarLogin($request, $submissao, $acesso['email']);
+        DB::transaction(function () use ($acesso, $dados): void {
+            $credencial = CredencialSubmissao::whereKey($acesso['credencial_id'])->lockForUpdate()->firstOrFail();
+            $valida = ($credencial->senha && Hash::check($dados['senha_atual'], $credencial->senha))
+                || ($credencial->temporaria_expira_em?->isFuture() && $credencial->temporaria_hash
+                    && Hash::check($dados['senha_atual'], $credencial->temporaria_hash));
+            if (! $valida) throw ValidationException::withMessages(['senha_atual' => 'A senha atual está incorreta.']);
+            $servico = app(SenhaCompartilhadaService::class);
+            $hash = Hash::make($dados['senha']);
+            $servico->atualizarSubmissao($credencial->email, $hash);
+            if ($dados['usar_na_atividade']) $servico->atualizarAtividade($credencial->email, $hash);
+        });
+        $this->limparLimitesLogin($request, $submissao, $acesso['email']);
+        $this->iniciarAcesso($request, $submissao, CredencialSubmissao::findOrFail($acesso['credencial_id']), $acesso['trabalho_atual']);
         return redirect()->route('submissoes.publicas.formulario', $submissao)->with('status', 'Senha alterada com sucesso.');
     }
 
@@ -280,46 +240,52 @@ class SubmissaoPublicaController
         abort_unless($submissao->ativo && (bool) $submissao->evento?->ativo, 404);
         $dados = $request->validate([
             'email_recuperacao' => ['required', 'email', 'max:150'],
+            'cadastrar' => ['sometimes', 'boolean'],
             'captcha' => ['required', 'string', 'size:6'],
             'website' => ['nullable', 'max:0'],
         ], ['email_recuperacao.required' => 'Informe o e-mail.', 'captcha.required' => 'Digite o texto exibido na imagem.', 'captcha.size' => 'Digite os 6 caracteres exibidos na imagem.', 'website.max' => 'Não foi possível processar a solicitação.']);
         $captcha->validarSubmissao($request, $submissao, $dados['captcha']);
         $email = mb_strtolower(trim($dados['email_recuperacao']));
         $this->limitarRecuperacao($request, $submissao, $email);
-        $inscricao = $submissao->inscricoes()->with('trabalhos.autores')->where('email', $email)->first();
-
-        // A mesma resposta evita revelar a terceiros se o endereço possui trabalhos.
-        if (! $inscricao) {
-            return back()->with('recuperacao', 'Se o e-mail estiver cadastrado, uma nova senha será enviada.');
+        $credencial = CredencialSubmissao::where('email', $email)->first();
+        $trabalhos = $this->trabalhosAcessiveis($submissao, $email)->with('autores')->get();
+        if (! $credencial && ($trabalhos->isNotEmpty() || ($request->boolean('cadastrar') && $submissao->aberta()))) {
+            $credencial = CredencialSubmissao::firstOrCreate(['email' => $email]);
         }
+        if (! $credencial) return back()->with('recuperacao', 'Se o e-mail estiver cadastrado, uma senha temporária será enviada.');
 
-        $senhaTemporaria = strtoupper(substr(bin2hex(random_bytes(4)), 0, 4)).random_int(1000, 9999);
-        $nome = $inscricao->trabalhos->first()?->autores?->firstWhere('principal', true)?->nome;
-        $url = route('submissoes.publicas.formulario', $submissao);
-        $titulos = $inscricao->trabalhos->pluck('titulo_trabalho')->map(fn ($titulo) => '<li>'.e($titulo).'</li>')->implode('');
-        $conteudo = '<p>Olá'.($nome ? ', '.e($nome) : '').'.</p>'
-            .'<p>Uma nova senha foi solicitada para os seus trabalhos em <strong>'.e($submissao->titulo).'</strong>.</p>'
-            .'<p>Sua senha temporária é: <strong style="font-size:18px">'.e($senhaTemporaria).'</strong></p>'
-            .'<p>Trabalhos vinculados:</p><ul>'.$titulos.'</ul>'
-            .'<p><a href="'.e($url).'">Acessar a área de submissão</a></p>'
-            .'<p>Altere essa senha depois de entrar. Se você não fez este pedido, avise a comissão responsável.</p>';
-
-        try {
-            $emailService->enviar($email, $nome, 'Nova senha — '.$submissao->titulo, $conteudo, 'submissao-senha-'.$submissao->id.'-'.bin2hex(random_bytes(8)));
-        } catch (Throwable $erro) {
-            Log::warning('Falha ao enviar recuperação de senha de submissão.', ['submissao' => $submissao->id, 'erro' => $erro->getMessage()]);
-
-            return back()->withErrors(['email_recuperacao' => 'Não foi possível enviar a nova senha agora. Tente novamente mais tarde.']);
-        }
-
-        $inscricao->update([
-            'senha' => Hash::make($senhaTemporaria),
-            'credencial_versao' => $inscricao->credencial_versao + 1,
+        $senhaTemporaria = strtoupper(bin2hex(random_bytes(5))).random_int(1000, 9999);
+        $token = Str::random(64);
+        $tokenHash = hash('sha256', $token);
+        $credencial->update([
+            'temporaria_hash' => Hash::make($senhaTemporaria),
+            'temporaria_expira_em' => now()->addMinutes(15),
+            'redefinicao_token_hash' => $tokenHash,
+            'redefinicao_expira_em' => now()->addMinutes(60),
         ]);
+        $url = route('submissoes.publicas.formulario', $submissao);
+        $urlSenha = route('senha-submissao.editar', ['token' => $token]);
+        $titulos = $trabalhos->pluck('titulo_trabalho')->map(fn ($titulo) => '<li>'.e($titulo).'</li>')->implode('');
+        $conteudo = '<p>Olá.</p><p>Sua senha temporária de submissão é: <strong>'.e($senhaTemporaria).'</strong></p>'
+            .'<p>Ela vale por 15 minutos e pode ser utilizada nas outras submissões.</p>'
+            .($titulos ? '<p>Trabalhos vinculados:</p><ul>'.$titulos.'</ul>' : '')
+            .'<p><a href="'.e($url).'">Acessar a área de submissão</a></p>'
+            .'<p><a href="'.e($urlSenha).'">Alterar senha de submissão</a> (link válido por 60 minutos e para um único uso).</p>'
+            .'<p>Se você não fez este pedido, ignore esta mensagem.</p>';
+        try {
+            $emailService->enviar($email, null, 'Senha temporária — '.$submissao->titulo, $conteudo, 'submissao-senha-'.$submissao->id.'-'.Str::random(16));
+        } catch (Throwable $erro) {
+            CredencialSubmissao::whereKey($credencial->id)->where('redefinicao_token_hash', $tokenHash)->update([
+                'temporaria_hash' => null, 'temporaria_expira_em' => null,
+                'redefinicao_token_hash' => null, 'redefinicao_expira_em' => null,
+            ]);
+            Log::warning('Falha ao enviar recuperação de senha de submissão.', ['submissao' => $submissao->id, 'erro' => $erro->getMessage()]);
+            return back()->withErrors(['email_recuperacao' => 'Não foi possível enviar a nova senha agora. Tente novamente mais tarde.'])->withInput($request->only('email_recuperacao', 'cadastrar'));
+        }
 
         $request->session()->forget($this->chaveSessao($submissao));
 
-        return back()->with('recuperacao', 'Se o e-mail estiver cadastrado, uma nova senha será enviada.');
+        return back()->with('recuperacao', 'Se o e-mail estiver cadastrado, uma senha temporária será enviada.');
     }
 
     public function sair(Request $request, Submissao $submissao): RedirectResponse
@@ -333,7 +299,6 @@ class SubmissaoPublicaController
     private function validarTrabalho(
         Request $request,
         Submissao $submissao,
-        bool $novo,
         ?string $emailPrimeiroAutor = null,
     ): array
     {
@@ -356,10 +321,7 @@ class SubmissaoPublicaController
             'aprovacao_comite_etica' => ['required', 'boolean'],
             'protocolo_comite_etica' => ['nullable', 'required_if:aprovacao_comite_etica,1', 'string', 'max:500'],
         ];
-        if ($novo) {
-            $regras['senha'] = ['required', 'confirmed', Password::min(8)->letters()->numbers()];
-            $regras['website_trabalho'] = ['nullable', 'max:0'];
-        }
+
 
         $dados = $request->validate($regras, [
             'titulo_trabalho.required' => 'Informe o título do trabalho.',
@@ -377,7 +339,6 @@ class SubmissaoPublicaController
             'apresentacao.required' => 'Selecione a forma de apresentação.',
             'aprovacao_comite_etica.required' => 'Informe se o trabalho possui aprovação do Comitê de Ética.',
             'protocolo_comite_etica.required_if' => 'Informe o protocolo do Comitê de Ética.',
-            'senha.confirmed' => 'A confirmação da senha não confere.',
         ]);
         $emailPrimeiroAutor = mb_strtolower(trim($emailPrimeiroAutor ?: $dados['email']));
         $dados['email'] = $emailPrimeiroAutor;
@@ -433,6 +394,7 @@ class SubmissaoPublicaController
     {
         foreach ($autores as $indice => $autor) {
             $numero = $indice + 1;
+            CredencialSubmissao::firstOrCreate(['email' => $autor['email']]);
             $trabalho->autores()->create([
                 'nome' => $autor['nome'],
                 'email' => $autor['email'],
@@ -460,26 +422,32 @@ class SubmissaoPublicaController
         }
     }
 
-    private function exigirAcesso(Request $request, Submissao $submissao, InscricaoSubmissaoTrabalho $trabalho): void
+    private function trabalhosAcessiveis(Submissao $submissao, string $email): \Illuminate\Database\Eloquent\Relations\HasManyThrough
     {
-        $inscricao = $trabalho->inscricao;
-        abort_unless($inscricao->submissao_id === $submissao->id, 404);
-        $acesso = $this->acessoValido($request, $submissao);
-        abort_unless($acesso
-            && (int) $acesso['inscricao_id'] === $inscricao->id
-            && (int) $acesso['versao'] === $inscricao->credencial_versao, 403);
+        return $submissao->trabalhos()->where(function ($query) use ($email): void {
+            $query->whereHas('inscricao', fn ($q) => $q->where('email', $email))
+                ->orWhereHas('autores', fn ($q) => $q->where('email', $email));
+        });
     }
 
-    private function iniciarAcesso(Request $request, Submissao $submissao, InscricaoSubmissao $inscricao, ?int $trabalhoAtual): void
+    private function exigirAcesso(Request $request, Submissao $submissao, InscricaoSubmissaoTrabalho $trabalho, bool $editar = false): void
+    {
+        abort_unless($trabalho->inscricao->submissao_id === $submissao->id, 404);
+        $acesso = $this->acessoValido($request, $submissao);
+        abort_unless($acesso, 403);
+        abort_unless($editar
+            ? $trabalho->inscricao->email === $acesso['email']
+            : $this->trabalhosAcessiveis($submissao, $acesso['email'])->whereKey($trabalho->id)->exists(), 403);
+    }
+
+    private function iniciarAcesso(Request $request, Submissao $submissao, CredencialSubmissao $credencial, ?int $trabalhoAtual): void
     {
         $agora = now()->timestamp;
         $request->session()->regenerate();
         $request->session()->put($this->chaveSessao($submissao), [
-            'inicio' => $agora,
-            'ultimo_acesso' => $agora,
-            'inscricao_id' => $inscricao->id,
-            'versao' => $inscricao->credencial_versao,
-            'trabalho_atual' => $trabalhoAtual,
+            'inicio' => $agora, 'ultimo_acesso' => $agora,
+            'credencial_id' => $credencial->id, 'email' => $credencial->email,
+            'versao' => $credencial->credencial_versao, 'trabalho_atual' => $trabalhoAtual,
         ]);
     }
 
@@ -488,15 +456,16 @@ class SubmissaoPublicaController
         $chave = $this->chaveSessao($submissao);
         $acesso = $request->session()->get($chave);
         $agora = now()->timestamp;
-        if (! is_array($acesso) || ! isset($acesso['inicio'], $acesso['ultimo_acesso'], $acesso['inscricao_id'], $acesso['versao'])
+        if (! is_array($acesso) || ! isset($acesso['inicio'], $acesso['ultimo_acesso'], $acesso['credencial_id'], $acesso['versao'], $acesso['email'])
             || $agora - (int) $acesso['inicio'] > self::SESSAO_TOTAL_SEGUNDOS
-            || $agora - (int) $acesso['ultimo_acesso'] > self::SESSAO_OCIOSA_SEGUNDOS) {
+            || $agora - (int) $acesso['ultimo_acesso'] > self::SESSAO_OCIOSA_SEGUNDOS
+            || ! $submissao->ativo || ! $submissao->evento?->ativo
+            || ! CredencialSubmissao::whereKey($acesso['credencial_id'])->where('email', $acesso['email'])->where('credencial_versao', $acesso['versao'])->exists()) {
             $request->session()->forget($chave);
             return null;
         }
         $acesso['ultimo_acesso'] = $agora;
         $request->session()->put($chave, $acesso);
-
         return $acesso;
     }
 
@@ -518,13 +487,13 @@ class SubmissaoPublicaController
     /** @return list<string> */
     private function chavesLogin(Request $request, Submissao $submissao, string $email): array
     {
-        $base = 'submissao-login:'.$submissao->id.':';
+        $base = 'submissao-login:';
         return [$base.'email:'.sha1($email), $base.'sessao:'.sha1($request->session()->getId()), $base.'ip:'.sha1((string) $request->ip())];
     }
 
     private function limitarRecuperacao(Request $request, Submissao $submissao, string $email): void
     {
-        $base = 'submissao-recuperacao:'.$submissao->id.':';
+        $base = 'submissao-recuperacao:';
         $sessao = sha1($request->session()->getId());
         $ip = sha1((string) $request->ip());
         $regras = [
