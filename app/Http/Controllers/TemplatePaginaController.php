@@ -92,6 +92,11 @@ class TemplatePaginaController
         return response($asset['conteudo'], 200, [
             'Content-Type' => $asset['mime'],
             'Cache-Control' => 'public, max-age=3600',
+            // Templates podem ser incorporados em páginas hospedadas em outros domínios.
+            // Fontes e alguns tipos de requisição exigem liberação explícita de origem.
+            'Access-Control-Allow-Origin' => '*',
+            'Cross-Origin-Resource-Policy' => 'cross-origin',
+            'Content-Disposition' => 'inline',
             // O conteudo veio de um pacote enviado por alguem: sem o nosniff, um arquivo
             // com extensao inocente poderia ser interpretado como outra coisa.
             'X-Content-Type-Options' => 'nosniff',

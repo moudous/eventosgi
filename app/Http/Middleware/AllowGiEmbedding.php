@@ -21,6 +21,10 @@ class AllowGiEmbedding
         'inscricoes.arquivo',
         'senha-participante.*',
         'submissoes.publicas.*',
+        // CSS, JavaScript, fontes e imagens pertencem às páginas públicas dos eventos.
+        // A rota aceita subpastas, portanto esta exceção vale também para templates
+        // importados futuramente e para qualquer estrutura interna de assets.
+        'templates.asset',
     ];
 
     public function handle(Request $request, Closure $next): Response
