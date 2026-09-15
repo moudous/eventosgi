@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArquivoBiblioteca;
+use App\Services\BibliotecaImagemService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -48,6 +50,46 @@ class BibliotecaController
         $this->guardar($request->file('arquivo'), $dados, $request);
 
         return redirect()->route('biblioteca.index')->with('status', 'Recorte salvo como uma nova imagem.');
+    }
+
+    public function formatos(Request $request, ArquivoBiblioteca $arquivo, BibliotecaImagemService $imagens): RedirectResponse
+    {
+        $dados = $request->validate(['formato' => ['required', 'in:'.implode(',', array_keys(BibliotecaImagemService::FORMATOS))]]);
+        $gerada = $imagens->gerar($arquivo, $dados['formato']);
+        $nome = Str::uuid().'.'.$gerada['extensao'];
+        $caminho = storage_path('app/public/biblioteca/'.$nome);
+        try {
+            if (File::put($caminho, $gerada['conteudo']) !== strlen($gerada['conteudo'])) {
+                throw ValidationException::withMessages(['formato' => 'Não foi possível salvar a versão no disco.']);
+            }
+            ArquivoBiblioteca::create([
+                'nome' => mb_substr(pathinfo($arquivo->nome, PATHINFO_FILENAME), 0, 180).' — '.BibliotecaImagemService::FORMATOS[$dados['formato']].'.'.$gerada['extensao'],
+                'arquivo' => $nome,
+                'mime' => $gerada['extensao'] === 'svg' ? 'image/svg+xml' : 'image/'.$gerada['extensao'],
+                'formato' => $gerada['extensao'], 'tipo' => 'imagem',
+                'tamanho' => strlen($gerada['conteudo']), 'largura' => $gerada['largura'], 'altura' => $gerada['altura'],
+                'tags' => $arquivo->tags, 'categoria' => $arquivo->categoria,
+                'enviado_por' => $request->session()->get('gi_context.usuario.id'),
+            ]);
+        } catch (\Throwable $erro) {
+            File::delete($caminho);
+            throw $erro;
+        }
+        return redirect()->route('biblioteca.index')->with('status', 'Nova versão criada na biblioteca. A imagem original foi mantida.');
+    }
+
+    public function excluirPermanentemente(Request $request, ArquivoBiblioteca $arquivo, BibliotecaImagemService $imagens): RedirectResponse
+    {
+        $request->validate(['confirmar_exclusao' => ['accepted']]);
+        DB::transaction(function () use ($arquivo, $imagens): void {
+            $registro = ArquivoBiblioteca::query()->lockForUpdate()->findOrFail($arquivo->id);
+            $caminho = $imagens->caminho($registro);
+            if (is_file($caminho) && !File::delete($caminho)) {
+                throw ValidationException::withMessages(['arquivo' => 'Não foi possível excluir o arquivo do disco.']);
+            }
+            $registro->delete();
+        });
+        return redirect()->route('biblioteca.index')->with('status', 'Arquivo excluído permanentemente da biblioteca e do disco.');
     }
 
     public function abrir(string $arquivo): BinaryFileResponse

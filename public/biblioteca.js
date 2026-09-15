@@ -1,4 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('excluirBiblioteca')?.addEventListener('show.bs.modal', event => {
+        document.getElementById('formExcluirBiblioteca').action = event.relatedTarget.dataset.excluirUrl;
+        document.getElementById('nomeExcluirBiblioteca').textContent = event.relatedTarget.dataset.excluirNome;
+        document.getElementById('confirmarExclusaoBiblioteca').checked = false;
+    });
+    document.querySelectorAll('[data-gerar-formato]').forEach(form => {
+        form.addEventListener('submit', event => {
+            if (form.dataset.enviando) { event.preventDefault(); return; }
+            form.dataset.enviando = '1';
+            const botao = form.querySelector('.dropdown-toggle');
+            botao.textContent = 'Gerando…';
+            botao.disabled = true;
+        });
+    });
     const typeFilter = document.getElementById('tipo');
     const categoryFilter = document.getElementById('categoria');
     if (typeFilter && categoryFilter) {

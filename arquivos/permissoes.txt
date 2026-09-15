@@ -77,3 +77,6 @@ recebimentos.exportar
 atividades.personalizar
 atividades.convidados.visualizar
 atividades.convidados.editar
+
+imagem.formatos
+biblioteca.excluir_permanentemente

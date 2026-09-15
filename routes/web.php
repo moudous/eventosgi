@@ -260,6 +260,8 @@ Route::prefix('biblioteca')->name('biblioteca.')->group(function (): void {
     Route::get('/', [BibliotecaController::class, 'index'])->middleware('gi.permission:biblioteca.listar')->name('index');
     Route::post('/', [BibliotecaController::class, 'store'])->middleware('gi.permission:biblioteca.enviar')->name('store');
     Route::post('/recortar', [BibliotecaController::class, 'recortar'])->middleware('gi.permission:biblioteca.recortar')->name('recortar');
+    Route::post('/{arquivo}/formatos', [BibliotecaController::class, 'formatos'])->whereNumber('arquivo')->middleware('gi.permission:imagem.formatos')->name('formatos');
+    Route::delete('/{arquivo}', [BibliotecaController::class, 'excluirPermanentemente'])->whereNumber('arquivo')->middleware('gi.permission:biblioteca.excluir_permanentemente')->name('excluir-permanentemente');
     // O endereço é público para que sites e formulários possam reutilizar estes arquivos.
     Route::get('/arquivos/{arquivo}/visualizar', [BibliotecaController::class, 'abrir'])
         ->where('arquivo', '[a-f0-9-]{36}\.[a-z0-9]{1,15}')->name('abrir');

@@ -54,6 +54,27 @@
                 </div>
                 <div class="card-footer bg-white border-0 p-3 pt-0 d-grid gap-2">
                     @if($arquivo->tipo === 'imagem' && $permissoes->permite('biblioteca.recortar'))<button class="btn btn-sm btn-outline-primary" type="button" data-selecionar aria-pressed="false"><i class="bi bi-check2-square me-1"></i>Selecionar</button>@endif
+                    @if($arquivo->tipo === 'imagem' && $permissoes->permite('imagem.formatos'))
+                        @if($arquivo->formato !== 'svg')
+                        <form method="POST" action="{{ route('biblioteca.formatos', $arquivo) }}" data-gerar-formato>
+                            @csrf
+                            <div class="dropdown d-grid">
+                                <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-images me-1"></i>Gerar formato</button>
+                                <ul class="dropdown-menu">
+                                    @foreach(\App\Services\BibliotecaImagemService::FORMATOS as $valor => $rotulo)
+                                    <li><button class="dropdown-item" type="submit" name="formato" value="{{ $valor }}">{{ $rotulo }}</button></li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                            <div class="form-text small">Salva uma cópia. Tamanhos em KB são aproximados. SVG em preto e branco é indicado para logos; GIFs geram imagem estática.</div>
+                        </form>
+                        @else
+                        <span class="small text-secondary">Esta imagem já está em formato vetorial SVG.</span>
+                        @endif
+                    @endif
+                    @if($permissoes->permite('biblioteca.excluir_permanentemente'))
+                    <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#excluirBiblioteca" data-excluir-url="{{ route('biblioteca.excluir-permanentemente', $arquivo) }}" data-excluir-nome="{{ $arquivo->nome }}"><i class="bi bi-trash me-1"></i>Excluir permanentemente</button>
+                    @endif
                     <a class="btn btn-sm btn-outline-secondary" href="{{ $url }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir link público</a>
                 </div>
             </article>
@@ -64,6 +85,20 @@
     </div>
     <div class="mt-4">{{ $arquivos->onEachSide(1)->links('pagination::bootstrap-5') }}</div>
 </div>
+
+@if($permissoes->permite('biblioteca.excluir_permanentemente'))
+<div class="modal fade" id="excluirBiblioteca" tabindex="-1" aria-labelledby="excluirBibliotecaTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <form method="POST" id="formExcluirBiblioteca">@csrf @method('DELETE')
+        <div class="modal-header"><h2 class="modal-title fs-5" id="excluirBibliotecaTitulo">Excluir permanentemente</h2><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+        <div class="modal-body">
+            <p>Excluir <strong id="nomeExcluirBiblioteca"></strong> da biblioteca e do disco?</p>
+            <p>Esta ação não pode ser desfeita. Páginas que usam o link deste arquivo deixarão de exibi-lo.</p>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="confirmar_exclusao" value="1" id="confirmarExclusaoBiblioteca" required><label class="form-check-label" for="confirmarExclusaoBiblioteca">Confirmo a exclusão permanente.</label></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger" type="submit">Excluir permanentemente</button></div>
+    </form>
+</div></div></div>
+@endif
 
 @if($permissoes->permite('biblioteca.enviar'))
 <div class="modal fade" id="uploadBiblioteca" tabindex="-1" aria-labelledby="uploadTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
@@ -102,4 +137,4 @@
 </div></div></div>
 @endif
 @endsection
-@push('scripts')<script src="{{ asset('biblioteca.js') }}" defer></script>@endpush
+@push('scripts')<script src="{{ asset('biblioteca.js') }}?v={{ filemtime(public_path('biblioteca.js')) }}" defer></script>@endpush
