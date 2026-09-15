@@ -73,7 +73,7 @@
         <div class="col-12 mb-3"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2"><div class="d-flex flex-wrap align-items-center gap-2"><label class="form-label fw-semibold mb-0">Resumo</label><span id="contadorResumo" class="badge text-bg-secondary" aria-live="polite">0 caracteres digitados · {{ $submissao->qtde_resumo }} restantes</span></div>@if(!$novoTrabalho)<a class="btn btn-sm btn-outline-primary" href="{{ route('submissoes.publicas.exportar-documento', [$submissao, $trabalho]) }}"><i class="bi bi-file-earmark-word me-1"></i>Exportar documento</a>@else<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Salve o trabalho antes de exportar"><i class="bi bi-file-earmark-word me-1"></i>Exportar documento</button>@endif</div><input type="hidden" id="conteudo" name="conteudo"><div id="conteudoEditor" class="modelo-editor bg-white">{!! $conteudoInicial !!}</div></div>
     </div></div>
 </div>
-<div class="d-flex justify-content-end"><button class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i>Salvar trabalho</button></div>
+<div class="d-flex justify-content-end"><button class="btn btn-primary px-4"><i class="bi bi-check-lg me-1"></i>Enviar</button></div>
 </form>
 
 

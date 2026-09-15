@@ -51,7 +51,7 @@ body{background:{{ $submissao->corFundoPagina() }}}.submissao-publica{max-width:
             @elseif($submissao->encerrada())
                 <div class="alert alert-warning prazo-alerta"><strong>O período de submissão foi finalizado.</strong> O trabalho foi encaminhado à comissão responsável. Aguarde a divulgação dos resultados.</div>
             @elseif($autorPrincipal)
-                <div class="alert alert-primary prazo-alerta">Você poderá editar até o dia <strong>{{ $submissao->data_fim?->format('d/m/Y H:i') }}</strong>. Depois desta data e hora, o trabalho será submetido à avaliação da comissão responsável.</div>
+                <div class="alert alert-primary prazo-alerta">Após o envio do trabalho, você ainda poderá editar até o dia <strong>{{ $submissao->data_fim?->format('d/m/Y H:i') }}</strong>. Depois desta data e hora, o trabalho será submetido à avaliação da comissão responsável.</div>
             @endif
 
             @if(!$autorPrincipal)<div class="alert alert-info">Você é coautor deste trabalho e tem acesso somente à leitura. Apenas o primeiro autor pode alterá-lo durante o prazo permitido.</div>@endif
