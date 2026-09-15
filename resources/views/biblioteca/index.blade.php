@@ -2,7 +2,7 @@
 @section('title', 'Biblioteca de arquivos')
 @push('styles')
 <style>
-.biblioteca-card{height:100%;transition:border-color .15s,box-shadow .15s}.biblioteca-card.selecionado{border-color:#0d6efd;box-shadow:0 0 0 3px rgba(13,110,253,.2)}.biblioteca-miniatura{aspect-ratio:4/3;background:#eef2f6;display:flex;align-items:center;justify-content:center;overflow:hidden}.biblioteca-miniatura img{width:100%;height:100%;object-fit:cover}.biblioteca-icone{font-size:3.5rem}.biblioteca-nome{overflow-wrap:anywhere}.biblioteca-tags{min-height:1.6rem}.biblioteca-tags .badge{font-weight:500}.crop-canvas{width:100%;max-height:58vh;background:#20252b;object-fit:contain;touch-action:none}
+.biblioteca-card{height:100%;transition:border-color .15s,box-shadow .15s}.biblioteca-card.selecionado{border-color:#0d6efd;box-shadow:0 0 0 3px rgba(13,110,253,.2)}.biblioteca-miniatura{aspect-ratio:4/3;background:#eef2f6;display:flex;align-items:center;justify-content:center;overflow:hidden}.biblioteca-miniatura img{width:100%;height:100%;object-fit:cover}.biblioteca-icone{font-size:3.5rem}.biblioteca-nome{overflow-wrap:anywhere}.biblioteca-tags{min-height:1.6rem}.biblioteca-tags .badge{font-weight:500}.crop-canvas{width:100%;max-height:58vh;background:#20252b;object-fit:contain;touch-action:none}.colar-imagem-area{min-height:86px;border:2px dashed #adb5bd;background:#f8f9fa;cursor:text;transition:border-color .15s,background-color .15s}.colar-imagem-area:focus{border-color:#0d6efd;background:#eef5ff;box-shadow:0 0 0 .25rem rgba(13,110,253,.15);outline:0}.colar-imagem-preview{width:72px;height:64px;object-fit:contain;background:#fff}
 </style>
 @endpush
 @section('content')
@@ -12,8 +12,8 @@
         <div><h1 class="page-title">Biblioteca de arquivos</h1><p class="page-description mb-0">Imagens, documentos, planilhas e apresentações disponíveis por link público.</p></div>
         <div class="d-flex flex-wrap gap-2">
             @if($permissoes->permite('biblioteca.enviar'))
-                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#uploadBiblioteca"><i class="bi bi-cloud-arrow-up me-1"></i>Upload de arquivo</button>
-                <button class="btn btn-outline-primary" type="button" id="colarImagem"><i class="bi bi-clipboard me-1"></i>Colar imagem copiada</button>
+                <button class="btn btn-primary" type="button" id="abrirUploadBiblioteca" data-bs-toggle="modal" data-bs-target="#uploadBiblioteca"><i class="bi bi-cloud-arrow-up me-1"></i>Upload de arquivo</button>
+                <button class="btn btn-outline-primary" type="button" id="colarImagem"><i class="bi bi-clipboard me-1"></i>Colar arquivo copiado</button>
             @endif
             @if($permissoes->permite('biblioteca.recortar'))
                 <button class="btn btn-outline-secondary" type="button" id="recortarSelecionada" disabled><i class="bi bi-crop me-1"></i>Cortar imagem selecionada</button>
@@ -24,6 +24,26 @@
     @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{ session('status') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>@endif
     <div class="alert alert-danger d-none" id="erroClipboard" role="alert"></div>
+
+    @if($permissoes->permite('biblioteca.enviar'))
+    <div class="card content-card mb-4"><div class="card-body p-3">
+        <div class="row g-3 align-items-stretch">
+            <div class="col-12 col-lg">
+                <div id="areaColarImagem" class="colar-imagem-area rounded-3 p-2 d-flex align-items-center gap-3" tabindex="0" role="button" aria-label="Área para colar arquivo copiado" aria-describedby="instrucaoColarImagem" data-extensoes="{{ \App\Http\Controllers\BibliotecaController::EXTENSOES }}">
+                    <i class="bi bi-clipboard-plus fs-2 text-secondary" id="iconeColarImagem" aria-hidden="true"></i>
+                    <img id="previewImagemColada" class="colar-imagem-preview rounded border d-none" alt="Prévia da imagem colada">
+                    <div>
+                        <div class="fw-semibold" id="statusColarImagem">Clique aqui e pressione Ctrl+V</div>
+                        <div class="small text-secondary" id="instrucaoColarImagem">Cole imagens, PDF, Word, PowerPoint ou planilhas do Microsoft Office e LibreOffice.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-auto d-grid">
+                <button class="btn btn-success px-4" type="button" id="salvarImagemColada" disabled><i class="bi bi-floppy me-1"></i>Salvar arquivo colado</button>
+            </div>
+        </div>
+    </div></div>
+    @endif
 
     <form class="card content-card mb-4" method="GET" action="{{ route('biblioteca.index') }}">
         <div class="card-body"><div class="row g-3 align-items-end">
@@ -105,7 +125,7 @@
     <form method="POST" action="{{ route('biblioteca.store') }}" enctype="multipart/form-data" id="formUploadBiblioteca">@csrf
         <div class="modal-header"><h2 class="modal-title fs-5" id="uploadTitulo">Adicionar à biblioteca</h2><button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
         <div class="modal-body">
-            <div class="mb-3"><label class="form-label" for="arquivoUpload">Arquivo</label><input class="form-control" type="file" id="arquivoUpload" name="arquivo" required accept=".jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,.doc,.docx,.odt,.rtf,.txt,.csv,.xls,.xlsx,.ods,.ppt,.pptx,.odp"></div>
+            <div class="mb-3"><label class="form-label" for="arquivoUpload">Arquivo</label><input class="form-control" type="file" id="arquivoUpload" name="arquivo" required accept=".{{ str_replace(',', ',.', \App\Http\Controllers\BibliotecaController::EXTENSOES) }}"><div class="form-text">Imagens, PDF, Word, PowerPoint, planilhas e formatos equivalentes do LibreOffice. Máximo de 25 MB.</div></div>
             <div class="mb-3"><label class="form-label" for="nomeUpload">Nome</label><input class="form-control" id="nomeUpload" name="nome" maxlength="255" required value="{{ old('nome') }}"></div>
             <div class="mb-3"><label class="form-label" for="tagsUpload">Tags</label><input class="form-control" id="tagsUpload" name="tags" maxlength="500" value="{{ old('tags') }}" placeholder="evento, banner, odontologia"><div class="form-text">Até 10 tags, separadas por vírgula.</div></div>
             <div data-categoria-upload><label class="form-label" for="categoriaUpload">Categoria da imagem</label><select class="form-select" id="categoriaUpload" name="categoria"><option value="">Selecione...</option>@foreach(\App\Models\ArquivoBiblioteca::CATEGORIAS as $valor => $rotulo)<option value="{{ $valor }}" @selected(old('categoria') === $valor)>{{ $rotulo }}</option>@endforeach</select></div>

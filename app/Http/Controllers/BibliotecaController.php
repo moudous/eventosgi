@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BibliotecaController
 {
-    private const EXTENSOES = 'jpg,jpeg,png,gif,webp,svg,pdf,doc,docx,odt,rtf,txt,csv,xls,xlsx,ods,ppt,pptx,odp';
+    public const EXTENSOES = 'jpg,jpeg,png,gif,webp,svg,pdf,doc,docx,odt,rtf,txt,csv,xls,xlsx,ods,ppt,pptx,odp';
 
     public function index(Request $request): View
     {

@@ -27,6 +27,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadCategoryGroup = document.querySelector('[data-categoria-upload]');
     const uploadCategory = document.getElementById('categoriaUpload');
     const clipboardError = document.getElementById('erroClipboard');
+    const pasteArea = document.getElementById('areaColarImagem');
+    const pastePreview = document.getElementById('previewImagemColada');
+    const pasteIcon = document.getElementById('iconeColarImagem');
+    const pasteStatus = document.getElementById('statusColarImagem');
+    const savePasted = document.getElementById('salvarImagemColada');
+    let pastedFile = null;
+    let pastedPreviewUrl = null;
+    const allowedExtensions = new Set((pasteArea?.dataset.extensoes || '').split(',').filter(Boolean));
+    const mimeExtensions = {
+        'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg',
+        'application/pdf': 'pdf', 'application/msword': 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/vnd.oasis.opendocument.text': 'odt', 'application/rtf': 'rtf', 'text/rtf': 'rtf', 'text/plain': 'txt', 'text/csv': 'csv',
+        'application/vnd.ms-excel': 'xls', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.oasis.opendocument.spreadsheet': 'ods', 'application/vnd.ms-powerpoint': 'ppt',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+        'application/vnd.oasis.opendocument.presentation': 'odp'
+    };
+    const extensionOf = file => {
+        const fromName = file?.name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+        return allowedExtensions.has(fromName) ? fromName : (mimeExtensions[file?.type] || '');
+    };
+    const iconFor = extension => {
+        if (extension === 'pdf') return 'bi-file-earmark-pdf text-danger';
+        if (['doc', 'docx', 'odt', 'rtf'].includes(extension)) return 'bi-file-earmark-word text-primary';
+        if (['xls', 'xlsx', 'ods', 'csv'].includes(extension)) return 'bi-file-earmark-spreadsheet text-success';
+        if (['ppt', 'pptx', 'odp'].includes(extension)) return 'bi-file-earmark-slides text-warning';
+        return 'bi-file-earmark-text text-secondary';
+    };
     const isImage = file => file && (file.type.startsWith('image/') || /\.svg$/i.test(file.name));
     const updateUpload = () => {
         if (!uploadInput || !uploadInput.files[0]) return;
@@ -42,32 +71,69 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUpload();
     });
 
-    document.getElementById('colarImagem')?.addEventListener('click', async () => {
+    const showClipboardError = message => {
+        if (!clipboardError) return;
+        clipboardError.textContent = message;
+        clipboardError.classList.remove('d-none');
+    };
+    const receivePastedFile = file => {
         clipboardError?.classList.add('d-none');
-        try {
-            if (!navigator.clipboard?.read) throw new Error('Seu navegador não permite ler imagens copiadas nesta página.');
-            const items = await navigator.clipboard.read();
-            let blob = null;
-            for (const item of items) {
-                const mime = item.types.find(type => type.startsWith('image/'));
-                if (mime) { blob = await item.getType(mime); break; }
-            }
-            if (!blob) throw new Error('A área de transferência não contém uma imagem.');
-            const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
-            const file = new File([blob], `imagem-colada.${extension}`, { type: blob.type });
-            const transfer = new DataTransfer();
-            transfer.items.add(file);
-            uploadInput.files = transfer.files;
-            uploadName.value = file.name;
-            if (uploadCategory && !uploadCategory.value) uploadCategory.value = 'imagem_decorativa';
-            updateUpload();
-            bootstrap.Modal.getOrCreateInstance(uploadModalElement).show();
-        } catch (error) {
-            if (clipboardError) {
-                clipboardError.textContent = error.message || 'Não foi possível colar a imagem copiada.';
-                clipboardError.classList.remove('d-none');
-            }
+        const extension = extensionOf(file);
+        if (!file || !extension) {
+            showClipboardError('O conteúdo colado não contém um arquivo compatível. Cole uma imagem, PDF, documento, apresentação ou planilha.');
+            return;
         }
+        if (file.size > 25 * 1024 * 1024) {
+            showClipboardError('O arquivo colado deve ter no máximo 25 MB.');
+            return;
+        }
+        const originalName = file.name && file.name !== 'image.png' ? file.name : `arquivo-colado-${Date.now()}.${extension}`;
+        pastedFile = new File([file], originalName, { type: file.type || 'application/octet-stream' });
+        if (pastedPreviewUrl) URL.revokeObjectURL(pastedPreviewUrl);
+        pastedPreviewUrl = null;
+        if (isImage(pastedFile)) {
+            pastedPreviewUrl = URL.createObjectURL(pastedFile);
+            pastePreview.src = pastedPreviewUrl;
+            pastePreview.classList.remove('d-none');
+            pasteIcon?.classList.add('d-none');
+        } else {
+            pastePreview.removeAttribute('src');
+            pastePreview.classList.add('d-none');
+            pasteIcon.className = `bi ${iconFor(extension)} fs-2`;
+            pasteIcon.classList.remove('d-none');
+        }
+        pasteStatus.textContent = `${pastedFile.name} — ${(pastedFile.size / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`;
+        savePasted.disabled = false;
+    };
+    pasteArea?.addEventListener('paste', event => {
+        event.preventDefault();
+        const file = Array.from(event.clipboardData?.files || [])[0]
+            || Array.from(event.clipboardData?.items || []).find(item => item.kind === 'file')?.getAsFile();
+        receivePastedFile(file);
+    });
+    pasteArea?.addEventListener('click', () => pasteArea.focus());
+    document.getElementById('colarImagem')?.addEventListener('click', () => {
+        pasteArea?.focus();
+        pasteArea?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    savePasted?.addEventListener('click', () => {
+        if (!pastedFile) return;
+        try {
+            const transfer = new DataTransfer();
+            transfer.items.add(pastedFile);
+            uploadInput.files = transfer.files;
+        } catch (error) {
+            showClipboardError('Seu navegador não permitiu preparar o arquivo colado para envio.');
+            return;
+        }
+        uploadName.value = pastedFile.name;
+        if (uploadCategory) uploadCategory.value = '';
+        updateUpload();
+        bootstrap.Modal.getOrCreateInstance(uploadModalElement).show();
+    });
+    document.getElementById('abrirUploadBiblioteca')?.addEventListener('click', () => {
+        if (uploadInput) uploadInput.value = '';
+        updateUpload();
     });
 
     let selected = null;
