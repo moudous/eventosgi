@@ -34,6 +34,13 @@ class Atividade extends Model
 
     public const MENSAGEM_IDENTIFICACAO = 'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite uma senha temporária por e-mail.';
 
+    public function temPagamentoPix(): bool
+    {
+        return collect($this->formulario['campos'] ?? [])->contains(
+            fn (array $campo) => ($campo['tipo'] ?? '') === 'pagamento_pix',
+        );
+    }
+
     private const MENSAGENS_IDENTIFICACAO_ANTIGAS = [
         'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite um código temporário por e-mail.',
         'Informe o seu e-mail e confirme o código que enviaremos para ele. Assim conseguimos localizar o seu cadastro e emitir o certificado no nome certo.',

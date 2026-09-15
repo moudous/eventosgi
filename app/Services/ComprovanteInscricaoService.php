@@ -18,6 +18,12 @@ class ComprovanteInscricaoService
         $itens = array_values(array_map(function (array $campo) use ($respostas, $inscricao): array {
             $nome = (string) ($campo['nome'] ?? '');
             $valor = $respostas[$nome] ?? null;
+            if (($campo['tipo'] ?? '') === 'pagamento_pix') {
+                $cobranca = $inscricao->cobrancasPix()->where('campo', $nome)->first();
+                $preco = number_format((float) ($cobranca?->valor ?? $campo['valor_pix'] ?? 0), 2, ',', '.');
+                $situacao = $cobranca?->status === 'CONCLUIDA' ? 'pagamento confirmado' : 'aguardando pagamento';
+                return ['label' => (string) ($campo['label'] ?? $nome), 'valor' => 'R$ '.$preco.' — '.$situacao];
+            }
             $opcoes = collect($campo['opcoes'] ?? [])->mapWithKeys(function ($opcao): array {
                 return is_array($opcao)
                     ? [(string) ($opcao['valor'] ?? '') => (string) ($opcao['texto'] ?? $opcao['valor'] ?? '')]

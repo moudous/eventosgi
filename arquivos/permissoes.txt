@@ -10,8 +10,12 @@ atividades.excluir_definitivamente
 atividades.historico
 atividades.formulario
 atividades.formulario.estrutura
+atividades.pix
 atividades.visualizar_formulario
 atividades.inscritos
+atividades.recebimentoslistar
+atividades.recebimentos.visualizar
+atividades.recebimentos.exportar
 atividades.wordpress
 atividades.validador_qr
 categorias.listar
@@ -21,6 +25,7 @@ categorias.editar
 categorias.excluir
 categorias.ativar_desativar
 configuracao.visualizar
+configuracao.pix
 configuracao.faixa.criar
 configuracao.faixa.ativar_desativar
 configuracao.faixa.excluir
@@ -64,6 +69,10 @@ usuarios.visualizar
 biblioteca.listar
 biblioteca.enviar
 biblioteca.recortar
+
+recebimentos.listar
+recebimentos.visualizar
+recebimentos.exportar
 
 atividades.personalizar
 atividades.convidados.visualizar

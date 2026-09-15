@@ -237,7 +237,15 @@ class EventosGI_Shortcode {
 		// O token é consumido pela inscrição; a próxima começa da identificação.
 		$this->limpar_sessao( $atividade_id );
 
-		$this->redirecionar( $atividade_id, array( 'tipo' => 'sucesso', 'mensagem' => $resposta['mensagem'] ) );
+        $this->redirecionar(
+            $atividade_id,
+            array(
+                'tipo'      => 'sucesso',
+                'mensagem'  => $resposta['mensagem'],
+                'pix'       => isset( $resposta['pix'] ) && is_array( $resposta['pix'] ) ? $resposta['pix'] : array(),
+                'pix_erro'  => isset( $resposta['pix_erro'] ) ? $resposta['pix_erro'] : '',
+            )
+        );
 	}
 
 	/**
@@ -556,6 +564,18 @@ class EventosGI_Shortcode {
 				</div>
 			<?php endif; ?>
 
+			<?php if ( $resultado && ! empty( $resultado['pix'] ) ) : ?>
+				<?php foreach ( $resultado['pix'] as $pix ) : ?>
+					<div class="eventosgi-pix">
+						<strong><?php echo esc_html( sprintf( __( 'Pagamento PIX — R$ %s', 'eventosgi-formularios' ), number_format_i18n( (float) $pix['valor'], 2 ) ) ); ?></strong>
+						<p><?php esc_html_e( 'Copie o código abaixo e pague no aplicativo do seu banco:', 'eventosgi-formularios' ); ?></p>
+						<textarea class="eventosgi-controle" rows="4" readonly onclick="this.select()"><?php echo esc_textarea( $pix['pix_copia_cola'] ); ?></textarea>
+					</div>
+				<?php endforeach; ?>
+			<?php elseif ( $resultado && ! empty( $resultado['pix_erro'] ) ) : ?>
+				<div class="eventosgi-alerta eventosgi-alerta--erro"><?php echo esc_html( $resultado['pix_erro'] ); ?></div>
+			<?php endif; ?>
+
 			<?php if ( ! $aberto ) : ?>
 				<div class="eventosgi-alerta eventosgi-alerta--aviso"><?php echo esc_html( $estrutura['estado']['mensagem'] ); ?></div>
 			<?php endif; ?>
@@ -722,7 +742,11 @@ class EventosGI_Shortcode {
 				<?php if ( $obrigatorio ) : ?><span class="eventosgi-obrigatorio" aria-hidden="true">*</span><?php endif; ?>
 			</label>
 
-			<?php if ( 'textarea' === $tipo ) : ?>
+			<?php if ( 'pagamento_pix' === $tipo ) : ?>
+				<div class="eventosgi-pix-resumo"><span><?php esc_html_e( 'A cobrança será gerada após o envio.', 'eventosgi-formularios' ); ?></span><strong><?php echo esc_html( 'R$ ' . number_format_i18n( (float) $campo['valor_pix'], 2 ) ); ?></strong></div>
+				<?php if ( ! empty( $campo['descricao_pix'] ) ) : ?><small class="eventosgi-ajuda"><?php echo esc_html( $campo['descricao_pix'] ); ?></small><?php endif; ?>
+
+			<?php elseif ( 'textarea' === $tipo ) : ?>
 				<textarea class="eventosgi-controle" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nome ); ?>" rows="4"
 					placeholder="<?php echo esc_attr( $campo['placeholder'] ); ?>" <?php echo $obrigatorio ? 'required' : ''; ?>><?php echo esc_textarea( is_string( $valor ) ? $valor : '' ); ?></textarea>
 

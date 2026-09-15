@@ -22,6 +22,7 @@ use App\Http\Controllers\CaptchaSubmissaoController;
 use App\Http\Controllers\PresencaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardExportController;
+use App\Http\Controllers\RecebimentoPixController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -168,7 +169,9 @@ Route::prefix('categorias')->name('categorias.')->group(function (): void {
 // configuracao.visualizar abre a tela; as demais liberam cada acao dentro dela. Quem so
 // tem a primeira ve a configuracao atual sem poder altera-la.
 Route::prefix('configuracao')->name('configuracao.')->group(function (): void {
-    Route::get('/', [ConfiguracaoController::class, 'index'])->middleware('gi.permission:configuracao.visualizar')->name('index');
+    Route::get('/', [ConfiguracaoController::class, 'index'])->middleware('gi.permission:configuracao.visualizar,configuracao.pix')->name('index');
+    Route::put('/pix', [ConfiguracaoController::class, 'salvarPix'])->middleware('gi.permission:configuracao.pix')->name('pix.update');
+    Route::post('/pix/testar', [ConfiguracaoController::class, 'testarPix'])->middleware('gi.permission:configuracao.pix')->name('pix.testar');
     Route::post('/faixas-ip', [ConfiguracaoController::class, 'guardarFaixa'])->middleware('gi.permission:configuracao.faixa.criar')->name('faixas-ip.store');
     Route::patch('/faixas-ip/{faixa}', [ConfiguracaoController::class, 'alternarFaixa'])->middleware('gi.permission:configuracao.faixa.ativar_desativar')->name('faixas-ip.toggle');
     Route::delete('/faixas-ip/{faixa}', [ConfiguracaoController::class, 'removerFaixa'])->middleware('gi.permission:configuracao.faixa.excluir')->name('faixas-ip.destroy');
@@ -201,6 +204,10 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     // pela permissao em inscricoes.exportar-link.
     Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
     Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.inscritos')->name('inscricoes');
+    Route::get('/{atividade}/recebimentos', [RecebimentoPixController::class, 'index'])->middleware('gi.permission:atividades.recebimentoslistar')->name('recebimentos.index');
+    Route::get('/{atividade}/recebimentos/dados', [RecebimentoPixController::class, 'dados'])->middleware('gi.permission:atividades.recebimentoslistar')->name('recebimentos.dados');
+    Route::get('/{atividade}/recebimentos/exportar', [RecebimentoPixController::class, 'exportar'])->middleware('gi.permission:atividades.recebimentos.exportar')->name('recebimentos.exportar');
+    Route::get('/{atividade}/recebimentos/{recebimento}', [RecebimentoPixController::class, 'showAtividade'])->middleware('gi.permission:atividades.recebimentos.visualizar')->name('recebimentos.show');
     Route::patch('/inscricoes/{inscricao}/presenca', [PresencaController::class, 'definir'])->middleware('gi.permission:atividades.validador_qr')->name('inscricoes.presenca');
     Route::get('/{atividade}/historico', [AtividadeController::class, 'historico'])->middleware('gi.permission:atividades.historico')->name('historico');
     Route::patch('/{atividade}/restaurar', [AtividadeController::class, 'restore'])->middleware('gi.permission:atividades.restaurar')->name('restore');
@@ -211,6 +218,13 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/{atividade}/editar', [AtividadeController::class, 'edit'])->middleware('gi.permission:atividades.editar')->name('edit');
     Route::put('/{atividade}', [AtividadeController::class, 'update'])->middleware('gi.permission:atividades.editar')->name('update');
     Route::delete('/{atividade}', [AtividadeController::class, 'destroy'])->middleware('gi.permission:atividades.excluir')->name('destroy');
+});
+
+Route::prefix('recebimentos')->name('recebimentos.')->group(function (): void {
+    Route::get('/', [RecebimentoPixController::class, 'index'])->middleware('gi.permission:recebimentos.listar')->name('index');
+    Route::get('/dados', [RecebimentoPixController::class, 'dados'])->middleware('gi.permission:recebimentos.listar')->name('dados');
+    Route::get('/exportar', [RecebimentoPixController::class, 'exportar'])->middleware('gi.permission:recebimentos.exportar')->name('exportar');
+    Route::get('/{recebimento}', [RecebimentoPixController::class, 'show'])->middleware('gi.permission:recebimentos.visualizar')->name('show');
 });
 
 // Endereço permanente por hash. A disponibilidade segue as datas do formulário.
@@ -225,6 +239,7 @@ Route::get('/formularios/{atividade:hash_publica}/captcha', CaptchaInscricaoCont
 Route::get('/formularios/{atividade:hash_publica}/editor/imagens/{arquivo}/visualizar', [AtividadeController::class, 'imagemEditor'])
     ->where('arquivo', '[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp)')->name('inscricoes.editor.imagem');
 Route::post('/formularios/{atividade:hash_publica}/comprovante/email', [AtividadeController::class, 'enviarComprovante'])->name('inscricoes.comprovante.email');
+Route::get('/formularios/{atividade:hash_publica}/pix/{cobranca}/comprovante.pdf', [AtividadeController::class, 'comprovantePix'])->name('inscricoes.pix.comprovante');
 Route::delete('/formularios/{atividade:hash_publica}/inscricao', [AtividadeController::class, 'apagarInscricao'])->name('inscricoes.apagar');
 Route::get('/comprovantes/{inscricao:comprovante_hash}.pdf/visualizar', [AtividadeController::class, 'comprovantePdf'])
     ->where('inscricao', '[a-f0-9]{64}')->name('inscricoes.comprovante.pdf');

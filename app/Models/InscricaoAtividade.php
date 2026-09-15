@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InscricaoAtividade extends Model
 {
@@ -19,6 +20,7 @@ class InscricaoAtividade extends Model
         static::creating(function (InscricaoAtividade $inscricao): void {
             $inscricao->comprovante_hash ??= bin2hex(random_bytes(32));
         });
+        static::deleting(fn (InscricaoAtividade $inscricao) => $inscricao->cobrancasPix()->delete());
     }
 
     public function atividade(): BelongsTo
@@ -39,5 +41,10 @@ class InscricaoAtividade extends Model
     public function validadorPresenca(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'presenca_validada_por');
+    }
+
+    public function cobrancasPix(): HasMany
+    {
+        return $this->hasMany(PixCobranca::class, 'inscricao_atividade_id');
     }
 }

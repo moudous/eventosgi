@@ -67,6 +67,7 @@
     @if(session('vagas_esgotadas'))<div class="alert alert-warning">{{ session('vagas_esgotadas') }}</div>@endif
     @if(session('identificacao_expirada'))<div class="alert alert-warning">{{ session('identificacao_expirada') }}</div>@endif
     @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
+    @if(session('pix_erro'))<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>{{ session('pix_erro') }}</div>@endif
 
     @if($listaReservaAtiva)
         <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>{{ \App\Models\Atividade::MENSAGEM_LISTA_RESERVA }}</div>
@@ -126,9 +127,50 @@
                 ? 'comprovante-ultracompacto'
                 : ($itensComprovante > 13 || $caracteresComprovante > 1500 ? 'comprovante-compacto' : '');
         @endphp
+        @if(collect($config['campos'] ?? [])->contains(fn ($campo) => ($campo['tipo'] ?? '') === 'pagamento_pix'))
+            <div class="card content-card mb-3">
+                <div class="card-header"><h2 class="h5 fw-bold mb-0"><i class="bi bi-qr-code me-1"></i>Pagamento PIX</h2></div>
+                <div class="card-body p-4">
+                    @forelse($cobrancasPix ?? [] as $itemPix)
+                        @php
+                            $cobrancaPix = $itemPix['model'];
+                        @endphp
+                        <div class="row g-4 align-items-center {{ !$loop->last ? 'border-bottom pb-4 mb-4' : '' }}">
+                            @if($cobrancaPix->status !== 'CONCLUIDA' && $itemPix['qr'])<div class="col-md-5 text-center"><img src="{{ $itemPix['qr']['imagem'] }}" width="260" height="260" alt="QR Code para pagamento PIX"></div>@endif
+                            <div class="col">
+                                <div class="fs-4 fw-bold mb-2">R$ {{ number_format((float) $cobrancaPix->valor, 2, ',', '.') }}</div>
+                                @if($cobrancaPix->status === 'CONCLUIDA')
+                                    <div class="alert alert-success">
+                                        <i class="bi bi-check-circle-fill me-1"></i>Pagamento confirmado
+                                        @if($cobrancaPix->pago_em) em {{ $cobrancaPix->pago_em->format('d/m/Y H:i') }}@endif.
+                                    </div>
+                                    <a class="btn btn-outline-success" href="{{ route('inscricoes.pix.comprovante', ['atividade' => $atividade->hash_publica, 'cobranca' => $cobrancaPix]) }}"><i class="bi bi-file-earmark-pdf me-1"></i>Baixar comprovante PIX</a>
+                                @else
+                                    <span class="badge text-bg-warning mb-3">Aguardando pagamento</span>
+                                    @if($itemPix['qr'])
+                                        <label class="form-label" for="pix_codigo_{{ $cobrancaPix->id }}">PIX copia e cola</label>
+                                        <div class="input-group mb-3"><textarea class="form-control font-monospace" id="pix_codigo_{{ $cobrancaPix->id }}" rows="3" readonly>{{ $itemPix['qr']['codigo'] }}</textarea><button class="btn btn-outline-primary" type="button" data-copiar-pix="#pix_codigo_{{ $cobrancaPix->id }}"><i class="bi bi-clipboard"></i> Copiar</button></div>
+                                    @endif
+                                    <form method="POST" action="{{ request()->fullUrl() }}">@csrf<input type="hidden" name="acao" value="atualizar_pix"><input type="hidden" name="cobranca_id" value="{{ $cobrancaPix->id }}"><button class="btn btn-outline-success"><i class="bi bi-arrow-clockwise me-1"></i>Já paguei — verificar</button></form>
+                                @endif
+                                <div class="small text-muted mt-2">TXID: <code>{{ $cobrancaPix->txid }}</code></div>
+                            </div>
+                        </div>
+                    @empty
+                        <p>A cobrança ainda não foi gerada. Confira a configuração do Sicoob e tente novamente.</p>
+                        <form method="POST" action="{{ request()->fullUrl() }}">@csrf<input type="hidden" name="acao" value="gerar_pix"><button class="btn btn-primary"><i class="bi bi-qr-code me-1"></i>Gerar cobrança PIX</button></form>
+                    @endforelse
+                </div>
+            </div>
+        @endif
         <div class="d-flex flex-wrap gap-2 mb-3">
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#comprovanteModal"><i class="bi bi-printer me-1"></i>Imprimir comprovante</button>
+            @if($cancelamentoBloqueadoPix ?? false)
+            <button type="button" class="btn btn-outline-danger" disabled aria-disabled="true" title="Inscrições com pagamento PIX não podem ser apagadas"><i class="bi bi-trash me-1"></i>Apagar inscrição</button>
+            <span class="align-self-center small text-muted"><i class="bi bi-lock-fill me-1"></i>Inscrições com pagamento PIX não podem ser apagadas.</span>
+            @else
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#apagarInscricaoModal"><i class="bi bi-trash me-1"></i>Apagar inscrição</button>
+            @endif
         </div>
 
         <div id="comprovanteRespostas" class="card content-card {{ $densidadeComprovante }}">
@@ -150,6 +192,7 @@
             </div></div>
         </div>
 
+        @if(!($cancelamentoBloqueadoPix ?? false))
         <div class="modal fade" id="apagarInscricaoModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="POST" action="{{ route('inscricoes.apagar', ['atividade' => $atividade->hash_publica]) }}">@csrf @method('DELETE')
                 <div class="modal-header"><h2 class="modal-title fs-5">Apagar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
@@ -157,6 +200,7 @@
                 <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger"><i class="bi bi-trash me-1"></i>Apagar definitivamente</button></div>
             </form></div></div>
         </div>
+        @endif
     @endif
 
     @if($aberto && ! $identificacao)
@@ -308,12 +352,17 @@
                                 $camposPorLinha = min(12, max(1, $camposPorLinha));
                             @endphp
                             <div class="col-12 campo-formulario-publico" style="--campos-por-linha: {{ $camposPorLinha }}; --largura-campo: {{ 100 / $camposPorLinha }}%">
-                                @if(in_array($tipo, ['radio', 'checkbox'], true))
+                                @if(in_array($tipo, ['radio', 'checkbox', 'pagamento_pix'], true))
                                     <div class="form-label">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</div>
                                 @else
                                     <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
                                 @endif
-                                @if(in_array($tipo, ['select', 'multiselect'], true))
+                                @if($tipo === 'pagamento_pix')
+                                    <div class="border rounded-3 p-3 bg-light">
+                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2"><span class="text-muted"><i class="bi bi-qr-code me-1"></i>A cobrança será gerada após o envio da inscrição.</span><strong class="fs-5">R$ {{ number_format((float) ($campo['valor_pix'] ?? 0), 2, ',', '.') }}</strong></div>
+                                        @if(!empty($campo['descricao_pix']))<div class="small mt-2">{{ $campo['descricao_pix'] }}</div>@endif
+                                    </div>
+                                @elseif(in_array($tipo, ['select', 'multiselect'], true))
                                     <select class="form-select" id="campo_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" data-nome-campo="{{ $nome }}" @if($criterioVagas) data-criterio-vagas="1" @endif @if(!empty($campo['obrigatorio']) || $criterioVagas) required @endif @if($multiplo) multiple @endif>
                                         @foreach($campo['opcoes'] ?? [] as $opcao)
                                             @php
@@ -438,6 +487,16 @@
     }
     /* Fora da tela em vez de display:none, para o robô continuar preenchendo. */
 </style>
+@endpush
+
+@push('scripts')
+<script>
+document.querySelectorAll('[data-copiar-pix]').forEach(botao => botao.addEventListener('click', async () => {
+    const campo = document.querySelector(botao.dataset.copiarPix);
+    try { await navigator.clipboard.writeText(campo.value); } catch (_) { campo.select(); document.execCommand('copy'); }
+    botao.innerHTML = '<i class="bi bi-check-lg"></i> Copiado';
+}));
+</script>
 @endpush
 
 @push('scripts')

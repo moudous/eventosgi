@@ -87,6 +87,7 @@ class FormularioInscricaoService
 
             $nome = $campo['nome'];
             $tipo = $campo['tipo'] ?? 'text';
+            if ($tipo === 'pagamento_pix') continue;
             $opcoes = array_map(
                 fn ($opcao) => (string) (is_array($opcao) ? ($opcao['valor'] ?? '') : $opcao),
                 $campo['opcoes'] ?? [],

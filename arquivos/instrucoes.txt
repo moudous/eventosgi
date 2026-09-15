@@ -19,8 +19,18 @@ criar compo embed para embutir a página em algum iframe, nao use borda.
 nao pode deixar fazer cadastro novo pois a perigo de usar um email que nao pertence realmente !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 deve autenticar no email com senha igual em atividade
 
-## em https://gi.fco.edu.br/integracoes/9/container/143  na pagina do evento quando carrega as variaveis do template seria possivel 
-já trazer preenchido as variveis padrao quando estiver vazio e mostrar em alqgum lugar o campo que é valor padrao
+#criterios de avaliação
+
+faça uma rota /criterios que vai ser o cadastro dos criterios de avaliação  os criterios vao poder ser ordenados 
+te um botão adicionar criterio de avaliação que ao clicar abre um modal onde se coloca a 
+descricao do criterio (100 caracteres), nota minima e nota maxima valor decimal 1 casa decimal.  
+com valores preenchidos 0 e 10 exemplo de notas (1.5 , 3.5  9.8) . Ao adicionar o criterio ele aparece como
+  o primeiro da lista a lista é cada criterio é idnetificado por uma letra maicuscula A, B, C. D... Z.
+   O proprio sistema coloca a letra no criterio. quando adiciona um criterio novo ele vai aparecer no fim da lista lá embaixo.
+    deve ser possivel mudar a ordem dos criterios e a letra nao vai junto do item
 
 
-..
+## avaliação
+faça uma rota /avaliacao  onde vai abrir uma tela com deve se escolher  o evento e o traballho de subumissao cadastrado.
+ Em eventos devem aparecer apenas os eventos que possuem trabalhos de submimssao. Ao selecionar o evento o combo de trabalhos/Resumos
+ vai trazer os resumos vinculados aquele evento.

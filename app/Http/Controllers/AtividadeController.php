@@ -8,6 +8,7 @@ use App\Models\Evento;
 use App\Models\HistoricoAtividade;
 use App\Models\InscricaoAtividade;
 use App\Models\Participante;
+use App\Models\PixCobranca;
 use App\Rules\EmailValido;
 use App\Services\ArmazemService;
 use App\Services\CaptchaInscricaoService;
@@ -21,6 +22,7 @@ use App\Services\GiPermissionService;
 use App\Services\HistoricoService;
 use App\Services\PresencaQrService;
 use App\Services\InscricoesExportService;
+use App\Services\SicoobPixService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -123,6 +125,10 @@ class AtividadeController
         ]);
         $url = $request->boolean('usar_url') ? $dados['url'] : null;
         $config = $distribuicao->prepararConfiguracao(json_decode($dados['formulario'], true));
+        $podeInserirCampoPix = app(GiPermissionService::class)->permite('atividades.pix', $request);
+        $camposPixExistentes = collect($atividade->formulario['campos'] ?? [])
+            ->filter(fn (array $campo): bool => ($campo['tipo'] ?? '') === 'pagamento_pix')
+            ->pluck('nome')->filter()->all();
         $validator = validator(['config' => $config], [
             'config' => ['required', 'array'],
             'config.campos' => ['sometimes', 'array'],
@@ -136,6 +142,9 @@ class AtividadeController
             'config.campos.*.opcoes.*.texto' => ['required_with:config.campos.*.opcoes.*.valor', 'string', 'max:255'],
             'config.campos.*.opcoes.*.percentual_vagas' => ['nullable', 'numeric', 'between:0,100'],
             'config.campos.*.percentual_vagas' => ['nullable', 'numeric', 'between:0,100'],
+            'config.campos.*.valor_pix' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999.99'],
+            'config.campos.*.expiracao_pix' => ['nullable', 'integer', 'between:300,86400'],
+            'config.campos.*.descricao_pix' => ['nullable', 'string', 'max:140'],
             'config.criterios_vagas' => ['sometimes', 'array'],
             'config.criterios_vagas.*' => ['required', 'string', 'distinct'],
             'config.limitar_inscricoes' => ['sometimes', 'boolean'],
@@ -163,6 +172,16 @@ class AtividadeController
             'config.limite_lista_reserva.integer' => 'A quantidade de inscrições além do limite deve ser um número inteiro.',
             'config.limite_lista_reserva.min' => 'A quantidade de inscrições além do limite deve ser pelo menos 1.',
         ]);
+        $validator->after(function ($validator) use ($config, $podeInserirCampoPix, $camposPixExistentes): void {
+            foreach (($config['campos'] ?? []) as $indice => $campo) {
+                if (($campo['tipo'] ?? '') === 'pagamento_pix' && (float) ($campo['valor_pix'] ?? 0) <= 0) {
+                    $validator->errors()->add("config.campos.{$indice}.valor_pix", 'Informe um valor maior que zero para cada campo Pagamento PIX.');
+                }
+                if (($campo['tipo'] ?? '') === 'pagamento_pix' && ! $podeInserirCampoPix && ! in_array($campo['nome'] ?? null, $camposPixExistentes, true)) {
+                    $validator->errors()->add("config.campos.{$indice}.tipo", 'Seu perfil não possui a permissão atividades.pix para inserir um campo Pagamento PIX.');
+                }
+            }
+        });
         if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
         $distribuicao->validarConfiguracao($config);
 
@@ -243,6 +262,7 @@ class AtividadeController
 
         $config = $distribuicao->recalcular($atividade);
         $config['editor']['conteudo'] = $editor->sanitizar($config['editor']['conteudo'] ?? '');
+        $cobrancasPix = $inscricao ? $inscricao->cobrancasPix : collect();
 
         return view('atividades.formulario-publico', [
             'atividade' => $atividade,
@@ -256,6 +276,11 @@ class AtividadeController
             'respostasComprovante' => $inscricao ? $comprovante->respostas($inscricao) : [],
             'qrPresenca' => $inscricao ? $comprovante->qrPresenca($inscricao) : null,
             'presencaInscricao' => $inscricao ? $comprovante->presenca($inscricao) : null,
+            'cancelamentoBloqueadoPix' => $inscricao && ($atividade->temPagamentoPix() || $cobrancasPix->isNotEmpty()),
+            'cobrancasPix' => $cobrancasPix->map(fn ($cobranca) => [
+                'model' => $cobranca,
+                'qr' => app(SicoobPixService::class)->qrCode($cobranca),
+            ]),
         ]);
     }
     /**
@@ -281,7 +306,7 @@ class AtividadeController
     /**
      * As etapas de identificação e inscrição compartilham o endereço permanente por hash.
      */
-    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, CaptchaInscricaoService $captcha): RedirectResponse
+    public function inscrever(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, CaptchaInscricaoService $captcha, SicoobPixService $pix): RedirectResponse
     {
         abort_unless($atividade->formulario, 404);
         if ($request->routeIs('inscricoes.publica.enviar', 'inscricoes.publica.amigavel.enviar')) abort_unless($atividade->ativo, 404);
@@ -292,7 +317,9 @@ class AtividadeController
             'validar_senha' => $this->validarSenha($request, $atividade, $identificacao),
             'salvar_nova_senha' => $this->salvarNovaSenha($request, $atividade, $identificacao),
             'trocar_email' => $this->trocarEmail($request, $atividade, $identificacao),
-            default => $this->registrarInscricao($request, $atividade, $servico, $identificacao),
+            'gerar_pix' => $this->gerarPix($request, $atividade, $servico, $identificacao, $pix),
+            'atualizar_pix' => $this->atualizarPix($request, $atividade, $servico, $identificacao, $pix),
+            default => $this->registrarInscricao($request, $atividade, $servico, $identificacao, $pix),
         };
     }
 
@@ -390,7 +417,7 @@ class AtividadeController
         return redirect()->to($request->fullUrl().'#inicio-formulario')->with('identificado', $mensagem);
     }
 
-    private function registrarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao): RedirectResponse
+    private function registrarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, SicoobPixService $pix): RedirectResponse
     {
         $sessao = $identificacao->daSessao($request, $atividade);
         $participante = $identificacao->participanteDaSessao($request, $atividade);
@@ -403,10 +430,52 @@ class AtividadeController
 
         $resultado = $servico->inscrever($request, $atividade, $participante, $sessao['email']);
         if ($resultado['sucesso']) {
+            try {
+                $inscricao = InscricaoAtividade::query()->with(['atividade', 'participante'])->findOrFail($resultado['inscricao_id']);
+                $pix->gerarParaInscricao($inscricao);
+            } catch (Throwable $erro) {
+                report($erro);
+                return back()->with('status', $resultado['mensagem'])->with('pix_erro', $erro->getMessage());
+            }
             return back()->with('status', $resultado['mensagem']);
         }
         if ($resultado['motivo'] === 'esgotado') return back()->with('vagas_esgotadas', $resultado['mensagem']);
         abort(403, $resultado['mensagem']);
+    }
+
+    private function gerarPix(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, SicoobPixService $pix): RedirectResponse
+    {
+        $inscricao = $this->inscricaoPixAutorizada($request, $atividade, $servico, $identificacao);
+        try {
+            $pix->gerarParaInscricao($inscricao->loadMissing(['atividade', 'participante']));
+            return back()->with('status', 'Cobrança PIX gerada.');
+        } catch (Throwable $erro) {
+            report($erro);
+            return back()->with('pix_erro', $erro->getMessage());
+        }
+    }
+
+    private function atualizarPix(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao, SicoobPixService $pix): RedirectResponse
+    {
+        $inscricao = $this->inscricaoPixAutorizada($request, $atividade, $servico, $identificacao);
+        $cobranca = $inscricao->cobrancasPix()->findOrFail((int) $request->input('cobranca_id'));
+        try {
+            $atualizada = $pix->consultar($cobranca);
+            return back()->with('status', $atualizada->status === 'CONCLUIDA' ? 'Pagamento PIX confirmado.' : 'O pagamento ainda não foi confirmado pelo Sicoob.');
+        } catch (Throwable $erro) {
+            report($erro);
+            return back()->with('pix_erro', $erro->getMessage());
+        }
+    }
+
+    private function inscricaoPixAutorizada(Request $request, Atividade $atividade, FormularioInscricaoService $servico, IdentificacaoParticipanteService $identificacao): InscricaoAtividade
+    {
+        $sessao = $identificacao->daSessao($request, $atividade);
+        $participante = $identificacao->participanteDaSessao($request, $atividade);
+        abort_unless($sessao && $participante, 403);
+        $inscricao = $servico->inscricaoDoParticipante($atividade, $participante, $sessao['email']);
+        abort_unless($inscricao, 404);
+        return $inscricao;
     }
 
     public function comprovantePdf(InscricaoAtividade $inscricao, ComprovanteInscricaoService $comprovante): Response
@@ -463,12 +532,41 @@ class AtividadeController
         return back()->with('status', 'As respostas foram enviadas para '.$sessao['email'].'.');
     }
 
+    public function comprovantePix(Request $request, Atividade $atividade, PixCobranca $cobranca, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao): Response
+    {
+        [$inscricao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
+        abort_unless(
+            (int) $cobranca->inscricao_atividade_id === (int) $inscricao->id
+            && $cobranca->status === 'CONCLUIDA'
+            && $cobranca->pago_em,
+            404,
+        );
+        $cobranca->load(['inscricao.atividade.evento', 'inscricao.participante']);
+
+        $opcoes = new Options;
+        $opcoes->set('isRemoteEnabled', false);
+        $pdf = new Dompdf($opcoes);
+        $pdf->loadHtml(view('atividades.comprovante-pix-pdf', compact('cobranca'))->render(), 'UTF-8');
+        $pdf->setPaper('A4');
+        $pdf->render();
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="comprovante-pix-'.$cobranca->id.'.pdf"',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function apagarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, GiEmailService $email, DistribuicaoVagasService $distribuicao): RedirectResponse
     {
+        [$inscricao, $sessao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
+        if ($atividade->temPagamentoPix() || $inscricao->cobrancasPix()->exists()) {
+            return back()->with('comprovante_erro', 'Inscrições com pagamento PIX não podem ser apagadas.');
+        }
         if ($request->input('confirmacao') !== 'APAGAR') {
             return back()->with('comprovante_erro', 'Marque a confirmação antes de apagar a inscrição.');
         }
-        [$inscricao, $sessao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
         $atividade->load('evento');
         $apagadaEm = now();
         try {

@@ -3,7 +3,7 @@
  * Plugin Name:       EventosGI — Eventos e Formulários
  * Plugin URI:        https://github.com/nossafco/eventosgi
  * Description:       Exibe páginas de eventos e formulários de atividades através dos shortcodes [eventosgi_evento] e [eventosgi_formulario].
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Nossa FCO
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'EVENTOSGI_FORM_VERSAO', '1.2.0' );
+define( 'EVENTOSGI_FORM_VERSAO', '1.3.0' );
 define( 'EVENTOSGI_FORM_ARQUIVO', __FILE__ );
 define( 'EVENTOSGI_FORM_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EVENTOSGI_FORM_URL', plugin_dir_url( __FILE__ ) );

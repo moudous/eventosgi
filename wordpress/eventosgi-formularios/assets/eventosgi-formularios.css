@@ -81,6 +81,8 @@
 }
 
 .eventosgi-alerta--info { border-color: #1e3a8a; background: rgba(30, 58, 138, .08); }
+.eventosgi-pix { margin: 1rem 0; padding: 1rem; border: 1px solid rgba(0, 0, 0, .15); border-radius: 6px; }
+.eventosgi-pix-resumo { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; padding: .8rem; background: rgba(0, 0, 0, .04); border-radius: 6px; }
 
 /* Campo isca antispam: fora da tela, mas não display:none, para que robôs o preencham. */
 .eventosgi-isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }

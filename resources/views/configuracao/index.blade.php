@@ -2,14 +2,50 @@
 @section('title', 'Configuração')
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
-    <div><h1 class="page-title">Configuração</h1><p class="page-description mb-0">Redes liberadas dos limites de envio de código e o plugin que publica os formulários no WordPress.</p></div>
+    <div><h1 class="page-title">Configuração</h1><p class="page-description mb-0">Integrações, redes liberadas e publicação dos formulários.</p></div>
     <a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar para atividades</a>
 </div>
 
 @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{ session('status') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach($errors->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>@endif
 
+{{-- ------------------------------------------------------------------ API PIX Sicoob --}}
+@if($permissoes->permite('configuracao.pix'))
+<div class="card content-card mb-4">
+    <div class="card-header"><h2 class="h5 fw-bold mb-0"><i class="bi bi-qr-code me-2"></i>API PIX — Sicoob</h2></div>
+    <div class="card-body">
+        <p class="text-muted">Credenciais para gerar cobranças imediatas dos campos “Pagamento PIX”. Os dados sensíveis são criptografados no banco e nunca aparecem no formulário público.</p>
+        <div class="alert alert-info"><strong>Produto correto:</strong> para cobrar uma inscrição, habilite <em>Pix Recebimentos</em> no Portal Developers com os escopos <code>cob.read cob.write pix.read</code>. A API “Pix Pagamentos” envia dinheiro e não gera QR Code de cobrança.</div>
+        <form method="POST" action="{{ route('configuracao.pix.update') }}" class="row g-3">@csrf @method('PUT')
+            <div class="col-12"><label class="form-check"><input type="hidden" name="ativo" value="0"><input class="form-check-input" type="checkbox" name="ativo" value="1" @checked(old('ativo', $pix?->ativo))><span class="form-check-label fw-semibold">Ativar cobranças PIX</span></label></div>
+            <div class="col-md-3"><label class="form-label" for="pix_ambiente">Ambiente</label><select class="form-select" id="pix_ambiente" name="ambiente"><option value="sandbox" @selected(old('ambiente', $pix?->ambiente ?? 'sandbox') === 'sandbox')>Sandbox (testes)</option><option value="producao" @selected(old('ambiente', $pix?->ambiente) === 'producao')>Produção</option></select></div>
+            <div class="col-md-5"><label class="form-label" for="pix_client_id">Client ID</label><input class="form-control" id="pix_client_id" name="client_id" autocomplete="off" placeholder="{{ $pix ? 'Deixe vazio para manter o atual' : '' }}" @required(!$pix)></div>
+            <div class="col-md-4"><label class="form-label" for="pix_chave">Chave PIX recebedora/de teste</label><input class="form-control" id="pix_chave" name="chave_pix" autocomplete="off" placeholder="{{ $pix ? 'Deixe vazio para manter a atual' : 'Use uma chave indicada pelo Sandbox' }}" @required(!$pix)></div>
+            <div class="col-12" data-pix-sandbox>
+                <div class="alert alert-light border mb-3"><strong>Sandbox:</strong> copie o Client ID e o Access Token exibidos em <a href="https://developers.sicoob.com.br/portal/sandbox" target="_blank" rel="noopener">Portal Developers → Sandbox</a>. O simulador não movimenta dinheiro e pode devolver dados aleatórios válidos.</div>
+                <label class="form-label" for="pix_sandbox_token">Access Token (Bearer) do Sandbox</label><textarea class="form-control font-monospace" id="pix_sandbox_token" name="sandbox_token" rows="3" autocomplete="off" placeholder="{{ $pix?->sandbox_token ? 'Deixe vazio para manter o token atual' : 'Cole aqui o Access Token do Sandbox' }}"></textarea>
+                <div class="form-text">URL utilizada automaticamente: <code>{{ \App\Models\PixConfiguracao::SANDBOX_API_URL }}</code>. Certificado não é necessário.</div>
+            </div>
+            <div class="row g-3 m-0 p-0" data-pix-producao>
+                <div class="col-md-4"><label class="form-label" for="pix_client_secret">Client Secret (se fornecido)</label><input class="form-control" type="password" id="pix_client_secret" name="client_secret" autocomplete="new-password" placeholder="{{ $pix ? 'Deixe vazio para manter o atual' : '' }}"></div>
+                <div class="col-md-6"><label class="form-label" for="pix_token_url">URL OAuth2</label><input class="form-control font-monospace" id="pix_token_url" type="url" name="token_url" value="{{ old('token_url', $pix?->token_url ?? \App\Models\PixConfiguracao::TOKEN_URL) }}"></div>
+                <div class="col-md-6"><label class="form-label" for="pix_api_url">URL base da API Pix</label><input class="form-control font-monospace" id="pix_api_url" type="url" name="api_url" value="{{ old('api_url', $pix?->api_url ?? \App\Models\PixConfiguracao::API_URL) }}"></div>
+                <div class="col-md-6"><label class="form-label" for="pix_certificado">Certificado cliente (PEM)</label><textarea class="form-control font-monospace" id="pix_certificado" name="certificado_pem" rows="5" autocomplete="off" placeholder="{{ $pix ? 'Deixe vazio para manter o certificado atual' : '-----BEGIN CERTIFICATE-----' }}"></textarea></div>
+                <div class="col-md-6"><label class="form-label" for="pix_chave_privada">Chave privada (PEM)</label><textarea class="form-control font-monospace" id="pix_chave_privada" name="chave_privada_pem" rows="5" autocomplete="off" placeholder="{{ $pix ? 'Deixe vazio para manter a chave atual' : '-----BEGIN PRIVATE KEY-----' }}"></textarea></div>
+                <div class="col-md-5"><label class="form-label" for="pix_senha_chave">Senha da chave privada (se houver)</label><input class="form-control" type="password" id="pix_senha_chave" name="senha_chave" autocomplete="new-password" placeholder="{{ $pix ? 'Deixe vazio para manter a atual' : '' }}"></div>
+                <div class="col-12"><p class="form-text mb-0">Produção exige certificado cliente (mTLS). Use arquivos PEM; não cole um arquivo PFX/P12 diretamente.</p></div>
+            </div>
+            <div class="col-12"><button class="btn btn-primary"><i class="bi bi-shield-lock me-1"></i>Salvar configuração PIX</button></div>
+        </form>
+        @if($pix)
+            <form method="POST" action="{{ route('configuracao.pix.testar') }}" class="mt-2">@csrf<button class="btn btn-outline-success"><i class="bi bi-plug me-1"></i>Testar conexão salva</button></form>
+        @endif
+    </div>
+</div>
+@endif
+
 {{-- ------------------------------------------------------------------ Faixas de IP --}}
+@if($permissoes->permite('configuracao.visualizar'))
 <div class="card content-card mb-4">
     <div class="card-header"><h2 class="h5 fw-bold mb-0"><i class="bi bi-hdd-network me-2"></i>Faixas de IP liberadas</h2></div>
     <div class="card-body">
@@ -88,6 +124,7 @@
         <p class="form-text mt-2 mb-0">Para descobrir o IP público de uma rede, abra um site como <em>meuip.com.br</em> a partir dela.</p>
     </div>
 </div>
+@endif
 
 {{-- --------------------------------------------------------------- Plugin WordPress --}}
 @if($permissoes->permite('configuracao.wordpress.visualizar'))
@@ -147,3 +184,19 @@
 </div>
 @endif
 @endsection
+
+@push('scripts')
+<script>
+(() => {
+    const ambiente = document.getElementById('pix_ambiente');
+    if (!ambiente) return;
+    const atualizar = () => {
+        const sandbox = ambiente.value === 'sandbox';
+        document.querySelectorAll('[data-pix-sandbox]').forEach(el => el.hidden = !sandbox);
+        document.querySelectorAll('[data-pix-producao]').forEach(el => el.hidden = sandbox);
+    };
+    ambiente.addEventListener('change', atualizar);
+    atualizar();
+})();
+</script>
+@endpush

@@ -10,6 +10,7 @@ use App\Services\ConteudoEditorFormularioService;
 use App\Services\DistribuicaoVagasService;
 use App\Services\IdentificacaoParticipanteService;
 use App\Services\LimiteEnvioCodigoService;
+use App\Services\SicoobPixService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,7 @@ class FormularioPublicoController
         private readonly LimiteEnvioCodigoService $limites,
         private readonly ConteudoEditorFormularioService $editor,
         private readonly DistribuicaoVagasService $distribuicao,
+        private readonly SicoobPixService $pix,
     ) {}
 
     /**
@@ -47,6 +49,9 @@ class FormularioPublicoController
             'aceitos' => array_values($campo['aceitos'] ?? []),
             'max_arquivos' => min(10, max(1, (int) ($campo['max_arquivos'] ?? 1))),
             'validacao' => $campo['validacao'] ?? '',
+            'valor_pix' => ($campo['tipo'] ?? '') === 'pagamento_pix' ? (float) ($campo['valor_pix'] ?? 0) : null,
+            'expiracao_pix' => ($campo['tipo'] ?? '') === 'pagamento_pix' ? (int) ($campo['expiracao_pix'] ?? 3600) : null,
+            'descricao_pix' => ($campo['tipo'] ?? '') === 'pagamento_pix' ? ($campo['descricao_pix'] ?? '') : null,
         ], array_filter($config['campos'] ?? [], fn ($campo) => ! empty($campo['nome']))));
         if ($atividade->comSessoes()) {
             $sessoes = $atividade->sessoesAtivas()->withCount('inscricoes')->get();
@@ -198,7 +203,21 @@ class FormularioPublicoController
 
         $resultado = $this->inscricoes->inscrever($request, $atividade, $identificado['participante'], $identificado['email']);
 
-        if ($resultado['sucesso']) $this->identificacao->revogarToken($atividade, $this->token($request));
+        if ($resultado['sucesso']) {
+            try {
+                $inscricao = \App\Models\InscricaoAtividade::query()->with(['atividade', 'participante'])->findOrFail($resultado['inscricao_id']);
+                $resultado['pix'] = collect($this->pix->gerarParaInscricao($inscricao))->map(fn ($cobranca) => [
+                    'txid' => $cobranca->txid,
+                    'valor' => $cobranca->valor,
+                    'status' => $cobranca->status,
+                    'pix_copia_cola' => $cobranca->pix_copia_cola,
+                ])->values()->all();
+            } catch (\Throwable $erro) {
+                report($erro);
+                $resultado['pix_erro'] = $erro->getMessage();
+            }
+            $this->identificacao->revogarToken($atividade, $this->token($request));
+        }
 
         return response()->json($resultado, $resultado['sucesso'] ? 201 : 422);
     }

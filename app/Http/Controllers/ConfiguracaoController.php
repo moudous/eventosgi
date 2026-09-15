@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\FaixaIpLiberada;
+use App\Models\PixConfiguracao;
 use App\Services\FaixaIpService;
 use App\Services\GiPermissionService;
 use App\Services\LimiteEnvioCodigoService;
 use App\Services\PluginWordpressService;
+use App\Services\SicoobPixService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,6 +28,7 @@ class ConfiguracaoController
             'permissoes' => $permissoes,
             'faixas' => FaixaIpLiberada::query()->with('criador:id,nome')->orderBy('faixa')->get(),
             'versaoPlugin' => $plugin->versao(),
+            'pix' => PixConfiguracao::atual(),
             'limites' => [
                 'enderecos_por_faixa' => LimiteEnvioCodigoService::MAX_ENDERECOS_POR_FAIXA,
                 'envios_por_faixa' => LimiteEnvioCodigoService::MAX_POR_FAIXA,
@@ -34,6 +37,58 @@ class ConfiguracaoController
                 'por_atividade' => LimiteEnvioCodigoService::MAX_POR_ATIVIDADE,
             ],
         ]);
+    }
+
+    public function salvarPix(Request $request): RedirectResponse
+    {
+        $atual = PixConfiguracao::atual();
+        $ambiente = (string) $request->input('ambiente');
+        $urlSicoob = function (string $atributo, mixed $valor, \Closure $falhar): void {
+            $host = mb_strtolower((string) parse_url((string) $valor, PHP_URL_HOST));
+            if (! str_ends_with($host, '.sicoob.com.br') && ! str_ends_with($host, '.sisbr.com.br')) {
+                $falhar('A :attribute deve apontar para um domínio oficial do Sicoob.');
+            }
+        };
+        $dados = $request->validate([
+            'ativo' => ['nullable', 'boolean'],
+            'ambiente' => ['required', Rule::in(['sandbox', 'producao'])],
+            'client_id' => [$atual ? 'nullable' : 'required', 'string', 'max:500'],
+            'client_secret' => ['nullable', 'string', 'max:500'],
+            'sandbox_token' => [Rule::requiredIf($ambiente === 'sandbox' && ! $atual?->sandbox_token), 'nullable', 'string', 'max:5000'],
+            'chave_pix' => [$atual ? 'nullable' : 'required', 'string', 'max:500'],
+            'certificado_pem' => [Rule::requiredIf($ambiente === 'producao' && ! $atual?->certificado_pem), 'nullable', 'string', 'max:30000'],
+            'chave_privada_pem' => [Rule::requiredIf($ambiente === 'producao' && ! $atual?->chave_privada_pem), 'nullable', 'string', 'max:30000'],
+            'senha_chave' => ['nullable', 'string', 'max:500'],
+            'token_url' => [Rule::requiredIf($ambiente === 'producao'), 'nullable', 'url:http,https', 'max:500', $urlSicoob],
+            'api_url' => [Rule::requiredIf($ambiente === 'producao'), 'nullable', 'url:http,https', 'max:500', $urlSicoob],
+        ], [], [
+            'client_id' => 'Client ID', 'client_secret' => 'Client Secret', 'sandbox_token' => 'Access Token do Sandbox', 'chave_pix' => 'chave PIX', 'certificado_pem' => 'certificado PEM',
+            'chave_privada_pem' => 'chave privada PEM', 'senha_chave' => 'senha da chave',
+            'token_url' => 'URL OAuth2', 'api_url' => 'URL da API',
+        ]);
+
+        foreach (['client_id', 'client_secret', 'sandbox_token', 'chave_pix', 'certificado_pem', 'chave_privada_pem', 'senha_chave'] as $segredo) {
+            if ($atual && blank($dados[$segredo] ?? null)) unset($dados[$segredo]);
+        }
+        if ($ambiente === 'sandbox') {
+            $dados['api_url'] = PixConfiguracao::SANDBOX_API_URL;
+            $dados['token_url'] = null;
+        }
+        $dados['ativo'] = $request->boolean('ativo');
+        ($atual ?? new PixConfiguracao)->fill($dados)->save();
+
+        return back()->with('status', 'Configuração da API PIX salva com segurança.');
+    }
+
+    public function testarPix(SicoobPixService $pix): RedirectResponse
+    {
+        try {
+            $pix->testarConexao();
+            return back()->with('status', 'Conexão com a API PIX do Sicoob realizada com sucesso.');
+        } catch (\Throwable $erro) {
+            report($erro);
+            return back()->withErrors(['pix' => $erro->getMessage()]);
+        }
     }
 
     public function guardarFaixa(Request $request, FaixaIpService $servico): RedirectResponse
