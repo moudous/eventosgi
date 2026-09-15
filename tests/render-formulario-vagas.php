@@ -67,6 +67,12 @@ if (! str_contains($html, 'name="declaracao" value="1"') || ! str_contains($html
 if (! str_contains($html, 'id="inicio-formulario"') || ! str_contains($html, 'Você já entrou com')) {
     throw new RuntimeException('A âncora do início do formulário não foi renderizada no aviso de identificação.');
 }
+if (! str_contains($html, 'id="formularioInscricaoAtividade"')
+    || ! str_contains($html, "addEventListener('invalid'")
+    || ! str_contains($html, "scrollIntoView({behavior: 'smooth', block: 'center'})")
+    || ! str_contains($html, 'chavesDeErroDoServidor')) {
+    throw new RuntimeException('O formulário deve destacar e navegar até o primeiro campo inválido.');
+}
 $htmlIdentificacao = view('atividades.formulario-publico', [
     'atividade' => $atividade, 'config' => $config,
     'identificacao' => null, 'participante' => null,

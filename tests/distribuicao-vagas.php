@@ -47,6 +47,21 @@ conferirVagas($resultado['reservas_checkbox'][1]['opcoes']['1']['disponiveis'] =
 conferirVagas($servico->consumoResposta(['oficinas' => ['arte'], 'extras' => '1'], $config) === 2, 'Dois checkboxes reservados devem consumir duas vagas totais.');
 conferirVagas($servico->consumoResposta([], $config) === 1, 'Uma inscrição sem reserva selecionada deve continuar consumindo uma vaga geral.');
 $servico->conferirDisponibilidade($atividade, ['periodo' => 'manha', 'sexo' => 'F', 'extras' => '1']);
+
+$configSemLimite = [
+    'limitar_inscricoes' => false,
+    'campos' => [[
+        'nome' => 'participar_jornada',
+        'label' => 'Inscrever na VI Jornada?',
+        'tipo' => 'checkbox',
+        'obrigatorio' => true,
+        'opcoes' => [],
+    ]],
+];
+$atividadeSemLimite = new Atividade(['nome' => 'Sem limite', 'formulario' => $configSemLimite]);
+$atividadeSemLimite->id = -2;
+$servico->conferirDisponibilidade($atividadeSemLimite, ['participar_jornada' => '1']);
+
 try {
     $servico->conferirDisponibilidade($atividade, ['periodo' => 'manha', 'sexo' => 'F', 'oficinas' => ['musica']]);
     throw new RuntimeException('Uma opção checkbox sem vagas deveria ser recusada.');

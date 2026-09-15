@@ -257,7 +257,7 @@
 
 
 
-        <form method="POST" action="{{ request()->fullUrl() }}" enctype="multipart/form-data">
+        <form id="formularioInscricaoAtividade" method="POST" action="{{ request()->fullUrl() }}" enctype="multipart/form-data">
             @csrf
             {{-- Segue junto da inscrição; o servidor confere o valor gravado na sessão. --}}
             <input type="hidden" name="participante_email" value="{{ $identificacao['email'] }}">
@@ -473,6 +473,11 @@
     .anexo-icone { width: 64px; height: 64px; border-radius: .5rem; flex: 0 0 64px; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; background: var(--bs-tertiary-bg); color: var(--bs-secondary-color); }
     .anexo-nome { min-width: 0; overflow-wrap: anywhere; }
     [data-anexos-campo].is-invalid [data-anexos-erro] { display: block; }
+    .campo-com-erro {
+        border-radius: .375rem;
+        outline: 2px solid var(--bs-danger);
+        outline-offset: 4px;
+    }
     .comprovante-anexo-miniatura { width: 72px; height: 72px; border-radius: .5rem; object-fit: cover; flex: 0 0 72px; }
     .comprovante-anexo-icone { width: 72px; height: 72px; border-radius: .5rem; flex: 0 0 72px; display: inline-flex; align-items: center; justify-content: center; background: var(--bs-body-bg); font-size: 2.25rem; }
     .comprovante-anexos-nomes { display: none; }
@@ -548,6 +553,95 @@ const cpfValido = valor => {
 
 const emailValido = valor => /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(valor.trim());
 
+const formularioInscricao = document.getElementById('formularioInscricaoAtividade');
+let navegacaoParaErroAgendada = false;
+
+const alvoVisualDoErro = campo => {
+    if (campo.matches?.('[data-anexos-campo]')) return campo;
+    if (campo.matches?.('input[type="radio"], input[type="checkbox"]')) {
+        return campo.closest('[role="radiogroup"], [role="group"], [data-checkbox-obrigatorio]') || campo;
+    }
+    return campo;
+};
+
+const marcarCampoComErro = campo => {
+    if (!campo) return;
+    const alvoVisual = alvoVisualDoErro(campo);
+    if (campo.matches?.('[data-anexos-campo]')) {
+        campo.classList.add('is-invalid', 'campo-com-erro');
+        campo.setAttribute('aria-invalid', 'true');
+        return;
+    }
+    const controleComBorda = alvoVisual === campo && campo.matches?.('.form-control, .form-select, .form-check-input');
+    alvoVisual.classList.add(controleComBorda ? 'is-invalid' : 'campo-com-erro');
+    campo.setAttribute?.('aria-invalid', 'true');
+};
+
+const irParaCampoComErro = campo => {
+    if (!campo) return;
+    alvoVisualDoErro(campo).scrollIntoView({behavior: 'smooth', block: 'center'});
+    window.setTimeout(() => {
+        const alvoDoFoco = campo.matches?.('[data-anexos-campo]')
+            ? campo.querySelector('[data-adicionar-arquivo]')
+            : (campo.matches?.('input, select, textarea, button') ? campo : campo.querySelector('input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)'));
+        alvoDoFoco?.focus({preventScroll: true});
+    }, 250);
+};
+
+const agendarNavegacaoParaErro = campo => {
+    if (navegacaoParaErroAgendada) return;
+    navegacaoParaErroAgendada = true;
+    window.requestAnimationFrame(() => {
+        irParaCampoComErro(campo);
+        navegacaoParaErroAgendada = false;
+    });
+};
+
+const nomeDoCampoPelaChaveDeErro = chave => {
+    const chaveSemIndice = chave.replace(/\.(?:\d+|\*)$/, '');
+    if (!chaveSemIndice.startsWith('participante.')) return chaveSemIndice;
+    return `participante[${chaveSemIndice.substring('participante.'.length)}]`;
+};
+
+const localizarCampoPelaChaveDeErro = chave => {
+    if (!formularioInscricao) return null;
+    const nomeCampo = nomeDoCampoPelaChaveDeErro(chave);
+    const campo = [...formularioInscricao.elements].find(elemento =>
+        elemento.name === nomeCampo || elemento.name === `${nomeCampo}[]`
+    );
+    if (campo) return campo;
+
+    return [...formularioInscricao.querySelectorAll('[data-anexos-campo]')].find(elemento =>
+        (elemento.dataset.nome || '').replace(/\[\]$/, '') === nomeCampo
+    ) || null;
+};
+
+document.addEventListener('invalid', evento => {
+    if (!evento.target.closest?.('form')) return;
+    marcarCampoComErro(evento.target);
+    agendarNavegacaoParaErro(evento.target);
+}, true);
+
+const limparErroDoCampo = campo => {
+    campo.classList?.remove('is-invalid');
+    campo.removeAttribute?.('aria-invalid');
+    alvoVisualDoErro(campo)?.classList.remove('campo-com-erro');
+};
+document.addEventListener('input', evento => limparErroDoCampo(evento.target));
+document.addEventListener('change', evento => limparErroDoCampo(evento.target));
+
+const chavesDeErroDoServidor = {{ Illuminate\Support\Js::from(array_keys($errors->getBag('default')->toArray())) }};
+const camposComErroDoServidor = chavesDeErroDoServidor
+    .map(localizarCampoPelaChaveDeErro)
+    .filter((campo, indice, campos) => campo && campos.indexOf(campo) === indice);
+camposComErroDoServidor.forEach(marcarCampoComErro);
+if (camposComErroDoServidor.length > 0) {
+    agendarNavegacaoParaErro(camposComErroDoServidor[0]);
+} else {
+    const primeiroErroJaRenderizado = document.querySelector('form .is-invalid');
+    if (primeiroErroJaRenderizado) agendarNavegacaoParaErro(primeiroErroJaRenderizado);
+}
+
 // Espelha App\Rules\NomeCompleto: particulas e iniciais soltas nao valem como sobrenome.
 const PARTICULAS = ['de', 'da', 'do', 'das', 'dos', 'del', 'della', 'di', 'du', 'e', 'la', 'le', 'van', 'von', 'y'];
 
@@ -610,12 +704,14 @@ document.querySelectorAll('form').forEach(formulario => formulario.addEventListe
     formulario.querySelectorAll('input[type=email]').forEach(campo => {
         if (campo.value.trim() !== '' && !emailValido(campo.value)) invalidos.push(campo);
     });
+    const campoDeArquivoInvalido = formulario.querySelector('[data-anexos-campo].is-invalid');
+    if (campoDeArquivoInvalido) invalidos.push(campoDeArquivoInvalido);
 
     if (invalidos.length === 0) return;
 
     evento.preventDefault();
-    invalidos.forEach(campo => campo.classList.add('is-invalid'));
-    invalidos[0].focus();
+    invalidos.forEach(marcarCampoComErro);
+    agendarNavegacaoParaErro(invalidos[0]);
 }));
 
 document.getElementById('imprimirComprovante')?.addEventListener('click', () => window.print());

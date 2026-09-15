@@ -153,7 +153,10 @@ class DistribuicaoVagasService
 
     public function conferirDisponibilidade(Atividade $atividade, array $respostas): void
     {
-        $config = $this->recalcular($atividade, salvar: false);
+        $config = $this->prepararConfiguracao($atividade->formulario ?? []);
+        if (empty($config['limitar_inscricoes'])) return;
+
+        $config = $this->recalcular($atividade, $config, salvar: false);
         $distribuicao = $config['distribuicao_vagas'];
         $consumo = $this->consumoResposta($respostas, $config);
         if ($consumo > (int) ($distribuicao['total']['restantes'] ?? 0)) {
