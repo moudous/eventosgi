@@ -53,6 +53,7 @@ $t = $i->trabalhos()->create(['titulo_trabalho' => 'Trabalho compartilhado', 'st
 $t->autores()->create(['nome' => 'Autor Principal', 'email' => $i->email, 'principal' => true, 'ordem' => 1]);
 $t->autores()->create(['nome' => 'Outro Autor', 'email' => 'coautor@example.test', 'principal' => false, 'ordem' => 2]);
 (require __DIR__.'/../database/migrations/2026_09_14_010000_create_credenciais_submissao.php')->up();
+(require __DIR__.'/../database/migrations/2026_09_15_060000_create_submissao_autor_notificacoes_table.php')->up();
 check(CredencialSubmissao::count() === 2, 'Migração deve unificar e-mails e incluir coautor');
 check(Hash::check('Atual123', CredencialSubmissao::where('email', $i->email)->first()->senha), 'Migração deve conservar a senha mais recente');
 $c = new SubmissaoPublicaController;
@@ -63,8 +64,9 @@ check($r->session()->has('submissoes_publicas.'.$sub2->id), 'Mesma senha deve en
 
 $mail = new class extends GiEmailService {
     public array $mensagens = [];
-    public function enviar(string $email, ?string $nome, string $assunto, string $conteudoHtml, ?string $idExterno = null, array $extras = []): ?int { $this->mensagens[] = [$email, $conteudoHtml]; return 1; }
+    public function enviar(string $email, ?string $nome, string $assunto, string $conteudoHtml, ?string $idExterno = null, array $extras = []): ?int { $this->mensagens[] = [$email, $conteudoHtml, $assunto]; return 1; }
 };
+$app->instance(GiEmailService::class, $mail);
 $captcha = new class extends CaptchaInscricaoService { public function validarSubmissao(Request $r, Submissao $s, string $resposta): void {} };
 $rco = req(['email_recuperacao' => 'coautor@example.test', 'captcha' => 'ABC123']);
 $c->esqueciSenha($rco, $sub, $mail, $captcha);
@@ -99,13 +101,38 @@ $rsel = req(['trabalho_id' => $t->id], $rco->session()); $c->selecionar($rsel, $
 
 // O coautor pode criar um trabalho próprio; seu acesso anterior continua somente leitura.
 $novo = ['email' => 'tentativa@example.test', 'primeiro_autor' => 'Outro Autor', 'primeiro_autor_afiliacao' => 'Universidade', 'titulo_trabalho' => 'Trabalho próprio', 'categoria_trabalho' => 'pesquisa_original', 'tem_apoio_financeiro' => 0, 'apresentacao' => 'presencial', 'aprovacao_comite_etica' => 0];
+$totalAntesCriacao = count($mail->mensagens);
 $rnovo = req($novo, $rco->session()); $c->criar($rnovo, $sub);
 $proprio = $sub->trabalhos()->where('titulo_trabalho', 'Trabalho próprio')->firstOrFail();
 check($proprio->inscricao->email === 'coautor@example.test', 'Criação deve usar e-mail autenticado');
+check(count($mail->mensagens) === $totalAntesCriacao + 1, 'Primeiro salvamento deve notificar o primeiro autor uma única vez');
+$emailPrimeiroSalvamento = $mail->mensagens[array_key_last($mail->mensagens)];
+check($emailPrimeiroSalvamento[0] === 'coautor@example.test' && str_contains($emailPrimeiroSalvamento[1], 'primeiro(a) autor(a)'), 'E-mail inicial deve identificar o primeiro autor');
+check(str_contains($emailPrimeiroSalvamento[1], 'link válido por 48 horas e para um único uso'), 'Inclusão de autor deve conter link de senha por 48 horas e uso único');
+preg_match('#/senha/submissao/([A-Za-z0-9]{64})#', $emailPrimeiroSalvamento[1], $m);
+$token = $m[1] ?? '';
+check($token !== '', 'E-mail do primeiro salvamento deve conter token de alteração de senha');
 check($c->formulario($rnovo, $sub)->getData()['trabalhos']->count() === 2, 'Combo deve reunir autoria e coautoria');
 $rnovo = req($novo + ['conteudo' => '<p>Resumo editado</p>'], $rnovo->session());
+$totalAntesEdicao = count($mail->mensagens);
 $c->atualizar($rnovo, $sub, $proprio);
 check($proprio->fresh()->conteudo === '<p>Resumo editado</p>', 'Primeiro autor deve editar');
+check(count($mail->mensagens) === $totalAntesEdicao, 'Salvar sem alterar autores não deve repetir e-mails');
+
+$comNovoCoautor = $novo + ['outros_autores' => [[
+    'nome' => 'Nova Coautora', 'email' => 'nova.coautora@example.test', 'afiliacao' => 'Faculdade',
+]]];
+$c->atualizar(req($comNovoCoautor, $rnovo->session()), $sub, $proprio);
+$emailInclusao = $mail->mensagens[array_key_last($mail->mensagens)];
+check($emailInclusao[0] === 'nova.coautora@example.test' && str_contains($emailInclusao[2], 'adicionado(a) como coautor(a)'), 'Somente o novo coautor deve receber e-mail de inclusão');
+check(str_contains($emailInclusao[1], '/senha/submissao/') && str_contains($emailInclusao[1], 'Acessar e visualizar o trabalho/resumo'), 'Coautor incluído deve receber links de senha e do trabalho');
+$credencialNovaCoautora = CredencialSubmissao::where('email', 'nova.coautora@example.test')->firstOrFail();
+check($credencialNovaCoautora->redefinicao_expira_em->betweenIncluded(now()->addHours(47)->addMinutes(59), now()->addHours(48)->addMinute()), 'Link do novo coautor deve valer por 48 horas');
+
+$c->atualizar(req($novo, $rnovo->session()), $sub, $proprio);
+$emailRemocao = $mail->mensagens[array_key_last($mail->mensagens)];
+check($emailRemocao[0] === 'nova.coautora@example.test' && str_contains($emailRemocao[2], 'removido(a) do trabalho'), 'Coautor removido deve receber aviso');
+check(! str_contains($emailRemocao[1], '/senha/submissao/'), 'Aviso de remoção não deve conter link de alteração de senha');
 // Seleção de trabalho fora da fase de edição oculta a exclusão e bloqueia o DELETE.
 $proprio->update(['status' => 'avaliado']);
 $rselecionado = req(['trabalho_id' => $proprio->id], $rnovo->session());

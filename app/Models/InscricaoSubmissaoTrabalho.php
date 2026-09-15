@@ -47,6 +47,11 @@ class InscricaoSubmissaoTrabalho extends Model
         return $this->hasMany(SubmissaoAutor::class, 'inscrito_submissao_trabalho_id')->orderBy('ordem');
     }
 
+    public function notificacoesAutores(): HasMany
+    {
+        return $this->hasMany(SubmissaoAutorNotificacao::class, 'inscrito_submissao_trabalho_id');
+    }
+
     public function avaliada(): bool
     {
         return $this->status === 'avaliado';

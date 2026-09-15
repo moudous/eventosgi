@@ -13,6 +13,7 @@ atividades.formulario.estrutura
 atividades.pix
 atividades.visualizar_formulario
 atividades.inscritos
+atividades.inscricoes.excluir
 atividades.recebimentoslistar
 atividades.recebimentos.visualizar
 atividades.recebimentos.exportar

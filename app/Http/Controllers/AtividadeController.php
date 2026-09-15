@@ -623,7 +623,7 @@ class AtividadeController
             ? max(1, $request->integer('page'))
             : ($request->exists('pesquisar') ? 1 : $estado['page']);
         $porPagina = 20;
-        $query = InscricaoAtividade::query()->with('sessao')->where('atividade_id', $atividade->id);
+        $query = InscricaoAtividade::query()->with('sessao')->withCount('cobrancasPix')->where('atividade_id', $atividade->id);
 
         if ($pesquisar !== '') {
             $participantes = Participante::query()->where('nome', 'like', "%{$pesquisar}%")
@@ -645,6 +645,59 @@ class AtividadeController
         return view('atividades.inscricoes', compact('atividade', 'inscricoes', 'pesquisar') + [
             'camposExportacao' => $exportacao->camposDisponiveis($atividade),
         ]);
+    }
+
+    public function excluirInscricao(
+        Request $request,
+        Atividade $atividade,
+        InscricaoAtividade $inscricao,
+        GiPermissionService $permissoes,
+        HistoricoService $historico,
+        DistribuicaoVagasService $distribuicao,
+    ): JsonResponse {
+        $permissoes->exigir('atividades.inscricoes.excluir', $request);
+        $request->validate(
+            ['confirmacao' => ['required', 'accepted']],
+            ['confirmacao.accepted' => 'Marque que tem certeza antes de excluir a inscrição.'],
+        );
+        abort_unless((int) $inscricao->atividade_id === (int) $atividade->id, 404);
+
+        $arquivos = DB::transaction(function () use ($request, $atividade, $inscricao, $historico): array {
+            $registro = InscricaoAtividade::query()->whereKey($inscricao->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $registro->atividade_id === (int) $atividade->id, 404);
+
+            // Além da checagem exibida na tela, trava o intervalo do índice durante a
+            // transação para impedir que uma cobrança seja criada ao mesmo tempo.
+            if (PixCobranca::query()->where('inscricao_atividade_id', $registro->id)->lockForUpdate()->exists()) {
+                abort(409, 'Esta inscrição possui cobrança PIX vinculada e não pode ser excluída.');
+            }
+
+            $arquivos = collect(\Illuminate\Support\Arr::flatten((array) $registro->resposta))
+                ->filter(fn ($valor) => is_string($valor)
+                    && str_starts_with($valor, FormularioInscricaoService::PASTA_ANEXOS.'/')
+                    && ! str_contains($valor, '..'))
+                ->unique()->values()->all();
+            $historico->atividade($atividade, 'Inscrição excluída', [
+                'inscricao_id' => $registro->id,
+                'participante_id' => $registro->participante_id,
+                'participante_email' => $registro->participante_email,
+                'sessao_atividade_id' => $registro->sessao_atividade_id,
+                'lista_reserva' => (bool) $registro->lista_reserva,
+                'inscrita_em' => $registro->created_at?->format('d/m/Y H:i:s'),
+            ], $request);
+            $registro->delete();
+
+            return $arquivos;
+        });
+
+        foreach ($arquivos as $arquivo) {
+            Storage::disk(FormularioInscricaoService::DISCO_ANEXOS)->delete($arquivo);
+            // Arquivos anteriores à adoção do disco privado podem estar no public.
+            Storage::disk('public')->delete($arquivo);
+        }
+        $distribuicao->recalcular($atividade->refresh());
+
+        return response()->json(['message' => 'Inscrição excluída com sucesso.']);
     }
 
     /**

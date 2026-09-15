@@ -204,6 +204,8 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     // pela permissao em inscricoes.exportar-link.
     Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
     Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.inscritos')->name('inscricoes');
+    Route::delete('/{atividade}/inscricoes/{inscricao}', [AtividadeController::class, 'excluirInscricao'])
+        ->middleware('gi.permission:atividades.inscricoes.excluir')->name('inscricoes.destroy');
     Route::get('/{atividade}/recebimentos', [RecebimentoPixController::class, 'index'])->middleware('gi.permission:atividades.recebimentoslistar')->name('recebimentos.index');
     Route::get('/{atividade}/recebimentos/dados', [RecebimentoPixController::class, 'dados'])->middleware('gi.permission:atividades.recebimentoslistar')->name('recebimentos.dados');
     Route::get('/{atividade}/recebimentos/exportar', [RecebimentoPixController::class, 'exportar'])->middleware('gi.permission:atividades.recebimentos.exportar')->name('recebimentos.exportar');

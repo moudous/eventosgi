@@ -6,6 +6,7 @@ use App\Models\CredencialSubmissao;
 use App\Services\SenhaCompartilhadaService;
 use App\Models\InscricaoSubmissaoTrabalho;
 use App\Models\Submissao;
+use App\Models\SubmissaoAutorNotificacao;
 use App\Services\GiEmailService;
 use App\Services\CaptchaInscricaoService;
 use Illuminate\Http\RedirectResponse;
@@ -77,14 +78,17 @@ class SubmissaoPublicaController
                 'status' => 'rascunho',
             ]);
             $this->gravarAutores($trabalho, $autores);
+            $this->sincronizarNotificacoesAutores($trabalho, $autores);
 
             return [$inscricao, $trabalho];
         });
 
         $this->iniciarAcesso($request, $submissao, CredencialSubmissao::findOrFail($acesso['credencial_id']), $trabalho->id);
+        $falhasEmail = $this->enviarNotificacoesAutores($trabalho, $submissao);
 
         return redirect()->route('submissoes.publicas.formulario', $submissao)
-            ->with('status', 'Trabalho salvo. Você poderá alterá-lo enquanto o período de submissão estiver aberto.');
+            ->with('status', 'Trabalho salvo. Você poderá alterá-lo enquanto o período de submissão estiver aberto.'
+                .($falhasEmail ? ' Algumas notificações por e-mail não puderam ser enviadas e serão tentadas novamente no próximo salvamento.' : ''));
     }
 
     public function entrar(Request $request, Submissao $submissao): RedirectResponse
@@ -142,11 +146,18 @@ class SubmissaoPublicaController
                 'aprovacao_comite_etica' => $dados['aprovacao_comite_etica'],
                 'protocolo_comite_etica' => $dados['protocolo_comite_etica'],
             ]);
+            $this->sincronizarNotificacoesAutores($trabalho, $autores);
             $trabalho->autores()->delete();
             $this->gravarAutores($trabalho, $autores);
         });
 
-        return redirect()->route('submissoes.publicas.formulario', $submissao)->with('status', 'Alterações salvas com sucesso.');
+        $falhasEmail = $this->enviarNotificacoesAutores($trabalho, $submissao);
+
+        return redirect()->route('submissoes.publicas.formulario', $submissao)->with(
+            'status',
+            'Alterações salvas com sucesso.'
+                .($falhasEmail ? ' Algumas notificações por e-mail não puderam ser enviadas e serão tentadas novamente no próximo salvamento.' : ''),
+        );
     }
 
     public function exportarDocumento(
@@ -448,6 +459,112 @@ class SubmissaoPublicaController
                 'numero' => $numero,
             ]);
         }
+    }
+
+    /** @param list<array{nome:string,email:string,afiliacao:string}> $autores */
+    private function sincronizarNotificacoesAutores(InscricaoSubmissaoTrabalho $trabalho, array $autores): void
+    {
+        $agora = now();
+        $emailsAtuais = collect($autores)->pluck('email')->all();
+
+        $trabalho->notificacoesAutores()->where('ativo', true)->whereNotIn('email', $emailsAtuais)->update([
+            'ativo' => false,
+            'removido_em' => $agora,
+            'remocao_enviada_em' => null,
+            'updated_at' => $agora,
+        ]);
+
+        foreach ($autores as $indice => $autor) {
+            $notificacao = $trabalho->notificacoesAutores()->where('email', $autor['email'])->first();
+            if (! $notificacao) {
+                $trabalho->notificacoesAutores()->create([
+                    'email' => $autor['email'],
+                    'nome' => $autor['nome'],
+                    'principal' => $indice === 0,
+                    'ativo' => true,
+                    'adicionado_em' => $agora,
+                ]);
+                continue;
+            }
+
+            $dados = ['nome' => $autor['nome'], 'principal' => $indice === 0];
+            if (! $notificacao->ativo) {
+                $dados += [
+                    'ativo' => true,
+                    'adicionado_em' => $agora,
+                    'adicao_enviada_em' => null,
+                    'removido_em' => null,
+                    'remocao_enviada_em' => null,
+                ];
+            }
+            $notificacao->update($dados);
+        }
+    }
+
+    /** Retorna quantas mensagens falharam e ficaram pendentes para o próximo salvamento. */
+    private function enviarNotificacoesAutores(InscricaoSubmissaoTrabalho $trabalho, Submissao $submissao): int
+    {
+        $emailService = app(GiEmailService::class);
+        $falhas = 0;
+        $trabalho->refresh();
+
+        foreach ($trabalho->notificacoesAutores()->where('ativo', true)->whereNull('adicao_enviada_em')->get() as $notificacao) {
+            try {
+                $token = Str::random(64);
+                $credencial = CredencialSubmissao::firstOrCreate(['email' => $notificacao->email]);
+                $credencial->update([
+                    'redefinicao_token_hash' => hash('sha256', $token),
+                    'redefinicao_expira_em' => now()->addHours(self::HORAS_VALIDADE_LINK_SENHA),
+                ]);
+
+                $urlTrabalho = route('submissoes.publicas.formulario', $submissao).'?trabalho='.$trabalho->id;
+                $urlSenha = route('senha-submissao.editar', ['token' => $token]);
+                $papel = $notificacao->principal ? 'primeiro(a) autor(a)' : 'coautor(a)';
+                $conteudo = '<p>Olá, '.e($notificacao->nome).'.</p>'
+                    .'<p>Você foi registrado(a) como <strong>'.$papel.'</strong> no trabalho/resumo <strong>'.e($trabalho->titulo_trabalho).'</strong>, da submissão <strong>'.e($submissao->titulo).'</strong>.</p>'
+                    .'<p><a href="'.e($urlSenha).'">Alterar ou cadastrar sua senha</a> (link válido por '.self::HORAS_VALIDADE_LINK_SENHA.' horas e para um único uso).</p>'
+                    .'<p><a href="'.e($urlTrabalho).'">Acessar e visualizar o trabalho/resumo</a></p>'
+                    .'<p>Para visualizar o trabalho, entre com este endereço de e-mail após definir sua senha.</p>';
+                $emailService->enviar(
+                    $notificacao->email,
+                    $notificacao->nome,
+                    ($notificacao->principal ? 'Trabalho salvo — ' : 'Você foi adicionado(a) como coautor(a) — ').$trabalho->titulo_trabalho,
+                    $conteudo,
+                    'submissao-autor-adicionado-'.$notificacao->id.'-'.$notificacao->adicionado_em?->format('YmdHis'),
+                );
+                SubmissaoAutorNotificacao::whereKey($notificacao->id)->where('ativo', true)
+                    ->whereNull('adicao_enviada_em')->update(['adicao_enviada_em' => now()]);
+            } catch (Throwable $erro) {
+                $falhas++;
+                Log::warning('Falha ao notificar autor incluído em trabalho.', [
+                    'trabalho' => $trabalho->id, 'email' => $notificacao->email, 'erro' => $erro->getMessage(),
+                ]);
+            }
+        }
+
+        foreach ($trabalho->notificacoesAutores()->where('ativo', false)->whereNull('remocao_enviada_em')->get() as $notificacao) {
+            try {
+                $conteudo = '<p>Olá, '.e($notificacao->nome).'.</p>'
+                    .'<p>Seu nome foi removido da autoria do trabalho/resumo <strong>'.e($trabalho->titulo_trabalho).'</strong>, da submissão <strong>'.e($submissao->titulo).'</strong>.</p>'
+                    .'<p>Por esse motivo, você não possui mais acesso a esse trabalho como autor(a). Caso a remoção tenha sido feita por engano, entre em contato com o primeiro autor ou com a organização do evento.</p>';
+                $emailService->enviar(
+                    $notificacao->email,
+                    $notificacao->nome,
+                    'Você foi removido(a) do trabalho — '.$trabalho->titulo_trabalho,
+                    $conteudo,
+                    'submissao-autor-removido-'.$notificacao->id.'-'.$notificacao->removido_em?->format('YmdHis'),
+                );
+                SubmissaoAutorNotificacao::whereKey($notificacao->id)->where('ativo', false)
+                    ->whereNull('remocao_enviada_em')->update(['remocao_enviada_em' => now()]);
+            } catch (Throwable $erro) {
+                $falhas++;
+                Log::warning('Falha ao notificar autor removido de trabalho.', [
+                    'trabalho' => $trabalho->id, 'email' => $notificacao->email, 'erro' => $erro->getMessage(),
+                ]);
+            }
+        }
+
+        return $falhas;
     }
 
     private function exigirAberta(Submissao $submissao): void
