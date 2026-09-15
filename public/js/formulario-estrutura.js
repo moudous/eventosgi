@@ -22,7 +22,7 @@
     function optionHtml(option = {valor: '', texto: ''}) {
         const item = typeof option === 'object' && option !== null ? option : {valor: String(option), texto: String(option)};
         const percentual = item.percentual_vagas === null || item.percentual_vagas === undefined ? '' : `${Number(item.percentual_vagas)}%`;
-        return `<div class="row g-2 align-items-end mb-2 option-item"><div class="col-md-4"><label class="form-label small mb-1">Texto exibido<input class="form-control option-text" value="${esc(item.texto)}" required></label></div><div class="col-md-3"><label class="form-label small mb-1">Valor<input class="form-control option-value" value="${esc(item.valor)}" required></label></div><div class="col-md-3 option-percent-column"><label class="form-label small mb-1">% de vaga<input class="form-control option-percent quota-percent" inputmode="decimal" value="${esc(percentual)}" placeholder="Ex.: 33% ou 3"></label><div class="small text-muted option-quota-number"></div></div><div class="col-md-2"><button type="button" class="btn btn-outline-danger remove-option mb-1" aria-label="Remover item" title="Remover item"><i class="bi bi-trash"></i></button></div></div>`;
+        return `<div class="row g-2 align-items-end mb-2 option-item"><div class="col-md-4"><label class="form-label small mb-1">Texto exibido<input class="form-control option-text" value="${esc(item.texto)}" required></label></div><div class="col-md-3"><label class="form-label small mb-1">Valor<input class="form-control option-value" value="${esc(item.valor)}" required></label></div><div class="col-md-3 option-percent-column"><label class="form-label small mb-1">% de vaga<input class="form-control option-percent quota-percent" inputmode="decimal" value="${esc(percentual)}" placeholder="Ex.: 33% ou 3"></label><div class="small text-muted option-quota-number"></div></div><div class="col-md-2"><div class="btn-group mb-1" role="group" aria-label="Ordenar ou remover item"><button type="button" class="btn btn-outline-secondary move-option-up" aria-label="Subir item" title="Subir item"><i class="bi bi-arrow-up"></i></button><button type="button" class="btn btn-outline-secondary move-option-down" aria-label="Descer item" title="Descer item"><i class="bi bi-arrow-down"></i></button><button type="button" class="btn btn-outline-danger remove-option" aria-label="Remover item" title="Remover item"><i class="bi bi-trash"></i></button></div></div></div>`;
     }
     function refresh() {
         const fields = [...root.children];
@@ -60,6 +60,11 @@
                 input.required = criterio.checked && !checkboxSimples;
             });
             el.querySelectorAll('.option-percent-column').forEach(area => area.hidden = !criterio.checked || checkboxSimples);
+            const opcoes = [...el.querySelectorAll('.option-item')];
+            opcoes.forEach((opcao, indice) => {
+                opcao.querySelector('.move-option-up').disabled = indice === 0;
+                opcao.querySelector('.move-option-down').disabled = indice === opcoes.length - 1;
+            });
             const percentualCampo = el.querySelector('.f-field-percent');
             percentualCampo.disabled = !criterio.checked || !checkboxSimples;
             percentualCampo.required = criterio.checked && checkboxSimples;
@@ -149,6 +154,9 @@
         if (button.matches('.remove-field')) el.remove();
         if (button.matches('.move-up') && el.previousElementSibling) el.previousElementSibling.before(el);
         if (button.matches('.move-down') && el.nextElementSibling) el.nextElementSibling.after(el);
+        const option = button.closest('.option-item');
+        if (button.matches('.move-option-up') && option.previousElementSibling) option.previousElementSibling.before(option);
+        if (button.matches('.move-option-down') && option.nextElementSibling) option.nextElementSibling.after(option);
         if (button.matches('.remove-option')) button.closest('.option-item').remove();
         if (button.matches('.add-option')) {
             const list = el.querySelector('.option-items');

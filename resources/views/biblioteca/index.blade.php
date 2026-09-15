@@ -13,7 +13,6 @@
         <div class="d-flex flex-wrap gap-2">
             @if($permissoes->permite('biblioteca.enviar'))
                 <button class="btn btn-primary" type="button" id="abrirUploadBiblioteca" data-bs-toggle="modal" data-bs-target="#uploadBiblioteca"><i class="bi bi-cloud-arrow-up me-1"></i>Upload de arquivo</button>
-                <button class="btn btn-outline-primary" type="button" id="colarImagem"><i class="bi bi-clipboard me-1"></i>Colar arquivo copiado</button>
             @endif
             @if($permissoes->permite('biblioteca.recortar'))
                 <button class="btn btn-outline-secondary" type="button" id="recortarSelecionada" disabled><i class="bi bi-crop me-1"></i>Cortar imagem selecionada</button>

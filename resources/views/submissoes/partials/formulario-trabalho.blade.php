@@ -31,7 +31,7 @@
         <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="email">E-mail do primeiro autor *</label><input type="email" class="form-control" id="email" value="{{ $acesso['email'] }}" disabled><input type="hidden" name="email" value="{{ $acesso['email'] }}"></div>
 
         <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="primeiro_autor">Primeiro autor *</label><input class="form-control" id="primeiro_autor" name="primeiro_autor" maxlength="255" required value="{{ $primeiroInicial }}"><div class="form-text">Informe nome e sobrenome.</div></div>
-        <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="primeiro_autor_afiliacao">Afiliação do primeiro autor *</label><input class="form-control" id="primeiro_autor_afiliacao" name="primeiro_autor_afiliacao" maxlength="1000" required placeholder="{{ $afiliacaoPlaceholder }}" value="{{ $primeiroAfiliacao }}"></div>
+        <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="primeiro_autor_afiliacao">Filiação do primeiro autor *</label><input class="form-control" id="primeiro_autor_afiliacao" name="primeiro_autor_afiliacao" maxlength="1000" required placeholder="{{ $afiliacaoPlaceholder }}" value="{{ $primeiroAfiliacao }}"></div>
 
         <div class="col-12">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">

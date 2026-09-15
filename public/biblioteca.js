@@ -112,10 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
         receivePastedFile(file);
     });
     pasteArea?.addEventListener('click', () => pasteArea.focus());
-    document.getElementById('colarImagem')?.addEventListener('click', () => {
-        pasteArea?.focus();
-        pasteArea?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
     savePasted?.addEventListener('click', () => {
         if (!pastedFile) return;
         try {

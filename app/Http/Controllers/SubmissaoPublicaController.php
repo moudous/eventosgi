@@ -162,7 +162,7 @@ class SubmissaoPublicaController
         $afiliacoes = $trabalho->autores->map(function ($autor): string {
             $numero = (int) ($autor->numero ?: $autor->ordem);
 
-            return '<div><sup>'.$numero.'</sup> '.nl2br(e($autor->afiliacao ?: 'Afiliação não informada')).'</div>';
+            return '<div><sup>'.$numero.'</sup> '.nl2br(e($autor->afiliacao ?: 'Filiação não informada')).'</div>';
         })->implode('');
         $apoio = $trabalho->tem_apoio_financeiro ? ($trabalho->apoiador ?: 'Sim') : 'Não';
         $etica = $trabalho->aprovacao_comite_etica
@@ -360,13 +360,13 @@ class SubmissaoPublicaController
             'titulo_trabalho.required' => 'Informe o título do trabalho.',
             'titulo_trabalho.max' => 'O título do trabalho deve ter no máximo 120 caracteres.',
             'primeiro_autor.required' => 'Informe o primeiro autor.',
-            'primeiro_autor_afiliacao.required' => 'Informe a afiliação do primeiro autor.',
+            'primeiro_autor_afiliacao.required' => 'Informe a filiação do primeiro autor.',
             'outros_autores.max' => 'A quantidade máxima de autores permitida para esta submissão foi ultrapassada.',
             'outros_autores.*.nome.required' => 'Informe o nome completo de cada autor.',
             'outros_autores.*.email.required' => 'Informe o e-mail de cada autor.',
             'outros_autores.*.email.email' => 'Informe um e-mail válido para cada autor.',
             'outros_autores.*.email.distinct' => 'Não repita o e-mail de um autor.',
-            'outros_autores.*.afiliacao.required' => 'Informe a afiliação de cada autor.',
+            'outros_autores.*.afiliacao.required' => 'Informe a filiação de cada autor.',
             'tem_apoio_financeiro.required' => 'Informe se o trabalho possui apoio financeiro.',
             'apoiador.required_if' => 'Informe o apoiador financeiro.',
             'apresentacao.required' => 'Selecione a forma de apresentação.',
