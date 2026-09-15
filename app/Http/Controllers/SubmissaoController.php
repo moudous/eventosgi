@@ -6,6 +6,7 @@ use App\Models\Evento;
 use App\Models\InscricaoSubmissaoTrabalho;
 use App\Models\Submissao;
 use App\Services\ArmazemService;
+use App\Services\ConteudoEditorFormularioService;
 use App\Services\GiPermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -237,6 +238,7 @@ class SubmissaoController
         $dados = $request->validate([
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'titulo' => ['required', 'string', 'max:255'],
+            'informacoes' => ['nullable', 'string', 'max:500000'],
             'data_inicio' => ['required', 'date'],
             'data_fim' => ['required', 'date', 'after:data_inicio'],
             'ativo' => ['required', 'boolean'],
@@ -275,6 +277,8 @@ class SubmissaoController
 
         $dados['min_palavras_chave'] = (int) ($dados['min_palavras_chave'] ?? 3);
         $dados['max_palavras_chave'] = (int) ($dados['max_palavras_chave'] ?? 6);
+        $dados['informacoes'] = app(ConteudoEditorFormularioService::class)
+            ->sanitizar($dados['informacoes'] ?? '') ?: null;
         $dados['modelo_trabalho'] = $this->limparHtml((string) ($dados['modelo_trabalho'] ?? '')) ?: null;
         $dados['personalizacao']['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao']['alterar_cor_fundo_pagina'];
         $dados['personalizacao']['cor_fundo_pagina'] = strtolower($dados['personalizacao']['cor_fundo_pagina']);

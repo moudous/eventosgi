@@ -11,7 +11,7 @@ class Submissao extends Model
 {
     protected $table = 'submissoes';
 
-    protected $fillable = ['mostrar_categoria_trabalho', 'mostrar_palavras_chave', 'min_palavras_chave', 'max_palavras_chave', 'mostrar_apresentacao', 'mostrar_aprovacao_comite_etica', 'mostrar_apoio_financeiro', 'mostrar_link_evento', 'evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
+    protected $fillable = ['mostrar_categoria_trabalho', 'mostrar_palavras_chave', 'min_palavras_chave', 'max_palavras_chave', 'mostrar_apresentacao', 'mostrar_aprovacao_comite_etica', 'mostrar_apoio_financeiro', 'mostrar_link_evento', 'evento_id', 'titulo', 'informacoes', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
 
     protected $attributes = [
         'mostrar_categoria_trabalho' => true,
