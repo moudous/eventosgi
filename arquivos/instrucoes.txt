@@ -22,3 +22,5 @@ deve autenticar no email com senha igual em atividade
 ## em https://gi.fco.edu.br/integracoes/9/container/143  na pagina do evento quando carrega as variaveis do template seria possivel 
 já trazer preenchido as variveis padrao quando estiver vazio e mostrar em alqgum lugar o campo que é valor padrao
 
+
+..
