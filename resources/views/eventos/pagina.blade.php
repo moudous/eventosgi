@@ -58,7 +58,12 @@
                 <div class="row g-4">
                     @foreach($variaveis as $variavel)
                     <div class="col-12 col-md-6">
-                        @php($valorVariavel = old('variaveis.'.$variavel['nome'], $valores[$variavel['nome']] ?? $variavel['padrao']))
+                        @php
+                            $valorVariavel = old(
+                                'variaveis.'.$variavel['nome'],
+                                $valores[$variavel['nome']] ?? $variavel['padrao'],
+                            );
+                        @endphp
                         @if(($variavel['tipo'] ?? 'text') === 'checkbox')
                             <input type="hidden" name="variaveis[{{ $variavel['nome'] }}]" value="0" @disabled(!$podeEditarVariaveis)>
                             <div class="form-check form-switch pt-2">
