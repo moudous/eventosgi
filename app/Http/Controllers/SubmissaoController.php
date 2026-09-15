@@ -241,6 +241,12 @@ class SubmissaoController
             'data_fim' => ['required', 'date', 'after:data_inicio'],
             'ativo' => ['required', 'boolean'],
             'mostrar_link_evento' => ['sometimes', 'boolean'],
+            'mostrar_palavras_chave' => ['sometimes', 'boolean'],
+            'min_palavras_chave' => ['required_if:mostrar_palavras_chave,1', 'nullable', 'integer', 'min:1', 'max:100'],
+            'max_palavras_chave' => ['required_if:mostrar_palavras_chave,1', 'nullable', 'integer', 'min:1', 'max:100', 'gte:min_palavras_chave'],
+            'mostrar_apresentacao' => ['sometimes', 'boolean'],
+            'mostrar_aprovacao_comite_etica' => ['sometimes', 'boolean'],
+            'mostrar_apoio_financeiro' => ['sometimes', 'boolean'],
             'qtde_resumo' => ['required', 'integer', 'min:1', 'max:100000'],
             'qtde_autores' => ['required', 'integer', 'min:1', 'max:100'],
             'modelo_trabalho' => ['nullable', 'string', 'max:1000000'],
@@ -248,6 +254,9 @@ class SubmissaoController
             'personalizacao.alterar_cor_fundo_pagina' => ['required', 'boolean'],
             'personalizacao.cor_fundo_pagina' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ], [
+            'min_palavras_chave.required_if' => 'Informe o mínimo de palavras-chave.',
+            'max_palavras_chave.required_if' => 'Informe o máximo de palavras-chave.',
+            'max_palavras_chave.gte' => 'O máximo de palavras-chave deve ser maior ou igual ao mínimo.',
             'evento_id.required' => 'Selecione o evento.',
             'titulo.required' => 'Informe o título da submissão.',
             'data_inicio.required' => 'Informe a data inicial.',
@@ -263,6 +272,8 @@ class SubmissaoController
             'qtde_autores.max' => 'A quantidade de autores não pode ultrapassar 100.',
         ]);
 
+        $dados['min_palavras_chave'] = (int) ($dados['min_palavras_chave'] ?? 3);
+        $dados['max_palavras_chave'] = (int) ($dados['max_palavras_chave'] ?? 6);
         $dados['modelo_trabalho'] = $this->limparHtml((string) ($dados['modelo_trabalho'] ?? '')) ?: null;
         $dados['personalizacao']['alterar_cor_fundo_pagina'] = (bool) $dados['personalizacao']['alterar_cor_fundo_pagina'];
         $dados['personalizacao']['cor_fundo_pagina'] = strtolower($dados['personalizacao']['cor_fundo_pagina']);

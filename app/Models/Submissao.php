@@ -11,14 +11,26 @@ class Submissao extends Model
 {
     protected $table = 'submissoes';
 
-    protected $fillable = ['mostrar_link_evento', 'evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
+    protected $fillable = ['mostrar_palavras_chave', 'min_palavras_chave', 'max_palavras_chave', 'mostrar_apresentacao', 'mostrar_aprovacao_comite_etica', 'mostrar_apoio_financeiro', 'mostrar_link_evento', 'evento_id', 'titulo', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
 
     protected $attributes = [
+        'mostrar_palavras_chave' => true,
+        'min_palavras_chave' => 3,
+        'max_palavras_chave' => 6,
+        'mostrar_apresentacao' => true,
+        'mostrar_aprovacao_comite_etica' => true,
+        'mostrar_apoio_financeiro' => true,
         'qtde_resumo' => 1600,
         'qtde_autores' => 8,
     ];
 
     protected $casts = [
+        'mostrar_palavras_chave' => 'boolean',
+        'min_palavras_chave' => 'integer',
+        'max_palavras_chave' => 'integer',
+        'mostrar_apresentacao' => 'boolean',
+        'mostrar_aprovacao_comite_etica' => 'boolean',
+        'mostrar_apoio_financeiro' => 'boolean',
         'mostrar_link_evento' => 'boolean',
         'evento_id' => 'integer',
         'data_inicio' => 'datetime',

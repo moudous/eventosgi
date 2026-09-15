@@ -64,6 +64,7 @@ class SubmissaoPublicaController
             $trabalho = $inscricao->trabalhos()->create([
                 'titulo_trabalho' => $dados['titulo_trabalho'],
                 'conteudo' => $dados['conteudo'],
+                'palavras_chave' => $dados['palavras_chave'],
                 'tem_apoio_financeiro' => $dados['tem_apoio_financeiro'],
                 'apoiador' => $dados['apoiador'],
                 'apresentacao' => $dados['apresentacao'],
@@ -123,12 +124,13 @@ class SubmissaoPublicaController
     {
         $this->exigirAcesso($request, $submissao, $trabalho, true);
         $this->exigirEditavel($submissao, $trabalho);
-        [$dados, $autores] = $this->validarTrabalho($request, $submissao, $trabalho->inscricao->email);
+        [$dados, $autores] = $this->validarTrabalho($request, $submissao, $trabalho->inscricao->email, $trabalho);
 
         DB::transaction(function () use ($dados, $autores, $trabalho): void {
             $trabalho->update([
                 'titulo_trabalho' => $dados['titulo_trabalho'],
                 'conteudo' => $dados['conteudo'],
+                'palavras_chave' => $dados['palavras_chave'],
                 'tem_apoio_financeiro' => $dados['tem_apoio_financeiro'],
                 'apoiador' => $dados['apoiador'],
                 'apresentacao' => $dados['apresentacao'],
@@ -174,6 +176,7 @@ class SubmissaoPublicaController
             .'</style></head><body>'
             .'<h1>'.e($trabalho->titulo_trabalho).'</h1>'
             .'<div class="autores">'.$nomes.'</div><div class="afiliacoes">'.$afiliacoes.'</div>'
+            .($submissao->mostrar_palavras_chave && $trabalho->palavras_chave ? '<p><strong>Palavras Chave:</strong> '.e($trabalho->palavras_chave).'</p>' : '')
             .'<p class="resumo-titulo">RESUMO:</p><div>'.$resumo.'</div>'
             .'<div class="espaco">&nbsp;</div><hr><div class="dados">'
             .'<p><em>E-mail do primeiro autor: '.e($trabalho->inscricao->email).'</em></p>'
@@ -300,6 +303,7 @@ class SubmissaoPublicaController
         Request $request,
         Submissao $submissao,
         ?string $emailPrimeiroAutor = null,
+        ?InscricaoSubmissaoTrabalho $trabalho = null,
     ): array
     {
         $nomeCompleto = function (string $atributo, mixed $valor, \Closure $falhar): void {
@@ -314,6 +318,7 @@ class SubmissaoPublicaController
             'outros_autores.*.nome' => ['required', 'string', 'max:255', $nomeCompleto],
             'outros_autores.*.email' => ['required', 'email', 'max:150', 'distinct:ignore_case'],
             'outros_autores.*.afiliacao' => ['required', 'string', 'max:1000'],
+            'palavras_chave' => $submissao->mostrar_palavras_chave ? ['required', 'string', 'max:20000'] : ['exclude'],
             'conteudo' => ['nullable', 'string', 'max:1000000'],
             'tem_apoio_financeiro' => ['required', 'boolean'],
             'apoiador' => ['nullable', 'required_if:tem_apoio_financeiro,1', 'string', 'max:1000'],
@@ -322,8 +327,27 @@ class SubmissaoPublicaController
             'protocolo_comite_etica' => ['nullable', 'required_if:aprovacao_comite_etica,1', 'string', 'max:500'],
         ];
 
+        $camposOcultos = [];
+        if (! $submissao->mostrar_palavras_chave) {
+            $camposOcultos['palavras_chave'] = $trabalho?->palavras_chave;
+        }
+        if (! $submissao->mostrar_apresentacao) {
+            $camposOcultos['apresentacao'] = $trabalho?->apresentacao ?? 'presencial';
+        }
+        if (! $submissao->mostrar_apoio_financeiro) {
+            $camposOcultos['tem_apoio_financeiro'] = $trabalho?->tem_apoio_financeiro ?? false;
+            $camposOcultos['apoiador'] = $trabalho?->apoiador;
+        }
+        if (! $submissao->mostrar_aprovacao_comite_etica) {
+            $camposOcultos['aprovacao_comite_etica'] = $trabalho?->aprovacao_comite_etica ?? false;
+            $camposOcultos['protocolo_comite_etica'] = $trabalho?->protocolo_comite_etica;
+        }
+        foreach ($camposOcultos as $campo => $valor) {
+            $regras[$campo] = ['exclude'];
+        }
 
         $dados = $request->validate($regras, [
+            'palavras_chave.required' => 'Informe as palavras-chave do resumo, separadas por vírgulas.',
             'titulo_trabalho.required' => 'Informe o título do trabalho.',
             'titulo_trabalho.max' => 'O título do trabalho deve ter no máximo 120 caracteres.',
             'primeiro_autor.required' => 'Informe o primeiro autor.',
@@ -340,6 +364,14 @@ class SubmissaoPublicaController
             'aprovacao_comite_etica.required' => 'Informe se o trabalho possui aprovação do Comitê de Ética.',
             'protocolo_comite_etica.required_if' => 'Informe o protocolo do Comitê de Ética.',
         ]);
+        $dados = array_replace($dados, $camposOcultos);
+        if ($submissao->mostrar_palavras_chave) {
+            $palavras = array_values(array_filter(array_map('trim', explode(',', $dados['palavras_chave'])), fn (string $palavra): bool => $palavra !== ''));
+            if (count($palavras) < $submissao->min_palavras_chave || count($palavras) > $submissao->max_palavras_chave) {
+                throw ValidationException::withMessages(['palavras_chave' => "Informe de {$submissao->min_palavras_chave} a {$submissao->max_palavras_chave} palavras-chave ou expressões, separadas por vírgulas."]);
+            }
+            $dados['palavras_chave'] = implode(', ', $palavras);
+        }
         $emailPrimeiroAutor = mb_strtolower(trim($emailPrimeiroAutor ?: $dados['email']));
         $dados['email'] = $emailPrimeiroAutor;
         $autores = [[

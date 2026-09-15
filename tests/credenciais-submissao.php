@@ -19,8 +19,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:', 'cache.default' => 'array', 'session.driver' => 'array', 'hashing.bcrypt.rounds' => 4]);
 Schema::create('eventos', function ($t) { $t->id(); $t->string('nome'); $t->boolean('ativo'); $t->timestamps(); $t->softDeletes(); });
 Schema::create('submissoes', function ($t) { $t->id(); $t->integer('evento_id'); $t->string('titulo'); $t->boolean('ativo'); $t->dateTime('data_inicio'); $t->dateTime('data_fim'); $t->integer('qtde_resumo'); $t->integer('qtde_autores'); $t->timestamps(); });
+(require __DIR__.'/../database/migrations/2026_09_15_010000_add_perguntas_visiveis_to_submissoes_table.php')->up();
 Schema::create('inscritos_submissao', function ($t) { $t->id(); $t->integer('submissao_id'); $t->string('email'); $t->string('senha'); $t->integer('credencial_versao')->default(1); $t->timestamps(); $t->unique(['submissao_id', 'email']); });
 Schema::create('inscritos_submissao_trabalhos', function ($t) { $t->id(); $t->integer('inscrito_submissao_id'); $t->string('titulo_trabalho'); $t->text('conteudo')->nullable(); $t->string('status'); $t->boolean('tem_apoio_financeiro')->default(false); $t->string('apoiador')->nullable(); $t->string('apresentacao')->default('presencial'); $t->boolean('aprovacao_comite_etica')->default(false); $t->string('protocolo_comite_etica')->nullable(); $t->timestamps(); $t->softDeletes(); });
+(require __DIR__.'/../database/migrations/2026_09_15_020000_add_palavras_chave_to_submissoes.php')->up();
 Schema::create('submissao_autores', function ($t) { $t->id(); $t->integer('inscrito_submissao_trabalho_id'); $t->string('nome'); $t->string('email'); $t->string('afiliacao')->nullable(); $t->boolean('principal'); $t->integer('ordem'); $t->integer('numero')->nullable(); $t->timestamps(); });
 Schema::create('credenciais_participante', function ($t) { $t->id(); $t->integer('participante_id'); $t->string('email')->unique(); $t->string('senha'); $t->integer('credencial_versao')->default(1); $t->timestamps(); });
 Schema::create('codigos_inscricao', function ($t) { $t->id(); $t->string('email'); $t->integer('participante_id')->nullable(); $t->string('codigo_hash'); $t->string('ip')->nullable(); $t->timestamp('expira_em'); $t->string('redefinicao_token_hash')->nullable(); $t->timestamp('redefinicao_expira_em')->nullable(); $t->timestamp('redefinicao_usado_em')->nullable(); $t->timestamps(); });
@@ -41,8 +43,8 @@ function negado(callable $acao, int $status = 403): void {
     throw new RuntimeException('Acesso deveria ser negado');
 }
 $evento = Evento::create(['nome' => 'Evento', 'ativo' => true]);
-$sub = Submissao::create(['evento_id' => $evento->id, 'titulo' => 'Submissão', 'ativo' => true, 'data_inicio' => now()->subDay(), 'data_fim' => now()->addDay()]);
-$sub2 = Submissao::create(['evento_id' => $evento->id, 'titulo' => 'Outra submissão', 'ativo' => true, 'data_inicio' => now()->subDay(), 'data_fim' => now()->addDay()]);
+$sub = Submissao::create(['mostrar_palavras_chave' => false, 'evento_id' => $evento->id, 'titulo' => 'Submissão', 'ativo' => true, 'data_inicio' => now()->subDay(), 'data_fim' => now()->addDay()]);
+$sub2 = Submissao::create(['mostrar_palavras_chave' => false, 'evento_id' => $evento->id, 'titulo' => 'Outra submissão', 'ativo' => true, 'data_inicio' => now()->subDay(), 'data_fim' => now()->addDay()]);
 $i = $sub->inscricoes()->create(['email' => 'autor@example.test', 'senha' => Hash::make('Antiga123')]);
 $i->update(['updated_at' => now()->subDay()]);
 $i2 = $sub2->inscricoes()->create(['email' => $i->email, 'senha' => Hash::make('Atual123')]);

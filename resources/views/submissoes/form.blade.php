@@ -24,6 +24,28 @@
         <label class="form-check-label" for="mostrar_link_evento">Mostrar link “Voltar para a página do evento” no formulário público</label>
     </div>
 </div>
+    <fieldset class="col-12">
+        <legend class="form-label fw-semibold fs-6">Perguntas exibidas no formulário</legend>
+        <div class="form-text mb-2">Marque as perguntas que os autores deverão responder.</div>
+        @foreach(['mostrar_apresentacao' => 'Apresentação', 'mostrar_aprovacao_comite_etica' => 'Aprovação do Comitê de Ética', 'mostrar_apoio_financeiro' => 'Tem apoio financeiro'] as $campo => $rotulo)
+            <input type="hidden" name="{{ $campo }}" value="0">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="{{ $campo }}" name="{{ $campo }}" value="1" @checked(old($campo, $submissao->{$campo}))>
+                <label class="form-check-label" for="{{ $campo }}">{{ $rotulo }}</label>
+            </div>
+        @endforeach
+    </fieldset>
+    <div class="col-12">
+        <input type="hidden" name="mostrar_palavras_chave" value="0">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="mostrar_palavras_chave" name="mostrar_palavras_chave" value="1" @checked(old('mostrar_palavras_chave', $submissao->mostrar_palavras_chave))>
+            <label class="form-check-label fw-semibold" for="mostrar_palavras_chave">Habilitar Palavras Chave</label>
+        </div>
+        <div id="limitesPalavrasChave" class="row g-3 mt-1" @if(!old('mostrar_palavras_chave', $submissao->mostrar_palavras_chave)) hidden @endif>
+            <div class="col-12 col-md-6"><label class="form-label" for="min_palavras_chave">Mínimo de palavras-chave</label><input class="form-control" type="number" id="min_palavras_chave" name="min_palavras_chave" min="1" max="100" value="{{ old('min_palavras_chave', $submissao->min_palavras_chave) }}"></div>
+            <div class="col-12 col-md-6"><label class="form-label" for="max_palavras_chave">Máximo de palavras-chave</label><input class="form-control" type="number" id="max_palavras_chave" name="max_palavras_chave" min="1" max="100" value="{{ old('max_palavras_chave', $submissao->max_palavras_chave) }}"></div>
+        </div>
+    </div>
     <div class="col-12 modelo-editor-wrapper"><label class="form-label fw-semibold">Modelo de trabalho</label><input type="hidden" id="modelo_trabalho" name="modelo_trabalho"><div id="modeloEditor" class="bg-white">{!! old('modelo_trabalho',$submissao->modelo_trabalho) !!}</div><div class="form-text">O modelo ocupará toda a largura do formulário público e será carregado inicialmente para cada novo trabalho.</div></div>
 </div></div></div>
 @php($estiloPagina = old('personalizacao', $submissao->estiloPagina()))
@@ -49,3 +71,22 @@
 </form>
 @endsection
 @push('scripts')<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script><script src="{{ asset('cor-fundo-pagina.js') }}?v={{ filemtime(public_path('cor-fundo-pagina.js')) }}" defer></script><script>document.addEventListener('DOMContentLoaded',()=>{const quill=new Quill('#modeloEditor',{theme:'snow',modules:{toolbar:[[{header:[1,2,3,4,false]}],['bold','italic','underline','strike'],[{align:[]}],[{list:'ordered'},{list:'bullet'}],['blockquote'],['clean']]}});document.getElementById('submissaoForm').addEventListener('submit',()=>document.getElementById('modelo_trabalho').value=quill.root.innerHTML)});</script>@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const habilitar = document.getElementById('mostrar_palavras_chave');
+    const limites = document.getElementById('limitesPalavrasChave');
+    const minimo = document.getElementById('min_palavras_chave');
+    const maximo = document.getElementById('max_palavras_chave');
+    const atualizar = () => {
+        limites.hidden = !habilitar.checked;
+        minimo.required = maximo.required = habilitar.checked;
+        maximo.min = minimo.value || '1';
+    };
+    habilitar.addEventListener('change', atualizar);
+    minimo.addEventListener('input', atualizar);
+    atualizar();
+});
+</script>
+@endpush
