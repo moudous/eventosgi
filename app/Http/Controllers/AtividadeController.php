@@ -804,6 +804,7 @@ class AtividadeController
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'categoria_id' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'integer', 'exists:categorias,id'],
             'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],
+            'local' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'string', 'max:255'],
             'data_inicio' => ['nullable', 'date'],
             'data_fim' => ['nullable', 'date'],
             'sessoes' => ['exclude_unless:formato,com_sessoes', 'required_if:formato,com_sessoes', 'array', 'min:1', 'max:100'],
@@ -835,7 +836,9 @@ class AtividadeController
         ]);
 
         if ($dados['tipo'] === 'somente_inscricao') {
-            $dados['categoria_id'] = $dados['modalidade'] = null;
+            $dados['categoria_id'] = $dados['modalidade'] = $dados['local'] = null;
+        } elseif (array_key_exists('local', $dados)) {
+            $dados['local'] = trim((string) $dados['local']) ?: null;
         }
 
         if (($dados['formato'] ?? 'simples') === 'com_sessoes' && $atividade) {

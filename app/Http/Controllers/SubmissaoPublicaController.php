@@ -64,6 +64,7 @@ class SubmissaoPublicaController
             $trabalho = $inscricao->trabalhos()->create([
                 'titulo_trabalho' => $dados['titulo_trabalho'],
                 'conteudo' => $dados['conteudo'],
+                'categoria_trabalho' => $dados['categoria_trabalho'],
                 'palavras_chave' => $dados['palavras_chave'],
                 'tem_apoio_financeiro' => $dados['tem_apoio_financeiro'],
                 'apoiador' => $dados['apoiador'],
@@ -130,6 +131,7 @@ class SubmissaoPublicaController
             $trabalho->update([
                 'titulo_trabalho' => $dados['titulo_trabalho'],
                 'conteudo' => $dados['conteudo'],
+                'categoria_trabalho' => $dados['categoria_trabalho'],
                 'palavras_chave' => $dados['palavras_chave'],
                 'tem_apoio_financeiro' => $dados['tem_apoio_financeiro'],
                 'apoiador' => $dados['apoiador'],
@@ -176,6 +178,7 @@ class SubmissaoPublicaController
             .'</style></head><body>'
             .'<h1>'.e($trabalho->titulo_trabalho).'</h1>'
             .'<div class="autores">'.$nomes.'</div><div class="afiliacoes">'.$afiliacoes.'</div>'
+            .($submissao->mostrar_categoria_trabalho && $trabalho->categoriaTrabalhoRotulo() ? '<p><strong>Categoria do trabalho:</strong> '.e($trabalho->categoriaTrabalhoRotulo()).'</p>' : '')
             .($submissao->mostrar_palavras_chave && $trabalho->palavras_chave ? '<p><strong>Palavras Chave:</strong> '.e($trabalho->palavras_chave).'</p>' : '')
             .'<p class="resumo-titulo">RESUMO:</p><div>'.$resumo.'</div>'
             .'<div class="espaco">&nbsp;</div><hr><div class="dados">'
@@ -318,6 +321,7 @@ class SubmissaoPublicaController
             'outros_autores.*.nome' => ['required', 'string', 'max:255', $nomeCompleto],
             'outros_autores.*.email' => ['required', 'email', 'max:150', 'distinct:ignore_case'],
             'outros_autores.*.afiliacao' => ['required', 'string', 'max:1000'],
+            'categoria_trabalho' => $submissao->mostrar_categoria_trabalho ? ['required', 'in:'.implode(',', array_keys(InscricaoSubmissaoTrabalho::CATEGORIAS_TRABALHO))] : ['exclude'],
             'palavras_chave' => $submissao->mostrar_palavras_chave ? ['required', 'string', 'max:20000'] : ['exclude'],
             'conteudo' => ['nullable', 'string', 'max:1000000'],
             'tem_apoio_financeiro' => ['required', 'boolean'],
@@ -328,6 +332,9 @@ class SubmissaoPublicaController
         ];
 
         $camposOcultos = [];
+        if (! $submissao->mostrar_categoria_trabalho) {
+            $camposOcultos['categoria_trabalho'] = $trabalho?->categoria_trabalho;
+        }
         if (! $submissao->mostrar_palavras_chave) {
             $camposOcultos['palavras_chave'] = $trabalho?->palavras_chave;
         }
@@ -347,6 +354,8 @@ class SubmissaoPublicaController
         }
 
         $dados = $request->validate($regras, [
+            'categoria_trabalho.required' => 'Selecione a categoria do trabalho.',
+            'categoria_trabalho.in' => 'Selecione uma categoria do trabalho válida.',
             'palavras_chave.required' => 'Informe as palavras-chave do resumo, separadas por vírgulas.',
             'titulo_trabalho.required' => 'Informe o título do trabalho.',
             'titulo_trabalho.max' => 'O título do trabalho deve ter no máximo 120 caracteres.',

@@ -27,7 +27,7 @@
     <fieldset class="col-12">
         <legend class="form-label fw-semibold fs-6">Perguntas exibidas no formulário</legend>
         <div class="form-text mb-2">Marque as perguntas que os autores deverão responder.</div>
-        @foreach(['mostrar_apresentacao' => 'Apresentação', 'mostrar_aprovacao_comite_etica' => 'Aprovação do Comitê de Ética', 'mostrar_apoio_financeiro' => 'Tem apoio financeiro'] as $campo => $rotulo)
+        @foreach(['mostrar_categoria_trabalho' => 'Categorias do Trabalho', 'mostrar_apresentacao' => 'Apresentação', 'mostrar_aprovacao_comite_etica' => 'Aprovação do Comitê de Ética', 'mostrar_apoio_financeiro' => 'Tem apoio financeiro'] as $campo => $rotulo)
             <input type="hidden" name="{{ $campo }}" value="0">
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="{{ $campo }}" name="{{ $campo }}" value="1" @checked(old($campo, $submissao->{$campo}))>

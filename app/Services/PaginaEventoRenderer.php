@@ -28,7 +28,7 @@ use App\Models\Evento;
 class PaginaEventoRenderer
 {
     /** Nomes reservados: uma variavel do evento nao pode encobrir os dados do sistema. */
-    public const RESERVADOS = ['evento', 'atividades', 'categorias', 'convidados', 'submissoes', 'eventos', 'dias', 'menu', 'loop', 'programacao_dias', 'hands_on', 'total_convidados', 'total_programacao'];
+    public const RESERVADOS = ['evento', 'atividades', 'categorias', 'convidados', 'submissoes', 'eventos', 'dias', 'menu', 'loop', 'programacao_dias', 'hands_on', 'minicursos', 'total_convidados', 'total_programacao'];
 
     /** Teto de itens por coleção, para um template não derrubar a página pedindo tudo. */
     private const MAX_ITENS = 500;
@@ -82,11 +82,14 @@ class PaginaEventoRenderer
                 'id' => $atividade->id,
                 'nome' => (string) $atividade->nome,
                 'subtitulo' => (string) ($atividade->formulario['subtitulo'] ?? ''),
-                'local' => (string) ($atividade->formulario['local'] ?? ''),
+                'local' => (string) ($atividade->local ?: ($atividade->formulario['local'] ?? '')),
+                'local_exibicao' => trim((string) ($atividade->local ?: ($atividade->formulario['local'] ?? ''))) ?: 'Local a definir',
+                'vagas' => $this->rotuloVagas($atividade),
                 'hora_inicio' => $atividade->data_inicio?->format('H:i') ?? '',
                 'hora_fim' => $atividade->data_fim?->format('H:i') ?? '',
                 'dia' => $atividade->data_inicio?->format('d/m') ?? '',
                 'hands_on' => \Illuminate\Support\Str::slug($atividade->categoria?->nome ?? '') === 'hands-on',
+                'minicurso' => in_array(\Illuminate\Support\Str::slug($atividade->categoria?->nome ?? ''), ['minicurso', 'minicursos', 'mini-curso', 'mini-cursos', 'curso', 'cursos'], true),
                 'inscricao_geral' => \Illuminate\Support\Str::slug($atividade->categoria?->nome ?? '') === 'inscricao-no-evento',
                 'convidados' => $atividade->convidados->map(fn ($convidado) => $this->dadosConvidado($convidado))->all(),
                 ...$this->dadosInscricao($atividade),
@@ -145,6 +148,9 @@ class PaginaEventoRenderer
         }));
         $dados['programacao_dias'] = $this->porDia($programacao);
         $dados['hands_on'] = array_values(array_filter($programacao, fn ($item) => $item['hands_on']));
+        // Minicursos possuem uma vitrine própria e continuam visíveis mesmo quando a
+        // data estiver fora do recorte opcional usado apenas pela grade da programação.
+        $dados['minicursos'] = array_values(array_filter($dados['atividades'], fn ($item) => $item['minicurso']));
         $dados['total_convidados'] = count($dados['convidados']);
         $dados['total_programacao'] = count($programacao);
 
@@ -198,6 +204,21 @@ class PaginaEventoRenderer
                 ? ($estado['lista_reserva'] ? 'Inscrever além do limite' : 'Inscreva-se')
                 : match ($estado['motivo']) { 'esgotado' => 'Vagas esgotadas', 'antes' => 'Inscrições em breve', default => 'Inscrições encerradas' },
         ];
+    }
+
+    private function rotuloVagas(Atividade $atividade): string
+    {
+        if ($atividade->comSessoes()) {
+            $limites = $atividade->sessoes->pluck('limite_vagas');
+            if ($limites->isEmpty() || $limites->contains(null)) return 'Vagas sem limite';
+            $total = (int) $limites->sum();
+        } elseif (! empty($atividade->formulario['limitar_inscricoes'])) {
+            $total = (int) ($atividade->formulario['limite_inscricoes'] ?? 0);
+        } else {
+            return 'Vagas sem limite';
+        }
+
+        return $total.' '.($total === 1 ? 'vaga' : 'vagas');
     }
 
     /**

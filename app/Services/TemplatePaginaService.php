@@ -434,7 +434,7 @@ class TemplatePaginaService
             if (in_array($nome, PaginaEventoRenderer::RESERVADOS, true)) continue;
 
             $tipo = is_array($declarada) ? (string) ($declarada['tipo'] ?? 'text') : 'text';
-            if (! in_array($tipo, ['text', 'textarea', 'url', 'color'], true)) $tipo = 'text';
+            if (! in_array($tipo, ['text', 'textarea', 'url', 'color', 'checkbox'], true)) $tipo = 'text';
 
             $variaveis[$nome] = [
                 'nome' => $nome,

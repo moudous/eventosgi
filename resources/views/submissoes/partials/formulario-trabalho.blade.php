@@ -61,6 +61,18 @@
         <div id="campoProtocoloEtica" class="col-12 col-md-4 {{ $aprovacaoEtica === 1 ? '' : 'd-none' }}"><label class="form-label fw-semibold" for="protocolo_comite_etica">Protocolo do Comitê de Ética *</label><input class="form-control" id="protocolo_comite_etica" name="protocolo_comite_etica" maxlength="500" value="{{ old('protocolo_comite_etica', $novoTrabalho ? '' : $trabalho->protocolo_comite_etica) }}" @required($aprovacaoEtica === 1)></div>
         @endif
 
+        @if($submissao->mostrar_categoria_trabalho)
+        <div class="col-12">
+            <label class="form-label fw-semibold" for="categoria_trabalho">Categoria do trabalho *</label>
+            <select class="form-select" id="categoria_trabalho" name="categoria_trabalho" required>
+                <option value="">Selecione...</option>
+                @foreach(\App\Models\InscricaoSubmissaoTrabalho::CATEGORIAS_TRABALHO as $valor => $rotulo)
+                    <option value="{{ $valor }}" @selected(old('categoria_trabalho', $novoTrabalho ? '' : $trabalho->categoria_trabalho) === $valor)>{{ $loop->iteration }}. {{ $rotulo }}</option>
+                @endforeach
+            </select>
+        </div>
+        @endif
+
         @if($submissao->mostrar_palavras_chave)
         <div class="col-12">
             <label class="form-label fw-semibold" for="palavras_chave">Palavras Chave *</label>

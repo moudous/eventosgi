@@ -241,6 +241,7 @@ class SubmissaoController
             'data_fim' => ['required', 'date', 'after:data_inicio'],
             'ativo' => ['required', 'boolean'],
             'mostrar_link_evento' => ['sometimes', 'boolean'],
+            'mostrar_categoria_trabalho' => ['sometimes', 'boolean'],
             'mostrar_palavras_chave' => ['sometimes', 'boolean'],
             'min_palavras_chave' => ['required_if:mostrar_palavras_chave,1', 'nullable', 'integer', 'min:1', 'max:100'],
             'max_palavras_chave' => ['required_if:mostrar_palavras_chave,1', 'nullable', 'integer', 'min:1', 'max:100', 'gte:min_palavras_chave'],

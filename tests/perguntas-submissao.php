@@ -15,7 +15,7 @@ function check(bool $ok, string $mensagem): void {
 }
 $submissao = new Submissao(['id' => 1]);
 $submissao->id = 1;
-$campos = ['apresentacao' => 'mostrar_apresentacao', 'aprovacao_comite_etica' => 'mostrar_aprovacao_comite_etica', 'tem_apoio_financeiro' => 'mostrar_apoio_financeiro'];
+$campos = ['categoria_trabalho' => 'mostrar_categoria_trabalho', 'apresentacao' => 'mostrar_apresentacao', 'aprovacao_comite_etica' => 'mostrar_aprovacao_comite_etica', 'tem_apoio_financeiro' => 'mostrar_apoio_financeiro'];
 $base = ['palavras_chave' => 'saúde pública, educação, qualidade de vida', 'titulo_trabalho' => 'Resumo de teste', 'email' => 'autor@example.com', 'primeiro_autor' => 'Autor Teste', 'primeiro_autor_afiliacao' => 'Universidade'];
 $metodo = new ReflectionMethod(SubmissaoPublicaController::class, 'validarTrabalho');
 $validar = function (array $dados, ?InscricaoSubmissaoTrabalho $trabalho = null) use ($app, $submissao, $metodo) {
@@ -33,12 +33,16 @@ try {
 } catch (ValidationException $e) {
     foreach ($campos as $campo => $opcao) check(isset($e->errors()[$campo]), 'Validação ausente: '.$campo);
 }
-for ($combinacao = 0; $combinacao < 8; $combinacao++) {
+for ($combinacao = 0; $combinacao < 16; $combinacao++) {
     $dados = $base;
     foreach (array_keys($campos) as $indice => $campo) {
         $habilitado = (bool) ($combinacao & (1 << $indice));
         $submissao->{$campos[$campo]} = $habilitado;
-        if ($habilitado) $dados[$campo] = $campo === 'apresentacao' ? 'online' : '0';
+        if ($habilitado) $dados[$campo] = match ($campo) {
+            'categoria_trabalho' => 'pesquisa_original',
+            'apresentacao' => 'online',
+            default => '0',
+        };
     }
     $validar($dados);
     $html = view('submissoes.partials.formulario-trabalho', ['submissao' => $submissao, 'novoTrabalho' => true, 'acesso' => ['email' => $base['email']]])->render();
@@ -47,10 +51,10 @@ for ($combinacao = 0; $combinacao < 8; $combinacao++) {
     check(str_contains($html, 'name="protocolo_comite_etica"') === $submissao->mostrar_aprovacao_comite_etica, 'Visibilidade do protocolo');
 }
 foreach ($campos as $opcao) $submissao->{$opcao} = false;
-$existente = new InscricaoSubmissaoTrabalho(['apresentacao' => 'online', 'tem_apoio_financeiro' => true, 'apoiador' => 'Fundação', 'aprovacao_comite_etica' => true, 'protocolo_comite_etica' => 'ABC123']);
-$dados = $validar($base + ['apresentacao' => 'invalida', 'tem_apoio_financeiro' => 'invalido', 'aprovacao_comite_etica' => 'invalido'], $existente);
-foreach (['apresentacao', 'tem_apoio_financeiro', 'apoiador', 'aprovacao_comite_etica', 'protocolo_comite_etica'] as $campo) check($dados[$campo] === $existente->{$campo}, 'Resposta oculta deve ser preservada: '.$campo);
-echo "OK: padrões, oito combinações de visibilidade, validação e preservação de respostas.\n";
+$existente = new InscricaoSubmissaoTrabalho(['categoria_trabalho' => 'projeto_pesquisa', 'apresentacao' => 'online', 'tem_apoio_financeiro' => true, 'apoiador' => 'Fundação', 'aprovacao_comite_etica' => true, 'protocolo_comite_etica' => 'ABC123']);
+$dados = $validar($base + ['categoria_trabalho' => 'invalida', 'apresentacao' => 'invalida', 'tem_apoio_financeiro' => 'invalido', 'aprovacao_comite_etica' => 'invalido'], $existente);
+foreach (['categoria_trabalho', 'apresentacao', 'tem_apoio_financeiro', 'apoiador', 'aprovacao_comite_etica', 'protocolo_comite_etica'] as $campo) check($dados[$campo] === $existente->{$campo}, 'Resposta oculta deve ser preservada: '.$campo);
+echo "OK: padrões, dezesseis combinações de visibilidade, validação e preservação de respostas.\n";
 
 $submissao->mostrar_palavras_chave = true;
 foreach (['um, dois', 'um, dois, três, quatro, cinco, seis, sete', ', , '] as $invalido) {

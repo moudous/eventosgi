@@ -11,7 +11,7 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['mostrar_link_evento', 'tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'data_inicio', 'data_fim', 'formulario', 'personalizacao', 'url'];
+    protected $fillable = ['mostrar_link_evento', 'tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'local', 'data_inicio', 'data_fim', 'formulario', 'personalizacao', 'url'];
     protected $casts = [
         'mostrar_link_evento' => 'boolean',
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',

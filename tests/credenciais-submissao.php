@@ -23,6 +23,7 @@ Schema::create('submissoes', function ($t) { $t->id(); $t->integer('evento_id');
 Schema::create('inscritos_submissao', function ($t) { $t->id(); $t->integer('submissao_id'); $t->string('email'); $t->string('senha'); $t->integer('credencial_versao')->default(1); $t->timestamps(); $t->unique(['submissao_id', 'email']); });
 Schema::create('inscritos_submissao_trabalhos', function ($t) { $t->id(); $t->integer('inscrito_submissao_id'); $t->string('titulo_trabalho'); $t->text('conteudo')->nullable(); $t->string('status'); $t->boolean('tem_apoio_financeiro')->default(false); $t->string('apoiador')->nullable(); $t->string('apresentacao')->default('presencial'); $t->boolean('aprovacao_comite_etica')->default(false); $t->string('protocolo_comite_etica')->nullable(); $t->timestamps(); $t->softDeletes(); });
 (require __DIR__.'/../database/migrations/2026_09_15_020000_add_palavras_chave_to_submissoes.php')->up();
+(require __DIR__.'/../database/migrations/2026_09_15_030000_add_categoria_trabalho_to_submissoes.php')->up();
 Schema::create('submissao_autores', function ($t) { $t->id(); $t->integer('inscrito_submissao_trabalho_id'); $t->string('nome'); $t->string('email'); $t->string('afiliacao')->nullable(); $t->boolean('principal'); $t->integer('ordem'); $t->integer('numero')->nullable(); $t->timestamps(); });
 Schema::create('credenciais_participante', function ($t) { $t->id(); $t->integer('participante_id'); $t->string('email')->unique(); $t->string('senha'); $t->integer('credencial_versao')->default(1); $t->timestamps(); });
 Schema::create('codigos_inscricao', function ($t) { $t->id(); $t->string('email'); $t->integer('participante_id')->nullable(); $t->string('codigo_hash'); $t->string('ip')->nullable(); $t->timestamp('expira_em'); $t->string('redefinicao_token_hash')->nullable(); $t->timestamp('redefinicao_expira_em')->nullable(); $t->timestamp('redefinicao_usado_em')->nullable(); $t->timestamps(); });
@@ -85,7 +86,7 @@ negado(fn () => $c->exportarDocumento($rco, $sub2, $t), 404);
 $rsel = req(['trabalho_id' => $t->id], $rco->session()); $c->selecionar($rsel, $sub);
 
 // O coautor pode criar um trabalho próprio; seu acesso anterior continua somente leitura.
-$novo = ['email' => 'tentativa@example.test', 'primeiro_autor' => 'Outro Autor', 'primeiro_autor_afiliacao' => 'Universidade', 'titulo_trabalho' => 'Trabalho próprio', 'tem_apoio_financeiro' => 0, 'apresentacao' => 'presencial', 'aprovacao_comite_etica' => 0];
+$novo = ['email' => 'tentativa@example.test', 'primeiro_autor' => 'Outro Autor', 'primeiro_autor_afiliacao' => 'Universidade', 'titulo_trabalho' => 'Trabalho próprio', 'categoria_trabalho' => 'pesquisa_original', 'tem_apoio_financeiro' => 0, 'apresentacao' => 'presencial', 'aprovacao_comite_etica' => 0];
 $rnovo = req($novo, $rco->session()); $c->criar($rnovo, $sub);
 $proprio = $sub->trabalhos()->where('titulo_trabalho', 'Trabalho próprio')->firstOrFail();
 check($proprio->inscricao->email === 'coautor@example.test', 'Criação deve usar e-mail autenticado');
