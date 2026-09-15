@@ -32,7 +32,9 @@ class IdentificacaoParticipanteService
      */
     public const COLUNAS_EMAIL = ['email', 'email2', 'email_institucional'];
 
-    public const MINUTOS_VALIDADE = 15;
+    public const HORAS_VALIDADE = 48;
+
+    public const MINUTOS_VALIDADE = self::HORAS_VALIDADE * 60;
 
     /** Validade do link de definição da senha global. */
     public const MINUTOS_VALIDADE_LINK_SENHA = 60;
@@ -268,7 +270,7 @@ class IdentificacaoParticipanteService
         }
 
         // O código identifica o e-mail em qualquer atividade enquanto estiver válido.
-        // validado_em registra o primeiro uso, sem consumi-lo antes dos 15 minutos.
+        // validado_em registra o primeiro uso, sem consumi-lo antes do prazo de validade.
         CodigoInscricao::query()->whereKey($registro->id)->whereNull('validado_em')
             ->update(['validado_em' => now()]);
 
@@ -466,7 +468,7 @@ class IdentificacaoParticipanteService
             .'<p>Recebemos um pedido de inscrição em <strong>'.e($atividade->nome).'</strong>.</p>'
             .'<p>Digite a senha temporária abaixo no campo <strong>Senha</strong> do formulário:</p>'
             .'<p style="font-size:30px;font-weight:bold;letter-spacing:8px;margin:24px 0">'.e($codigo).'</p>'
-            .'<p>Ela contém letras e números e vale por '.self::MINUTOS_VALIDADE.' minutos. Depois de entrar, você poderá cadastrar uma nova senha permanente ou apenas continuar.</p>'
+            .'<p>Ela contém letras e números e vale por '.self::HORAS_VALIDADE.' horas. Depois de entrar, você poderá cadastrar uma nova senha permanente ou apenas continuar.</p>'
             .'<p><a href="'.e($urlSenha).'">Alterar senha de inscrição em atividade</a> (link válido por 60 minutos e para um único uso).</p>'
             .'<p style="color:#748096;font-size:13px">Se você não pediu esta senha, ignore a mensagem.</p>'
             .'</div>';

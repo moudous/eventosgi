@@ -23,6 +23,8 @@ use Throwable;
 
 class SubmissaoPublicaController
 {
+    public const HORAS_VALIDADE_SENHA_TEMPORARIA = 48;
+
     private const SESSAO_OCIOSA_SEGUNDOS = 30 * 60;
     private const SESSAO_TOTAL_SEGUNDOS = 8 * 60 * 60;
 
@@ -265,7 +267,7 @@ class SubmissaoPublicaController
         $tokenHash = hash('sha256', $token);
         $credencial->update([
             'temporaria_hash' => Hash::make($senhaTemporaria),
-            'temporaria_expira_em' => now()->addMinutes(15),
+            'temporaria_expira_em' => now()->addHours(self::HORAS_VALIDADE_SENHA_TEMPORARIA),
             'redefinicao_token_hash' => $tokenHash,
             'redefinicao_expira_em' => now()->addMinutes(60),
         ]);
@@ -273,7 +275,7 @@ class SubmissaoPublicaController
         $urlSenha = route('senha-submissao.editar', ['token' => $token]);
         $titulos = $trabalhos->pluck('titulo_trabalho')->map(fn ($titulo) => '<li>'.e($titulo).'</li>')->implode('');
         $conteudo = '<p>Olá.</p><p>Sua senha temporária de submissão é: <strong>'.e($senhaTemporaria).'</strong></p>'
-            .'<p>Ela vale por 15 minutos e pode ser utilizada nas outras submissões.</p>'
+            .'<p>Ela vale por '.self::HORAS_VALIDADE_SENHA_TEMPORARIA.' horas e pode ser utilizada nas outras submissões.</p>'
             .($titulos ? '<p>Trabalhos vinculados:</p><ul>'.$titulos.'</ul>' : '')
             .'<p><a href="'.e($url).'">Acessar a área de submissão</a></p>'
             .'<p><a href="'.e($urlSenha).'">Alterar senha de submissão</a> (link válido por 60 minutos e para um único uso).</p>'

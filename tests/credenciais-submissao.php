@@ -69,6 +69,12 @@ $captcha = new class extends CaptchaInscricaoService { public function validarSu
 $rco = req(['email_recuperacao' => 'coautor@example.test', 'captcha' => 'ABC123']);
 $c->esqueciSenha($rco, $sub, $mail, $captcha);
 $html = $mail->mensagens[0][1];
+$expiracaoTemporaria = CredencialSubmissao::where('email', 'coautor@example.test')->firstOrFail()->temporaria_expira_em;
+check(
+    $expiracaoTemporaria->betweenIncluded(now()->addHours(47)->addMinutes(59), now()->addHours(48)->addMinute()),
+    'Senha temporária de submissão deve valer por 48 horas'
+);
+check(str_contains($html, 'vale por 48 horas'), 'E-mail de submissão deve informar validade de 48 horas');
 preg_match('/<strong>([^<]+)<\/strong>/', $html, $m); $temporaria = $m[1];
 preg_match('#/senha/submissao/([A-Za-z0-9]{64})#', $html, $m); $token = $m[1];
 check(!empty($token), 'E-mail deve incluir link');
@@ -183,6 +189,12 @@ $app->instance(GiEmailService::class, $mail);
 $servicoAtividade = $app->make(IdentificacaoParticipanteService::class);
 $servicoAtividade->solicitarCodigo(req(), new Atividade(['nome' => 'Atividade teste']), 'coautor@example.test', true);
 $ultima = $mail->mensagens[array_key_last($mail->mensagens)][1];
+$expiracaoAtividade = CodigoInscricao::where('email', 'coautor@example.test')->latest('id')->firstOrFail()->expira_em;
+check(
+    $expiracaoAtividade->betweenIncluded(now()->addHours(47)->addMinutes(59), now()->addHours(48)->addMinute()),
+    'Senha temporária de atividade deve valer por 48 horas'
+);
+check(str_contains($ultima, 'vale por 48 horas'), 'E-mail de atividade deve informar validade de 48 horas');
 preg_match('#/senha/definir/([A-Za-z0-9]{64})#', $ultima, $m);
 check(!empty($m[1]) && $pc->edit($m[1], $ident)->getData()['valido'], 'E-mail de atividade deve incluir link utilizável');
 file_put_contents('/tmp/submissao-acesso-teste.html', $c->formulario(req(), $sub)->render());

@@ -63,7 +63,7 @@
     @endif
 
     @if(session('status'))<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>{{ session('status') }}</div>@endif
-    @if(session('senha_temporaria_enviada'))<div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</div>@endif
+    @if(session('senha_temporaria_enviada'))<div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas.</div>@endif
     @if(session('vagas_esgotadas'))<div class="alert alert-warning">{{ session('vagas_esgotadas') }}</div>@endif
     @if(session('identificacao_expirada'))<div class="alert alert-warning">{{ session('identificacao_expirada') }}</div>@endif
     @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
@@ -232,7 +232,7 @@
                     </div>
                     <button class="btn btn-link px-0 mb-3" type="button" id="alternarRecuperacaoSenha" aria-expanded="{{ $recuperacaoAberta ? 'true' : 'false' }}" aria-controls="recuperacaoSenha">Esqueceu a senha ou precisa de uma nova?</button>
                     <div id="recuperacaoSenha" @class(['d-none' => ! $recuperacaoAberta])>
-                        <p class="text-muted small">Enviaremos uma senha temporária com letras e números. Digite-a no campo “Senha” acima em até {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</p>
+                        <p class="text-muted small">Enviaremos uma senha temporária com letras e números. Digite-a no campo “Senha” acima em até {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas.</p>
                         <div class="mb-3">
                             <label class="form-label fw-semibold" for="captcha">Digite o texto da imagem</label>
                             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -241,7 +241,7 @@
                             </div>
                             <input class="form-control @if($errosIdentificacao->has('captcha')) is-invalid @endif" style="max-width:220px;text-transform:uppercase;letter-spacing:.2em" type="text" id="captcha" name="captcha" maxlength="6" autocomplete="off" autocapitalize="characters">
                             @if($errosIdentificacao->has('captcha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('captcha') }}</div>@endif
-                            @if(session('senha_temporaria_enviada'))<div class="alert alert-success mt-3 mb-0"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::MINUTOS_VALIDADE }} minutos.</div>@endif
+                            @if(session('senha_temporaria_enviada'))<div class="alert alert-success mt-3 mb-0"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas.</div>@endif
                         </div>
                         <button class="btn btn-outline-primary mb-3" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar senha para o e-mail</button>
                     </div>

@@ -199,9 +199,9 @@ for ($i = 0; $i < 100; $i++) {
         throw new RuntimeException('A senha temporária deve ter oito caracteres, incluindo letras e números.');
     }
 }
-$conteudoEmail = (new ReflectionMethod($identificacaoService, 'conteudo'))->invoke($identificacaoService, $atividade, 'AB12CD34');
+$conteudoEmail = (new ReflectionMethod($identificacaoService, 'conteudo'))->invoke($identificacaoService, $atividade, 'AB12CD34', 'https://example.test/senha');
 if (! str_contains($conteudoEmail, 'campo <strong>Senha</strong>')
-    || ! str_contains($conteudoEmail, 'vale por 15 minutos')
+    || ! str_contains($conteudoEmail, 'vale por 48 horas')
     || str_contains($conteudoEmail, 'Definir nova senha')) {
     throw new RuntimeException('O e-mail deve orientar o uso da senha temporária no novo fluxo.');
 }
