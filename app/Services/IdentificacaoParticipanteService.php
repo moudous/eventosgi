@@ -37,7 +37,7 @@ class IdentificacaoParticipanteService
     public const MINUTOS_VALIDADE = self::HORAS_VALIDADE * 60;
 
     /** Validade do link de definição da senha global. */
-    public const MINUTOS_VALIDADE_LINK_SENHA = 60;
+    public const HORAS_VALIDADE_LINK_SENHA = 48;
 
     /** Tentativas aceitas antes de a senha temporária ser invalidada. */
     public const MAX_TENTATIVAS = 5;
@@ -90,7 +90,7 @@ class IdentificacaoParticipanteService
                 'email' => $email,
                 'codigo_hash' => hash('sha256', $codigo),
                 'redefinicao_token_hash' => hash('sha256', $tokenRedefinicao),
-                'redefinicao_expira_em' => now()->addMinutes(self::MINUTOS_VALIDADE_LINK_SENHA),
+                'redefinicao_expira_em' => now()->addHours(self::HORAS_VALIDADE_LINK_SENHA),
                 'expira_em' => $expiraEm,
                 'ip' => $request->ip(),
             ]);
@@ -469,7 +469,7 @@ class IdentificacaoParticipanteService
             .'<p>Digite a senha temporária abaixo no campo <strong>Senha</strong> do formulário:</p>'
             .'<p style="font-size:30px;font-weight:bold;letter-spacing:8px;margin:24px 0">'.e($codigo).'</p>'
             .'<p>Ela contém letras e números e vale por '.self::HORAS_VALIDADE.' horas. Depois de entrar, você poderá cadastrar uma nova senha permanente ou apenas continuar.</p>'
-            .'<p><a href="'.e($urlSenha).'">Alterar senha de inscrição em atividade</a> (link válido por 60 minutos e para um único uso).</p>'
+            .'<p><a href="'.e($urlSenha).'">Alterar senha de inscrição em atividade</a> (link válido por '.self::HORAS_VALIDADE_LINK_SENHA.' horas e para um único uso).</p>'
             .'<p style="color:#748096;font-size:13px">Se você não pediu esta senha, ignore a mensagem.</p>'
             .'</div>';
     }

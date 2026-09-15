@@ -24,6 +24,7 @@ use Throwable;
 class SubmissaoPublicaController
 {
     public const HORAS_VALIDADE_SENHA_TEMPORARIA = 48;
+    public const HORAS_VALIDADE_LINK_SENHA = 48;
 
     private const SESSAO_OCIOSA_SEGUNDOS = 30 * 60;
     private const SESSAO_TOTAL_SEGUNDOS = 8 * 60 * 60;
@@ -269,7 +270,7 @@ class SubmissaoPublicaController
             'temporaria_hash' => Hash::make($senhaTemporaria),
             'temporaria_expira_em' => now()->addHours(self::HORAS_VALIDADE_SENHA_TEMPORARIA),
             'redefinicao_token_hash' => $tokenHash,
-            'redefinicao_expira_em' => now()->addMinutes(60),
+            'redefinicao_expira_em' => now()->addHours(self::HORAS_VALIDADE_LINK_SENHA),
         ]);
         $url = route('submissoes.publicas.formulario', $submissao);
         $urlSenha = route('senha-submissao.editar', ['token' => $token]);
@@ -278,7 +279,7 @@ class SubmissaoPublicaController
             .'<p>Ela vale por '.self::HORAS_VALIDADE_SENHA_TEMPORARIA.' horas e pode ser utilizada nas outras submissões.</p>'
             .($titulos ? '<p>Trabalhos vinculados:</p><ul>'.$titulos.'</ul>' : '')
             .'<p><a href="'.e($url).'">Acessar a área de submissão</a></p>'
-            .'<p><a href="'.e($urlSenha).'">Alterar senha de submissão</a> (link válido por 60 minutos e para um único uso).</p>'
+            .'<p><a href="'.e($urlSenha).'">Alterar senha de submissão</a> (link válido por '.self::HORAS_VALIDADE_LINK_SENHA.' horas e para um único uso).</p>'
             .'<p>Se você não fez este pedido, ignore esta mensagem.</p>';
         try {
             $emailService->enviar($email, null, 'Senha temporária — '.$submissao->titulo, $conteudo, 'submissao-senha-'.$submissao->id.'-'.Str::random(16));
