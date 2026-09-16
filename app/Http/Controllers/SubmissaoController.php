@@ -8,9 +8,11 @@ use App\Models\Submissao;
 use App\Services\ArmazemService;
 use App\Services\ConteudoEditorFormularioService;
 use App\Services\GiPermissionService;
+use App\Services\SubmissaoResultadoNotificacaoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -134,6 +136,7 @@ class SubmissaoController
         return view('submissoes.inscritos', [
             'submissao' => $submissao,
             'estadoTabela' => $armazem->recuperar('submissoes.inscritos.'.$submissao->id, $request),
+            'permissoes' => app(GiPermissionService::class),
         ]);
     }
 
@@ -238,15 +241,27 @@ class SubmissaoController
 
     public function avaliar(Request $request, Submissao $submissao, int $trabalho): JsonResponse
     {
-        app(GiPermissionService::class)->exigirAlguma([
-            'submissoes.avaliar',
-            'submissoes.trabalhos.alterar_status',
-        ]);
+        app(GiPermissionService::class)->exigir('submissoes.avaliar');
         $decisao = $request->validate([
             'situacao' => ['required', 'string', 'in:aprovado,reprovado'],
         ])['situacao'];
         $registro = $submissao->trabalhos()->whereKey($trabalho)->firstOrFail();
-        $registro->update(['status' => 'avaliado', 'situacao' => $decisao]);
+        $alterouDecisao = $registro->status !== 'avaliado' || $registro->situacao !== $decisao;
+        $registro->update([
+            'status' => 'avaliado',
+            'situacao' => $decisao,
+            'notificacao_resultado_versao' => $alterouDecisao
+                ? max(1, (int) $registro->notificacao_resultado_versao + 1)
+                : max(1, (int) $registro->notificacao_resultado_versao),
+        ]);
+        if ($alterouDecisao) {
+            $registro->historicos()->create([
+                'historico' => 'Situação alterada para '.$decisao,
+                'usuario' => $this->usuarioGi($request),
+                'dados' => ['situacao' => $decisao],
+                'data_hora' => now(),
+            ]);
+        }
 
         return response()->json(['message' => 'Trabalho '.($decisao === 'aprovado' ? 'aprovado' : 'reprovado').' com sucesso.']);
     }
@@ -257,17 +272,89 @@ class SubmissaoController
             'status' => ['required', 'string', 'in:rascunho,submetido,avaliado'],
         ])['status'];
         $registro = $submissao->trabalhos()->whereKey($trabalho)->firstOrFail();
-        $registro->update(['status' => $status]);
+        $statusAnterior = $registro->status;
+        $registro->update([
+            'status' => $status,
+            'notificacao_resultado_versao' => $statusAnterior !== $status
+                ? max(1, (int) $registro->notificacao_resultado_versao + 1)
+                : max(1, (int) $registro->notificacao_resultado_versao),
+        ]);
+        if ($statusAnterior !== $status) {
+            $registro->historicos()->create([
+                'historico' => 'Status alterado para '.$this->nomeStatus($status),
+                'usuario' => $this->usuarioGi($request),
+                'dados' => ['status' => ['antes' => $statusAnterior, 'depois' => $status]],
+                'data_hora' => now(),
+            ]);
+        }
 
         return response()->json(['message' => 'Status alterado para '.$this->nomeStatus($status).'.']);
     }
 
-    public function restaurar(Submissao $submissao, int $trabalho): JsonResponse
+    public function restaurar(Request $request, Submissao $submissao, int $trabalho): JsonResponse
     {
         $registro = $submissao->trabalhos()->onlyTrashed()->whereKey($trabalho)->firstOrFail();
         $registro->restore();
+        $registro->historicos()->create([
+            'historico' => 'Trabalho restaurado', 'usuario' => $this->usuarioGi($request),
+            'dados' => null, 'data_hora' => now(),
+        ]);
 
         return response()->json(['message' => 'Trabalho restaurado com sucesso.']);
+    }
+
+    public function historico(Request $request, Submissao $submissao, int $trabalho): JsonResponse
+    {
+        $registro = $submissao->trabalhos()->withTrashed()->whereKey($trabalho)->firstOrFail();
+        $query = $registro->historicos();
+        $total = $query->count();
+        $inicio = max(0, (int) $request->input('start', 0));
+        $tamanho = min(100, max(1, (int) $request->input('length', 10)));
+        $dados = $query->latest('data_hora')->latest('id')->skip($inicio)->take($tamanho)->get()->values()
+            ->map(fn ($item, int $indice): array => [
+                'numero' => $total - $inicio - $indice,
+                'historico' => e($item->historico),
+                'usuario' => e($item->usuario ?: '—'),
+                'dados' => view('partials.historico-dados', ['dados' => $item->dados ?? []])->render(),
+                'data_hora' => $item->data_hora?->format('d/m/Y H:i:s') ?? '—',
+            ]);
+
+        return response()->json(['draw' => (int) $request->input('draw'), 'recordsTotal' => $total, 'recordsFiltered' => $total, 'data' => $dados]);
+    }
+
+    public function resumoNotificacao(
+        Submissao $submissao,
+        string $tipo,
+        SubmissaoResultadoNotificacaoService $notificacoes,
+    ): JsonResponse {
+        app(GiPermissionService::class)->exigir('submissoes.avaliar');
+        abort_unless(in_array($tipo, ['aprovados', 'reprovados'], true), 404);
+
+        return response()->json($notificacoes->resumo($submissao, $tipo));
+    }
+
+    public function notificarResultados(
+        Request $request,
+        Submissao $submissao,
+        string $tipo,
+        SubmissaoResultadoNotificacaoService $notificacoes,
+    ): JsonResponse {
+        app(GiPermissionService::class)->exigir('submissoes.avaliar');
+        abort_unless(in_array($tipo, ['aprovados', 'reprovados'], true), 404);
+        $campos = $tipo === 'aprovados'
+            ? ['assunto_principal', 'mensagem_principal', 'assunto_coautor', 'mensagem_coautor']
+            : ['assunto', 'mensagem'];
+        $regras = [];
+        foreach ($campos as $campo) {
+            $regras[$campo] = ['required', 'string', 'max:'.(str_starts_with($campo, 'assunto') ? 255 : 20000)];
+        }
+        $mensagens = $request->validate($regras);
+        $resultado = $notificacoes->enviar($submissao, $tipo, $mensagens, $request);
+        $mensagem = $resultado['enviados'].' e-mail(s) enviado(s) em '.$resultado['trabalhos'].' trabalho(s).';
+        if ($resultado['falhas']) $mensagem .= ' '.$resultado['falhas'].' envio(s) falharam e continuarão pendentes.';
+        if (! $resultado['enviados'] && ! $resultado['falhas']) $mensagem = 'Não há destinatários pendentes para esta notificação.';
+
+        return response()->json(['message' => $mensagem, ...$resultado]);
     }
 
     public function excluirDefinitivamente(Submissao $submissao, int $trabalho): JsonResponse
@@ -373,5 +460,13 @@ class SubmissaoController
     private function nomeStatus(string $status): string
     {
         return $this->statusDisponiveis()[$status][0] ?? ucfirst($status);
+    }
+
+    private function usuarioGi(Request $request): string
+    {
+        $usuario = trim((string) $request->session()->get('gi_context.usuario.nome'))
+            ?: 'Usuário GI '.(string) $request->session()->get('gi_context.usuario.id', 'não identificado');
+
+        return Str::limit($usuario, 255, '');
     }
 }

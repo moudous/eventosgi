@@ -16,7 +16,7 @@ class InscricaoSubmissaoTrabalho extends Model
     protected $fillable = [
         'inscrito_submissao_id', 'titulo_trabalho', 'conteudo', 'categoria_trabalho', 'palavras_chave', 'tem_apoio_financeiro', 'apoiador',
         'apresentacao', 'aprovacao_comite_etica', 'protocolo_comite_etica', 'status', 'nota', 'situacao',
-        'eposter_arquivo', 'eposter_nome_original', 'eposter_enviado_em',
+        'eposter_arquivo', 'eposter_nome_original', 'eposter_enviado_em', 'notificacao_resultado_versao',
     ];
 
     public const CATEGORIAS_TRABALHO = [
@@ -37,6 +37,7 @@ class InscricaoSubmissaoTrabalho extends Model
         'aprovacao_comite_etica' => 'boolean',
         'nota' => 'decimal:2',
         'eposter_enviado_em' => 'datetime',
+        'notificacao_resultado_versao' => 'integer',
     ];
 
     public function inscricao(): BelongsTo
@@ -52,6 +53,16 @@ class InscricaoSubmissaoTrabalho extends Model
     public function notificacoesAutores(): HasMany
     {
         return $this->hasMany(SubmissaoAutorNotificacao::class, 'inscrito_submissao_trabalho_id');
+    }
+
+    public function historicos(): HasMany
+    {
+        return $this->hasMany(SubmissaoTrabalhoHistorico::class, 'inscrito_submissao_trabalho_id');
+    }
+
+    public function notificacoesResultado(): HasMany
+    {
+        return $this->hasMany(SubmissaoResultadoNotificacao::class, 'inscrito_submissao_trabalho_id');
     }
 
     public function avaliada(): bool

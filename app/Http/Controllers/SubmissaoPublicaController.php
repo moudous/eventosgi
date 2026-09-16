@@ -85,6 +85,13 @@ class SubmissaoPublicaController
             return [$inscricao, $trabalho];
         });
 
+        $trabalho->historicos()->create([
+            'historico' => 'O autor submeteu o trabalho',
+            'usuario' => 'Autor: '.$acesso['email'],
+            'dados' => ['titulo' => $trabalho->titulo_trabalho],
+            'data_hora' => now(),
+        ]);
+
         $this->iniciarAcesso($request, $submissao, CredencialSubmissao::findOrFail($acesso['credencial_id']), $trabalho->id);
         $falhasEmail = $this->enviarNotificacoesAutores($trabalho, $submissao);
 
@@ -135,6 +142,9 @@ class SubmissaoPublicaController
         $this->exigirAcesso($request, $submissao, $trabalho, true);
         $this->exigirEditavel($submissao, $trabalho);
         [$dados, $autores] = $this->validarTrabalho($request, $submissao, $trabalho->inscricao->email, $trabalho);
+        $camposAcompanhados = ['titulo_trabalho', 'conteudo', 'categoria_trabalho', 'palavras_chave', 'tem_apoio_financeiro', 'apoiador', 'apresentacao', 'aprovacao_comite_etica', 'protocolo_comite_etica'];
+        $antes = $trabalho->only($camposAcompanhados);
+        $autoresAntes = $trabalho->autores()->get(['nome', 'email', 'afiliacao', 'ordem'])->keyBy(fn ($autor): string => mb_strtolower($autor->email));
 
         DB::transaction(function () use ($dados, $autores, $trabalho): void {
             $trabalho->update([
@@ -152,6 +162,30 @@ class SubmissaoPublicaController
             $trabalho->autores()->delete();
             $this->gravarAutores($trabalho, $autores);
         });
+
+        $depois = $trabalho->fresh()->only($camposAcompanhados);
+        $autorHistorico = 'Autor: '.$trabalho->inscricao->email;
+        if (($antes['conteudo'] ?? null) !== ($depois['conteudo'] ?? null)) {
+            $this->registrarHistorico($trabalho, 'O autor alterou o resumo', $autorHistorico);
+        }
+        $autoresDepois = collect($autores)->keyBy(fn (array $autor): string => mb_strtolower($autor['email']));
+        $incluidos = $autoresDepois->keys()->diff($autoresAntes->keys())->map(fn (string $email): string => $autoresDepois[$email]['nome'])->values()->all();
+        $removidos = $autoresAntes->keys()->diff($autoresDepois->keys())->map(fn (string $email): string => $autoresAntes[$email]->nome)->values()->all();
+        if ($incluidos !== []) {
+            $this->registrarHistorico($trabalho, 'O autor incluiu autores: '.implode(', ', $incluidos), $autorHistorico, ['autores' => $incluidos]);
+        }
+        if ($removidos !== []) {
+            $this->registrarHistorico($trabalho, 'O autor removeu autores: '.implode(', ', $removidos), $autorHistorico, ['autores' => $removidos]);
+        }
+        $outrosCamposAlterados = collect($camposAcompanhados)->reject(fn (string $campo): bool => $campo === 'conteudo')
+            ->filter(fn (string $campo): bool => ($antes[$campo] ?? null) != ($depois[$campo] ?? null))->values()->all();
+        $dadosAutoresAlterados = $autoresDepois->contains(function (array $autor, string $email) use ($autoresAntes): bool {
+            $anterior = $autoresAntes->get($email);
+            return $anterior && ($anterior->nome !== $autor['nome'] || $anterior->afiliacao !== $autor['afiliacao']);
+        });
+        if ($outrosCamposAlterados !== [] || $dadosAutoresAlterados) {
+            $this->registrarHistorico($trabalho, 'O autor alterou os dados do trabalho', $autorHistorico, ['campos' => $outrosCamposAlterados]);
+        }
 
         $falhasEmail = $this->enviarNotificacoesAutores($trabalho, $submissao);
 
@@ -195,6 +229,12 @@ class SubmissaoPublicaController
         }
 
         if ($arquivoAnterior && $arquivoAnterior !== $nome) File::delete($pasta.'/'.$arquivoAnterior);
+        $this->registrarHistorico(
+            $trabalho,
+            $arquivoAnterior ? 'O autor alterou o e-pôster' : 'O autor incluiu o e-pôster',
+            'Autor: '.$trabalho->inscricao->email,
+            ['arquivo' => $trabalho->eposter_nome_original],
+        );
 
         return redirect()->route('submissoes.publicas.formulario', $submissao)
             ->with('status', 'E-pôster enviado com sucesso. Você pode visualizá-lo ou substituí-lo até o fim do período de envio.');
@@ -275,6 +315,7 @@ class SubmissaoPublicaController
         $this->exigirEditavel($submissao, $trabalho);
         $titulo = $trabalho->titulo_trabalho;
         $inscricao = $trabalho->inscricao;
+        $this->registrarHistorico($trabalho, 'O autor excluiu o trabalho', 'Autor: '.$inscricao->email, ['titulo' => $titulo]);
         $trabalho->delete();
 
         $acesso = $this->acessoValido($request, $submissao);
@@ -778,5 +819,19 @@ class SubmissaoPublicaController
 
             return '<'.strtolower($partes[1]).(isset($classe[1]) ? ' class="'.strtolower($classe[1]).'"' : '').'>';
         }, $html));
+    }
+
+    private function registrarHistorico(
+        InscricaoSubmissaoTrabalho $trabalho,
+        string $texto,
+        string $usuario,
+        array $dados = [],
+    ): void {
+        $trabalho->historicos()->create([
+            'historico' => Str::limit($texto, 255, ''),
+            'usuario' => $usuario,
+            'dados' => $dados ?: null,
+            'data_hora' => now(),
+        ]);
     }
 }

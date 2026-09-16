@@ -35,6 +35,14 @@
                             @foreach($trabalho->autores as $autor)
                                 <div class="small mb-1"><sup>{{ $autor->numero ?: $autor->ordem }}</sup> {{ $autor->afiliacao ?: 'Filiação não informada' }}</div>
                             @endforeach
+                            @php($coautoresComEmail = $trabalho->autores->where('principal', false)->filter(fn ($autor) => filled($autor->email)))
+                            @if($coautoresComEmail->isNotEmpty())
+                                <hr class="my-3">
+                                <div class="small fw-semibold mb-2">E-mails dos coautores</div>
+                                @foreach($coautoresComEmail as $autor)
+                                    <div class="small mb-1"><sup>{{ $autor->numero ?: $autor->ordem }}</sup> <a href="mailto:{{ $autor->email }}">{{ $autor->email }}</a></div>
+                                @endforeach
+                            @endif
                         </div>
                     @endif
                 </dd>
