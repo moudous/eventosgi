@@ -222,7 +222,12 @@ class SubmissaoController
                 'status' => $trabalho->trashed()
                     ? '<span class="badge text-bg-danger">Apagado</span>'
                     : $this->rotuloStatus($trabalho->status, $podeAlterarStatus, $submissao, $trabalho),
-                'situacao' => $trabalho->status === 'avaliado' ? e($trabalho->situacao ?: '—') : '—',
+                'situacao' => match (true) {
+                    $trabalho->status !== 'avaliado' => '—',
+                    $trabalho->situacao === 'aprovado' => '<span class="badge text-bg-success">Aprovado</span>',
+                    $trabalho->situacao === 'reprovado' => '<span class="badge text-bg-danger">Reprovado</span>',
+                    default => e($trabalho->situacao ?: '—'),
+                },
                 'updated_at' => $trabalho->updated_at?->format('d/m/Y H:i') ?? '—',
                 'acoes' => view('submissoes.partials.acoes-trabalho', [
                     'submissao' => $submissao,
