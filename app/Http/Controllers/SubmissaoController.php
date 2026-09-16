@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class SubmissaoController
 {
@@ -136,21 +137,53 @@ class SubmissaoController
         ]);
     }
 
+    public function visualizarTrabalho(Submissao $submissao, int $trabalho): View
+    {
+        $permissoes = app(GiPermissionService::class);
+        $registro = $submissao->trabalhos()->withTrashed()->with(['inscricao', 'autores'])->whereKey($trabalho)->firstOrFail();
+
+        return view('submissoes.visualizar-trabalho', [
+            'submissao' => $submissao,
+            'trabalho' => $registro,
+            'podeVerAutores' => $permissoes->permite('submissoes.inscritos.trabalhos.autores'),
+        ]);
+    }
+
+    public function visualizarEposter(Submissao $submissao, int $trabalho): BinaryFileResponse
+    {
+        $registro = $submissao->trabalhos()->withTrashed()->whereKey($trabalho)->firstOrFail();
+        abort_unless($registro->temEposter(), 404);
+        $caminho = storage_path('app/private/eposters/'.$registro->eposter_arquivo);
+        abort_unless(is_file($caminho), 404);
+
+        return response()->file($caminho, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="e-poster-trabalho-'.$registro->id.'.pdf"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
+    }
+
     public function inscritosDados(Request $request, Submissao $submissao, ArmazemService $armazem): JsonResponse
     {
         $submissao->atualizarStatusDoPrazo();
         $permissoes = app(GiPermissionService::class);
         $podeAlterarStatus = $permissoes->permite('submissoes.trabalhos.alterar_status');
-        $query = $submissao->trabalhos()->withTrashed()->with(['autores', 'inscricao']);
+        $podeVerAutores = $permissoes->permite('submissoes.inscritos.trabalhos.autores');
+        $relacionamentos = ['inscricao'];
+        if ($podeVerAutores) $relacionamentos[] = 'autores';
+        $query = $submissao->trabalhos()->withTrashed()->with($relacionamentos);
         $total = (clone $query)->count();
         $busca = trim((string) $request->input('search.value', ''));
 
         if ($busca !== '') {
-            $query->where(function ($consulta) use ($busca): void {
+            $query->where(function ($consulta) use ($busca, $podeVerAutores): void {
                 $consulta->where('titulo_trabalho', 'like', "%{$busca}%")
-                    ->orWhereHas('inscricao', fn ($inscrito) => $inscrito->where('email', 'like', "%{$busca}%"))
-                    ->orWhere('situacao', 'like', "%{$busca}%")
-                    ->orWhereHas('autores', fn ($autores) => $autores->where('nome', 'like', "%{$busca}%"));
+                    ->orWhere('situacao', 'like', "%{$busca}%");
+                if ($podeVerAutores) {
+                    $consulta->orWhereHas('inscricao', fn ($inscrito) => $inscrito->where('email', 'like', "%{$busca}%"))
+                        ->orWhereHas('autores', fn ($autores) => $autores->where('nome', 'like', "%{$busca}%"));
+                }
             });
         }
 
@@ -162,7 +195,6 @@ class SubmissaoController
             'inscritos_submissao.email',
             $tabelaTrabalhos.'.id',
             $tabelaTrabalhos.'.status',
-            $tabelaTrabalhos.'.nota',
             $tabelaTrabalhos.'.situacao',
             $tabelaTrabalhos.'.updated_at',
         ];
@@ -182,13 +214,12 @@ class SubmissaoController
             ->map(fn (InscricaoSubmissaoTrabalho $trabalho): array => [
                 'id' => $trabalho->id,
                 'titulo_trabalho' => e($trabalho->titulo_trabalho),
-                'email' => e($trabalho->inscricao?->email ?? '—'),
-                'autores' => e($trabalho->autores->pluck('nome')->implode(', ')),
+                'email' => $podeVerAutores ? e($trabalho->inscricao?->email ?? '—') : '—',
+                'autores' => $podeVerAutores ? e($trabalho->autores->pluck('nome')->implode(', ')) : '—',
                 'status' => $trabalho->trashed()
                     ? '<span class="badge text-bg-danger">Apagado</span>'
                     : $this->rotuloStatus($trabalho->status, $podeAlterarStatus, $submissao, $trabalho),
-                'nota' => $trabalho->nota ?? '—',
-                'situacao' => e($trabalho->situacao ?: '—'),
+                'situacao' => $trabalho->status === 'avaliado' ? e($trabalho->situacao ?: '—') : '—',
                 'updated_at' => $trabalho->updated_at?->format('d/m/Y H:i') ?? '—',
                 'acoes' => view('submissoes.partials.acoes-trabalho', [
                     'submissao' => $submissao,
@@ -203,6 +234,21 @@ class SubmissaoController
             'recordsFiltered' => $filtrados,
             'data' => $dados,
         ]);
+    }
+
+    public function avaliar(Request $request, Submissao $submissao, int $trabalho): JsonResponse
+    {
+        app(GiPermissionService::class)->exigirAlguma([
+            'submissoes.avaliar',
+            'submissoes.trabalhos.alterar_status',
+        ]);
+        $decisao = $request->validate([
+            'situacao' => ['required', 'string', 'in:aprovado,reprovado'],
+        ])['situacao'];
+        $registro = $submissao->trabalhos()->whereKey($trabalho)->firstOrFail();
+        $registro->update(['status' => 'avaliado', 'situacao' => $decisao]);
+
+        return response()->json(['message' => 'Trabalho '.($decisao === 'aprovado' ? 'aprovado' : 'reprovado').' com sucesso.']);
     }
 
     public function alterarStatus(Request $request, Submissao $submissao, int $trabalho): JsonResponse
@@ -228,7 +274,9 @@ class SubmissaoController
     {
         $registro = $submissao->trabalhos()->onlyTrashed()->whereKey($trabalho)->firstOrFail();
         $titulo = $registro->titulo_trabalho;
+        $arquivoEposter = $registro->eposter_arquivo;
         $registro->forceDelete();
+        if ($arquivoEposter) \Illuminate\Support\Facades\File::delete(storage_path('app/private/eposters/'.$arquivoEposter));
 
         return response()->json(['message' => "O trabalho \"{$titulo}\" foi excluído definitivamente."]);
     }
@@ -241,6 +289,8 @@ class SubmissaoController
             'informacoes' => ['nullable', 'string', 'max:500000'],
             'data_inicio' => ['required', 'date'],
             'data_fim' => ['required', 'date', 'after:data_inicio'],
+            'eposter_data_inicio' => ['required', 'date', 'after:data_fim'],
+            'eposter_data_fim' => ['required', 'date', 'after:eposter_data_inicio'],
             'ativo' => ['required', 'boolean'],
             'mostrar_link_evento' => ['sometimes', 'boolean'],
             'mostrar_categoria_trabalho' => ['sometimes', 'boolean'],
@@ -265,6 +315,10 @@ class SubmissaoController
             'data_inicio.required' => 'Informe a data inicial.',
             'data_fim.required' => 'Informe a data final.',
             'data_fim.after' => 'A data final precisa ser posterior à data inicial.',
+            'eposter_data_inicio.required' => 'Informe a data e hora inicial do envio do e-pôster.',
+            'eposter_data_inicio.after' => 'O período de envio do e-pôster deve começar depois do fim da submissão dos trabalhos.',
+            'eposter_data_fim.required' => 'Informe a data e hora final do envio do e-pôster.',
+            'eposter_data_fim.after' => 'O fim do envio do e-pôster deve ser posterior ao seu início.',
             'qtde_resumo.required' => 'Informe a quantidade máxima de caracteres do resumo.',
             'qtde_resumo.integer' => 'A quantidade de caracteres do resumo deve ser um número inteiro.',
             'qtde_resumo.min' => 'A quantidade de caracteres do resumo deve ser maior que zero.',

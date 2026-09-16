@@ -16,10 +16,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 class SubmissaoPublicaController
@@ -158,6 +160,63 @@ class SubmissaoPublicaController
             'Alterações salvas com sucesso.'
                 .($falhasEmail ? ' Algumas notificações por e-mail não puderam ser enviadas e serão tentadas novamente no próximo salvamento.' : ''),
         );
+    }
+
+    public function enviarEposter(Request $request, Submissao $submissao, InscricaoSubmissaoTrabalho $trabalho): RedirectResponse
+    {
+        $this->exigirAcesso($request, $submissao, $trabalho, true);
+        abort_unless($trabalho->aprovada(), 403, 'Somente trabalhos aprovados podem enviar o e-pôster.');
+        abort_unless($submissao->periodoEposterAberto(), 403, 'O envio do e-pôster está fora do período permitido.');
+
+        $arquivo = $request->validate([
+            'eposter' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf,application/x-pdf', 'max:20480'],
+        ], [
+            'eposter.required' => 'Selecione o arquivo PDF do e-pôster.',
+            'eposter.mimes' => 'O e-pôster deve ser enviado em formato PDF.',
+            'eposter.mimetypes' => 'O arquivo selecionado não é um PDF válido.',
+            'eposter.max' => 'O arquivo do e-pôster deve ter no máximo 20 MB.',
+        ])['eposter'];
+
+        $pasta = storage_path('app/private/eposters');
+        File::ensureDirectoryExists($pasta);
+        $nome = Str::uuid().'.pdf';
+        $arquivoAnterior = $trabalho->eposter_arquivo;
+        $arquivo->move($pasta, $nome);
+
+        try {
+            $trabalho->update([
+                'eposter_arquivo' => $nome,
+                'eposter_nome_original' => Str::limit($arquivo->getClientOriginalName(), 255, ''),
+                'eposter_enviado_em' => now(),
+            ]);
+        } catch (Throwable $erro) {
+            File::delete($pasta.'/'.$nome);
+            throw $erro;
+        }
+
+        if ($arquivoAnterior && $arquivoAnterior !== $nome) File::delete($pasta.'/'.$arquivoAnterior);
+
+        return redirect()->route('submissoes.publicas.formulario', $submissao)
+            ->with('status', 'E-pôster enviado com sucesso. Você pode visualizá-lo ou substituí-lo até o fim do período de envio.');
+    }
+
+    public function visualizarEposter(
+        Request $request,
+        Submissao $submissao,
+        InscricaoSubmissaoTrabalho $trabalho,
+    ): BinaryFileResponse {
+        $this->exigirAcesso($request, $submissao, $trabalho);
+        abort_unless($trabalho->aprovada() && $submissao->periodoEposterAberto(), 403);
+        abort_unless($trabalho->temEposter(), 404);
+        $caminho = storage_path('app/private/eposters/'.$trabalho->eposter_arquivo);
+        abort_unless(is_file($caminho), 404);
+
+        return response()->file($caminho, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="e-poster-trabalho-'.$trabalho->id.'.pdf"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
     }
 
     public function exportarDocumento(

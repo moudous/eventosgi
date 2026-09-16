@@ -11,7 +11,7 @@ class Submissao extends Model
 {
     protected $table = 'submissoes';
 
-    protected $fillable = ['mostrar_categoria_trabalho', 'mostrar_palavras_chave', 'min_palavras_chave', 'max_palavras_chave', 'mostrar_apresentacao', 'mostrar_aprovacao_comite_etica', 'mostrar_apoio_financeiro', 'mostrar_link_evento', 'evento_id', 'titulo', 'informacoes', 'data_inicio', 'data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
+    protected $fillable = ['mostrar_categoria_trabalho', 'mostrar_palavras_chave', 'min_palavras_chave', 'max_palavras_chave', 'mostrar_apresentacao', 'mostrar_aprovacao_comite_etica', 'mostrar_apoio_financeiro', 'mostrar_link_evento', 'evento_id', 'titulo', 'informacoes', 'data_inicio', 'data_fim', 'eposter_data_inicio', 'eposter_data_fim', 'ativo', 'modelo_trabalho', 'qtde_resumo', 'qtde_autores', 'personalizacao'];
 
     protected $attributes = [
         'mostrar_categoria_trabalho' => true,
@@ -37,6 +37,8 @@ class Submissao extends Model
         'evento_id' => 'integer',
         'data_inicio' => 'datetime',
         'data_fim' => 'datetime',
+        'eposter_data_inicio' => 'datetime',
+        'eposter_data_fim' => 'datetime',
         'ativo' => 'boolean',
         'qtde_resumo' => 'integer',
         'qtde_autores' => 'integer',
@@ -103,6 +105,27 @@ class Submissao extends Model
         return $this->ativo && (bool) $this->evento?->ativo
             && $this->data_inicio !== null && $this->data_fim !== null
             && ! $this->aindaNaoAbriu() && ! $this->encerrada();
+    }
+
+    public function periodoEposterConfigurado(): bool
+    {
+        return $this->eposter_data_inicio !== null && $this->eposter_data_fim !== null;
+    }
+
+    public function periodoEposterAberto(): bool
+    {
+        return $this->periodoEposterConfigurado()
+            && now()->betweenIncluded($this->eposter_data_inicio, $this->eposter_data_fim);
+    }
+
+    public function periodoEposterAindaNaoAbriu(): bool
+    {
+        return $this->periodoEposterConfigurado() && now()->lt($this->eposter_data_inicio);
+    }
+
+    public function periodoEposterEncerrado(): bool
+    {
+        return $this->periodoEposterConfigurado() && now()->gt($this->eposter_data_fim);
     }
 
     /** Trabalhos não avaliados passam à fila da comissão assim que o prazo termina. */

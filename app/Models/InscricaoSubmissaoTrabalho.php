@@ -16,6 +16,7 @@ class InscricaoSubmissaoTrabalho extends Model
     protected $fillable = [
         'inscrito_submissao_id', 'titulo_trabalho', 'conteudo', 'categoria_trabalho', 'palavras_chave', 'tem_apoio_financeiro', 'apoiador',
         'apresentacao', 'aprovacao_comite_etica', 'protocolo_comite_etica', 'status', 'nota', 'situacao',
+        'eposter_arquivo', 'eposter_nome_original', 'eposter_enviado_em',
     ];
 
     public const CATEGORIAS_TRABALHO = [
@@ -35,6 +36,7 @@ class InscricaoSubmissaoTrabalho extends Model
         'tem_apoio_financeiro' => 'boolean',
         'aprovacao_comite_etica' => 'boolean',
         'nota' => 'decimal:2',
+        'eposter_enviado_em' => 'datetime',
     ];
 
     public function inscricao(): BelongsTo
@@ -55,5 +57,15 @@ class InscricaoSubmissaoTrabalho extends Model
     public function avaliada(): bool
     {
         return $this->status === 'avaliado';
+    }
+
+    public function aprovada(): bool
+    {
+        return $this->avaliada() && $this->situacao === 'aprovado';
+    }
+
+    public function temEposter(): bool
+    {
+        return filled($this->eposter_arquivo);
     }
 }

@@ -315,6 +315,9 @@ Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     Route::delete('/{submissao}', [SubmissaoController::class, 'destroy'])->middleware('gi.permission:submissoes.excluir')->name('destroy');
     Route::get('/{submissao}/inscritos', [SubmissaoController::class, 'inscritos'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos');
     Route::get('/{submissao}/inscritos/dados', [SubmissaoController::class, 'inscritosDados'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos.dados');
+    Route::get('/{submissao}/inscritos/{trabalho}', [SubmissaoController::class, 'visualizarTrabalho'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.visualizar-trabalho');
+    Route::get('/{submissao}/inscritos/{trabalho}/e-poster', [SubmissaoController::class, 'visualizarEposter'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.e-poster');
+    Route::patch('/{submissao}/inscritos/{trabalho}/avaliar', [SubmissaoController::class, 'avaliar'])->name('inscritos.avaliar');
     Route::patch('/{submissao}/inscritos/{trabalho}/status', [SubmissaoController::class, 'alterarStatus'])->middleware('gi.permission:submissoes.trabalhos.alterar_status')->name('inscritos.alterar-status');
     Route::patch('/{submissao}/inscritos/{trabalho}/restaurar', [SubmissaoController::class, 'restaurar'])->middleware('gi.permission:submissoes.trabalhos.restaurar')->name('inscritos.restaurar');
     Route::delete('/{submissao}/inscritos/{trabalho}/definitivo', [SubmissaoController::class, 'excluirDefinitivamente'])->middleware('gi.permission:submissoes.trabalhos.excluir_definitivamente')->name('inscritos.excluir-definitivamente');
@@ -327,6 +330,8 @@ Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     Route::post('/{submissao}/formulario/selecionar', [SubmissaoPublicaController::class, 'selecionar'])->name('publicas.selecionar');
     Route::put('/{submissao}/formulario/trabalhos/{trabalho}', [SubmissaoPublicaController::class, 'atualizar'])->name('publicas.atualizar');
     Route::get('/{submissao}/formulario/trabalhos/{trabalho}/exportar-doc', [SubmissaoPublicaController::class, 'exportarDocumento'])->name('publicas.exportar-documento');
+    Route::post('/{submissao}/formulario/trabalhos/{trabalho}/e-poster', [SubmissaoPublicaController::class, 'enviarEposter'])->name('publicas.enviar-e-poster');
+    Route::get('/{submissao}/formulario/trabalhos/{trabalho}/e-poster', [SubmissaoPublicaController::class, 'visualizarEposter'])->name('publicas.e-poster');
     Route::delete('/{submissao}/formulario/trabalhos/{trabalho}', [SubmissaoPublicaController::class, 'excluir'])->name('publicas.excluir');
     Route::patch('/{submissao}/formulario/senha', [SubmissaoPublicaController::class, 'alterarSenha'])->name('publicas.senha');
     Route::post('/{submissao}/formulario/esqueci-senha', [SubmissaoPublicaController::class, 'esqueciSenha'])->name('publicas.esqueci-senha');
