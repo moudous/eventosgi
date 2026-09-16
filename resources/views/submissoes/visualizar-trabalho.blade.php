@@ -23,11 +23,20 @@
                 <dd class="col-sm-9">{{ $trabalho->inscricao?->email ?: '—' }}</dd>
                 <dt class="col-sm-3">Autores</dt>
                 <dd class="col-sm-9">
-                    @forelse($trabalho->autores as $autor)
-                        <div>{{ $autor->nome }}@if($autor->email) <span class="text-secondary">({{ $autor->email }})</span>@endif</div>
-                    @empty
+                    @if($trabalho->autores->isEmpty())
                         —
-                    @endforelse
+                    @else
+                        <div class="border rounded bg-light p-3">
+                            <div class="mb-3">
+                                @foreach($trabalho->autores as $autor)
+                                    {{ !$loop->first ? '; ' : '' }}{{ $autor->nome }}<sup>{{ $autor->numero ?: $autor->ordem }}</sup>
+                                @endforeach
+                            </div>
+                            @foreach($trabalho->autores as $autor)
+                                <div class="small mb-1"><sup>{{ $autor->numero ?: $autor->ordem }}</sup> {{ $autor->afiliacao ?: 'Filiação não informada' }}</div>
+                            @endforeach
+                        </div>
+                    @endif
                 </dd>
             @endif
 
