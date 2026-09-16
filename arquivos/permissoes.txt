@@ -56,6 +56,7 @@ submissoes.editar
 submissoes.excluir
 submissoes.ativar_desativar
 submissoes.inscritos
+submissoes.inscritos.editar_emails_notificacao
 submissoes.inscritos.trabalhos
 submissoes.inscritos.trabalhos.autores
 submissoes.avaliar

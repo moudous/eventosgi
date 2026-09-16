@@ -16,6 +16,7 @@
 <div class="card content-card"><div class="card-body p-0"><div class="table-responsive"><table id="inscritosTable" class="table table-hover align-middle w-100 mb-0"><thead><tr><th>ID</th><th>Título do trabalho</th><th>E-mail</th><th>Autores</th><th>Status</th><th>Situação</th><th>Alterado em</th><th data-dt-order="disable">Ações</th></tr></thead></table></div></div></div>
 
 @if($permissoes->permite('submissoes.avaliar'))
+    @php($podeEditarEmailsNotificacao = $permissoes->permite('submissoes.inscritos.editar_emails_notificacao'))
     @foreach(['aprovados' => ['id' => 'notificarAprovadosModal', 'titulo' => 'Notificar autores de trabalhos aprovados', 'cor' => 'success'], 'reprovados' => ['id' => 'notificarReprovadosModal', 'titulo' => 'Notificar autores de trabalhos reprovados', 'cor' => 'danger']] as $tipo => $modal)
         <div class="modal fade" id="{{ $modal['id'] }}" tabindex="-1" aria-hidden="true" data-notification-modal data-type="{{ $tipo }}" data-summary-url="{{ route('submissoes.inscritos.notificacoes.resumo', [$submissao, $tipo]) }}" data-send-url="{{ route('submissoes.inscritos.notificacoes.enviar', [$submissao, $tipo]) }}">
             <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
@@ -25,15 +26,16 @@
                     <div data-notification-editor>
                         @if($tipo === 'aprovados')
                             <h3 class="h6 fw-bold text-success">Mensagem para os primeiros autores</h3>
-                            <div class="mb-3"><label class="form-label">Assunto</label><input class="form-control" name="assunto_principal" maxlength="255"></div>
-                            <div class="mb-4"><label class="form-label">Mensagem</label><textarea class="form-control" name="mensagem_principal" rows="10" maxlength="20000"></textarea></div>
+                            <div class="mb-3"><label class="form-label">Assunto</label><input class="form-control" name="assunto_principal" maxlength="255" @readonly(!$podeEditarEmailsNotificacao)></div>
+                            <div class="mb-4"><label class="form-label">Mensagem</label><textarea class="form-control" name="mensagem_principal" rows="10" maxlength="20000" @readonly(!$podeEditarEmailsNotificacao)></textarea></div>
                             <h3 class="h6 fw-bold text-success">Mensagem para os coautores</h3>
-                            <div class="mb-3"><label class="form-label">Assunto</label><input class="form-control" name="assunto_coautor" maxlength="255"></div>
-                            <div><label class="form-label">Mensagem</label><textarea class="form-control" name="mensagem_coautor" rows="7" maxlength="20000"></textarea></div>
+                            <div class="mb-3"><label class="form-label">Assunto</label><input class="form-control" name="assunto_coautor" maxlength="255" @readonly(!$podeEditarEmailsNotificacao)></div>
+                            <div><label class="form-label">Mensagem</label><textarea class="form-control" name="mensagem_coautor" rows="7" maxlength="20000" @readonly(!$podeEditarEmailsNotificacao)></textarea></div>
                         @else
-                            <div class="mb-3"><label class="form-label">Assunto</label><input class="form-control" name="assunto" maxlength="255"></div>
-                            <div><label class="form-label">Mensagem</label><textarea class="form-control" name="mensagem" rows="9" maxlength="20000"></textarea></div>
+                            <div class="mb-3"><label class="form-label">Assunto</label><input class="form-control" name="assunto" maxlength="255" @readonly(!$podeEditarEmailsNotificacao)></div>
+                            <div><label class="form-label">Mensagem</label><textarea class="form-control" name="mensagem" rows="9" maxlength="20000" @readonly(!$podeEditarEmailsNotificacao)></textarea></div>
                         @endif
+                        @unless($podeEditarEmailsNotificacao)<div class="alert alert-info mt-3 mb-0"><i class="bi bi-lock me-1"></i>Você pode visualizar os modelos, mas não possui permissão para editar os e-mails de notificação.</div>@endunless
                         <div class="form-text mt-2">Variáveis disponíveis: [NOME], [TITULO_TRABALHO], [SUBMISSAO], [LINK] e [PRAZO_EPOSTER]. Cada destinatário receberá um e-mail individual.</div>
                     </div>
                     <div class="alert alert-warning d-none" data-notification-confirmation><h3 class="h6 fw-bold">Confirmar o disparo?</h3><p class="mb-0" data-confirmation-text></p></div>

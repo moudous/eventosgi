@@ -346,14 +346,18 @@ class SubmissaoController
     ): JsonResponse {
         app(GiPermissionService::class)->exigir('submissoes.avaliar');
         abort_unless(in_array($tipo, ['aprovados', 'reprovados'], true), 404);
-        $campos = $tipo === 'aprovados'
-            ? ['assunto_principal', 'mensagem_principal', 'assunto_coautor', 'mensagem_coautor']
-            : ['assunto', 'mensagem'];
-        $regras = [];
-        foreach ($campos as $campo) {
-            $regras[$campo] = ['required', 'string', 'max:'.(str_starts_with($campo, 'assunto') ? 255 : 20000)];
+        if (app(GiPermissionService::class)->permite('submissoes.inscritos.editar_emails_notificacao', $request)) {
+            $campos = $tipo === 'aprovados'
+                ? ['assunto_principal', 'mensagem_principal', 'assunto_coautor', 'mensagem_coautor']
+                : ['assunto', 'mensagem'];
+            $regras = [];
+            foreach ($campos as $campo) {
+                $regras[$campo] = ['required', 'string', 'max:'.(str_starts_with($campo, 'assunto') ? 255 : 20000)];
+            }
+            $mensagens = $request->validate($regras);
+        } else {
+            $mensagens = $notificacoes->modelos($submissao, $tipo);
         }
-        $mensagens = $request->validate($regras);
         $resultado = $notificacoes->enviar($submissao, $tipo, $mensagens, $request);
         $mensagem = $resultado['enviados'].' e-mail(s) enviado(s) em '.$resultado['trabalhos'].' trabalho(s).';
         if ($resultado['falhas']) $mensagem .= ' '.$resultado['falhas'].' envio(s) falharam e continuarão pendentes.';
