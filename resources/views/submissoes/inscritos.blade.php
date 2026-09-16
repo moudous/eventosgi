@@ -5,7 +5,7 @@
 <div class="mb-4 d-flex flex-wrap justify-content-between gap-3">
     <div><h1 class="page-title">Trabalhos submetidos</h1><p class="page-description mb-0">{{ $submissao->titulo }} — {{ $submissao->evento?->nome }}</p></div>
     <div class="d-flex flex-wrap gap-2">
-        @if($permissoes->permite('submissoes.avaliar'))
+        @if($permissoes->permite('submissoes.inscritos.notificacoes'))
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#notificarAprovadosModal"><i class="bi bi-envelope-check me-1"></i>Notificar autores de trabalhos aprovados</button>
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#notificarReprovadosModal"><i class="bi bi-envelope-x me-1"></i>Notificar reprovados</button>
         @endif
@@ -15,7 +15,7 @@
 <div id="actionFeedback" class="alert alert-dismissible fade d-none"><span></span><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
 <div class="card content-card"><div class="card-body p-0"><div class="table-responsive"><table id="inscritosTable" class="table table-hover align-middle w-100 mb-0"><thead><tr><th>ID</th><th>Título do trabalho</th><th>E-mail</th><th>Autores</th><th>Status</th><th>Situação</th><th>Alterado em</th><th data-dt-order="disable">Ações</th></tr></thead></table></div></div></div>
 
-@if($permissoes->permite('submissoes.avaliar'))
+@if($permissoes->permite('submissoes.inscritos.notificacoes'))
     @php($podeEditarEmailsNotificacao = $permissoes->permite('submissoes.inscritos.editar_emails_notificacao'))
     @foreach(['aprovados' => ['id' => 'notificarAprovadosModal', 'titulo' => 'Notificar autores de trabalhos aprovados', 'cor' => 'success'], 'reprovados' => ['id' => 'notificarReprovadosModal', 'titulo' => 'Notificar autores de trabalhos reprovados', 'cor' => 'danger']] as $tipo => $modal)
         <div class="modal fade" id="{{ $modal['id'] }}" tabindex="-1" aria-hidden="true" data-notification-modal data-type="{{ $tipo }}" data-summary-url="{{ route('submissoes.inscritos.notificacoes.resumo', [$submissao, $tipo]) }}" data-send-url="{{ route('submissoes.inscritos.notificacoes.enviar', [$submissao, $tipo]) }}">

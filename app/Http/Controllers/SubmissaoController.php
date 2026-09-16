@@ -332,7 +332,7 @@ class SubmissaoController
         string $tipo,
         SubmissaoResultadoNotificacaoService $notificacoes,
     ): JsonResponse {
-        app(GiPermissionService::class)->exigir('submissoes.avaliar');
+        app(GiPermissionService::class)->exigir('submissoes.inscritos.notificacoes');
         abort_unless(in_array($tipo, ['aprovados', 'reprovados'], true), 404);
 
         return response()->json($notificacoes->resumo($submissao, $tipo));
@@ -344,7 +344,7 @@ class SubmissaoController
         string $tipo,
         SubmissaoResultadoNotificacaoService $notificacoes,
     ): JsonResponse {
-        app(GiPermissionService::class)->exigir('submissoes.avaliar');
+        app(GiPermissionService::class)->exigir('submissoes.inscritos.notificacoes');
         abort_unless(in_array($tipo, ['aprovados', 'reprovados'], true), 404);
         if (app(GiPermissionService::class)->permite('submissoes.inscritos.editar_emails_notificacao', $request)) {
             $campos = $tipo === 'aprovados'

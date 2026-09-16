@@ -315,8 +315,8 @@ Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     Route::delete('/{submissao}', [SubmissaoController::class, 'destroy'])->middleware('gi.permission:submissoes.excluir')->name('destroy');
     Route::get('/{submissao}/inscritos', [SubmissaoController::class, 'inscritos'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos');
     Route::get('/{submissao}/inscritos/dados', [SubmissaoController::class, 'inscritosDados'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos.dados');
-    Route::get('/{submissao}/inscritos/notificacoes/{tipo}', [SubmissaoController::class, 'resumoNotificacao'])->middleware('gi.permission:submissoes.avaliar')->name('inscritos.notificacoes.resumo');
-    Route::post('/{submissao}/inscritos/notificacoes/{tipo}', [SubmissaoController::class, 'notificarResultados'])->middleware('gi.permission:submissoes.avaliar')->name('inscritos.notificacoes.enviar');
+    Route::get('/{submissao}/inscritos/notificacoes/{tipo}', [SubmissaoController::class, 'resumoNotificacao'])->middleware('gi.permission:submissoes.inscritos.notificacoes')->name('inscritos.notificacoes.resumo');
+    Route::post('/{submissao}/inscritos/notificacoes/{tipo}', [SubmissaoController::class, 'notificarResultados'])->middleware('gi.permission:submissoes.inscritos.notificacoes')->name('inscritos.notificacoes.enviar');
     Route::get('/{submissao}/inscritos/{trabalho}', [SubmissaoController::class, 'visualizarTrabalho'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.visualizar-trabalho');
     Route::get('/{submissao}/inscritos/{trabalho}/historico', [SubmissaoController::class, 'historico'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.historico');
     Route::get('/{submissao}/inscritos/{trabalho}/e-poster', [SubmissaoController::class, 'visualizarEposter'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.e-poster');
