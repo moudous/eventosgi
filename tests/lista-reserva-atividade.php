@@ -18,7 +18,7 @@ Schema::create('atividades', function ($table): void {
 });
 Schema::create('inscricoes_atividade', function ($table): void {
     $table->id(); $table->unsignedBigInteger('atividade_id'); $table->unsignedBigInteger('sessao_atividade_id')->nullable();
-    $table->unsignedBigInteger('participante_id')->nullable(); $table->string('participante_email')->nullable(); $table->string('utm_rastreio', 15)->nullable();
+    $table->unsignedBigInteger('participante_id')->nullable(); $table->string('participante_email')->nullable(); $table->string('utm_rastreio', 15)->nullable(); $table->boolean('ativa')->nullable()->default(true);
     $table->boolean('lista_reserva')->default(false); $table->json('resposta');
     $table->string('ip')->nullable(); $table->text('user_agent')->nullable(); $table->json('dispositivo')->nullable();
     $table->string('comprovante_hash', 64)->nullable()->unique(); $table->string('codigo_qr')->nullable(); $table->timestamps();

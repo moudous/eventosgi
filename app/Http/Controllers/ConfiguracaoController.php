@@ -49,13 +49,18 @@ class ConfiguracaoController
                 $falhar('A :attribute deve apontar para um domínio oficial do Sicoob.');
             }
         };
+        $chavePixValida = function (string $atributo, mixed $valor, \Closure $falhar): void {
+            if (filled($valor) && ! PixConfiguracao::chavePixValida((string) $valor)) {
+                $falhar('A :attribute deve ser um CPF ou CNPJ sem pontuação, telefone no padrão +5511999999999, e-mail ou chave aleatória UUID.');
+            }
+        };
         $dados = $request->validate([
             'ativo' => ['nullable', 'boolean'],
             'ambiente' => ['required', Rule::in(['sandbox', 'producao'])],
             'client_id' => [$atual ? 'nullable' : 'required', 'string', 'max:500'],
             'client_secret' => ['nullable', 'string', 'max:500'],
             'sandbox_token' => [Rule::requiredIf($ambiente === 'sandbox' && ! $atual?->sandbox_token), 'nullable', 'string', 'max:5000'],
-            'chave_pix' => [$atual ? 'nullable' : 'required', 'string', 'max:500'],
+            'chave_pix' => [$atual ? 'nullable' : 'required', 'string', 'max:77', $chavePixValida],
             'certificado_pem' => [Rule::requiredIf($ambiente === 'producao' && ! $atual?->certificado_pem), 'nullable', 'string', 'max:30000'],
             'chave_privada_pem' => [Rule::requiredIf($ambiente === 'producao' && ! $atual?->chave_privada_pem), 'nullable', 'string', 'max:30000'],
             'senha_chave' => ['nullable', 'string', 'max:500'],
@@ -73,6 +78,10 @@ class ConfiguracaoController
         if ($ambiente === 'sandbox') {
             $dados['api_url'] = PixConfiguracao::SANDBOX_API_URL;
             $dados['token_url'] = null;
+        } elseif (rtrim((string) ($dados['api_url'] ?? ''), '/') === rtrim(PixConfiguracao::SANDBOX_API_URL, '/')) {
+            // Ao trocar o ambiente, o navegador pode reenviar a URL anteriormente
+            // gravada. Produção nunca deve continuar apontando para o simulador.
+            $dados['api_url'] = PixConfiguracao::API_URL;
         }
         $dados['ativo'] = $request->boolean('ativo');
         ($atual ?? new PixConfiguracao)->fill($dados)->save();
@@ -85,6 +94,43 @@ class ConfiguracaoController
         try {
             $pix->testarConexao();
             return back()->with('status', 'Conexão com a API PIX do Sicoob realizada com sucesso.');
+        } catch (\Throwable $erro) {
+            report($erro);
+            return back()->withErrors(['pix' => $erro->getMessage()]);
+        }
+    }
+
+    public function cadastrarWebhookPix(SicoobPixService $pix): RedirectResponse
+    {
+        try {
+            $dados = $pix->configurarWebhook();
+            $url = (string) ($dados['webhookUrl'] ?? config('pix.webhook_url'));
+
+            return back()->with('status', 'Webhook PIX cadastrado no Sicoob: '.rtrim($url, '/').'/pix');
+        } catch (\Throwable $erro) {
+            report($erro);
+            return back()->withErrors(['pix' => $erro->getMessage()]);
+        }
+    }
+
+    public function consultarWebhookPix(SicoobPixService $pix): RedirectResponse
+    {
+        try {
+            $dados = $pix->consultarWebhook();
+            $url = (string) ($dados['webhookUrl'] ?? 'URL não informada pelo Sicoob');
+
+            return back()->with('status', 'Webhook PIX ativo no Sicoob: '.$url);
+        } catch (\Throwable $erro) {
+            report($erro);
+            return back()->withErrors(['pix' => $erro->getMessage()]);
+        }
+    }
+
+    public function removerWebhookPix(SicoobPixService $pix): RedirectResponse
+    {
+        try {
+            $pix->removerWebhook();
+            return back()->with('status', 'Webhook PIX removido do Sicoob.');
         } catch (\Throwable $erro) {
             report($erro);
             return back()->withErrors(['pix' => $erro->getMessage()]);

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\PagamentoPixConfirmadoException;
 use App\Models\InscricaoAtividade;
 use App\Models\PixCobranca;
 use App\Models\PixConfiguracao;
@@ -19,6 +20,8 @@ use RuntimeException;
 
 class SicoobPixService
 {
+    private const OAUTH_SCOPES = 'openid cob.read cob.write pix.read webhook.read webhook.write';
+
     public function testarConexao(): void
     {
         $configuracao = $this->configuracaoAtiva();
@@ -27,6 +30,47 @@ class SicoobPixService
             'fim' => now()->toIso8601String(),
         ]);
         if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'testar a conexão com o Sicoob');
+    }
+
+    /** @return array<string, mixed> */
+    public function configurarWebhook(?string $url = null): array
+    {
+        $configuracao = $this->configuracaoAtiva();
+        $url = $this->urlWebhook($url);
+        $resposta = $this->enviar(
+            $configuracao,
+            'put',
+            rtrim($configuracao->api_url, '/').'/webhook/'.rawurlencode($configuracao->chave_pix),
+            ['webhookUrl' => $url],
+        );
+        if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'cadastrar o webhook PIX');
+
+        return (array) $resposta->json();
+    }
+
+    /** @return array<string, mixed> */
+    public function consultarWebhook(): array
+    {
+        $configuracao = $this->configuracaoAtiva();
+        $resposta = $this->enviar(
+            $configuracao,
+            'get',
+            rtrim($configuracao->api_url, '/').'/webhook/'.rawurlencode($configuracao->chave_pix),
+        );
+        if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'consultar o webhook PIX');
+
+        return (array) $resposta->json();
+    }
+
+    public function removerWebhook(): void
+    {
+        $configuracao = $this->configuracaoAtiva();
+        $resposta = $this->enviar(
+            $configuracao,
+            'delete',
+            rtrim($configuracao->api_url, '/').'/webhook/'.rawurlencode($configuracao->chave_pix),
+        );
+        if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'remover o webhook PIX');
     }
 
     /** Cria as cobranças dos campos PIX da inscrição que ainda não foram geradas. */
@@ -39,13 +83,20 @@ class SicoobPixService
         if ($camposPix === []) return [];
 
         $configuracao = $this->configuracaoAtiva();
+        if (! PixConfiguracao::chavePixValida($configuracao->chave_pix)) {
+            throw new RuntimeException('A chave PIX configurada não tem um formato válido. Em Configuração, informe um CPF ou CNPJ sem pontuação, telefone no padrão +5511999999999, e-mail ou chave aleatória UUID.');
+        }
+        $ambiente = $this->ambienteEfetivo($configuracao);
         $criadas = [];
 
         foreach ($camposPix as $campo) {
             $existente = PixCobranca::query()
                 ->where('inscricao_atividade_id', $inscricao->id)
                 ->where('campo', $campo['nome'])->first();
-            if ($existente) {
+            $deveRegenerarEmProducao = $existente
+                && $existente->ambiente === 'sandbox'
+                && $ambiente === 'producao';
+            if ($existente && ! $deveRegenerarEmProducao) {
                 $criadas[] = $existente;
                 continue;
             }
@@ -71,7 +122,7 @@ class SicoobPixService
                 $payload['devedor'] = ['cpf' => $cpf, 'nome' => Str::limit($participante->nome, 200, '')];
             }
 
-            $sandbox = $configuracao->ambiente === 'sandbox';
+            $sandbox = $ambiente === 'sandbox';
             $resposta = $this->enviar(
                 $configuracao,
                 $sandbox ? 'post' : 'put',
@@ -81,16 +132,28 @@ class SicoobPixService
             if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'criar a cobrança');
             $dados = (array) $resposta->json();
 
-            $criadas[] = PixCobranca::create([
+            $atributos = [
                 'inscricao_atividade_id' => $inscricao->id,
                 'campo' => $campo['nome'],
+                'ambiente' => $ambiente,
                 'txid' => $dados['txid'] ?? $txid,
                 'valor' => $valor,
                 'status' => $dados['status'] ?? 'ATIVA',
                 'pix_copia_cola' => $dados['pixCopiaECola'] ?? $dados['brcode'] ?? null,
                 'location' => $dados['location'] ?? data_get($dados, 'loc.location'),
                 'resposta_api' => $dados,
-            ]);
+            ];
+            if ($existente) {
+                $existente->update($atributos + [
+                    'pago_em' => null,
+                    'pagador_nome' => null,
+                    'pagador_documento' => null,
+                    'end_to_end_id' => null,
+                ]);
+                $criadas[] = $existente->refresh();
+            } else {
+                $criadas[] = PixCobranca::create($atributos);
+            }
         }
 
         return $criadas;
@@ -125,6 +188,52 @@ class SicoobPixService
         return $cobranca->refresh();
     }
 
+    public function cancelar(PixCobranca $cobranca): PixCobranca
+    {
+        if ($cobranca->pagamentoConfirmado()) throw new PagamentoPixConfirmadoException;
+        if ($cobranca->removidaSemPagamento()) return $cobranca;
+
+        $configuracao = $this->configuracaoAtiva();
+        $ambiente = $this->ambienteEfetivo($configuracao);
+        if ($cobranca->ambiente && $cobranca->ambiente !== $ambiente) {
+            // Uma cobrança do simulador não movimenta dinheiro e não pode ser gerida
+            // pelo endpoint de produção depois da troca de ambiente.
+            if ($cobranca->ambiente === 'sandbox') {
+                $cobranca->update(['status' => 'REMOVIDA_PELO_USUARIO_RECEBEDOR']);
+                return $cobranca->refresh();
+            }
+            throw new RuntimeException('A cobrança PIX pertence a outro ambiente e não pôde ser cancelada com segurança.');
+        }
+
+        $atualizada = $this->consultar($cobranca);
+        if ($atualizada->pagamentoConfirmado()) throw new PagamentoPixConfirmadoException;
+        if ($atualizada->removidaSemPagamento()) return $atualizada;
+
+        $resposta = $this->enviar(
+            $configuracao,
+            'patch',
+            rtrim($configuracao->api_url, '/').'/cob/'.$cobranca->txid,
+            ['status' => 'REMOVIDA_PELO_USUARIO_RECEBEDOR'],
+        );
+        if (! $resposta->successful()) {
+            // Um pagamento pode concluir entre o GET e o PATCH. Reconsultar transforma
+            // essa corrida em bloqueio de cancelamento, sem perder o vínculo financeiro.
+            $aposFalha = $this->consultar($cobranca);
+            if ($aposFalha->pagamentoConfirmado()) throw new PagamentoPixConfirmadoException;
+            $this->falha($resposta->status(), $resposta->json(), 'cancelar a cobrança');
+        }
+
+        $dados = (array) $resposta->json();
+        $cobranca->update([
+            'status' => $dados['status'] ?? 'REMOVIDA_PELO_USUARIO_RECEBEDOR',
+            'resposta_api' => $dados
+                ? array_replace_recursive((array) $cobranca->resposta_api, $dados)
+                : $cobranca->resposta_api,
+        ]);
+
+        return $cobranca->refresh();
+    }
+
     /** @return array{imagem: string, codigo: string}|null */
     public function qrCode(PixCobranca $cobranca): ?array
     {
@@ -147,12 +256,12 @@ class SicoobPixService
         }
 
         return $this->comCertificado($configuracao, function (array $opcoes) use ($configuracao, $metodo, $url, $dados): Response {
-            $chaveCache = 'sicoob-pix-token-'.$configuracao->id.'-'.$configuracao->updated_at?->timestamp;
+            $chaveCache = 'sicoob-pix-token-'.$configuracao->id.'-'.$configuracao->updated_at?->timestamp.'-'.sha1(self::OAUTH_SCOPES);
             $token = Cache::remember($chaveCache, now()->addMinutes(4), function () use ($configuracao, $opcoes): string {
                 $formulario = [
                     'grant_type' => 'client_credentials',
                     'client_id' => $configuracao->client_id,
-                    'scope' => 'openid cob.read cob.write pix.read',
+                    'scope' => self::OAUTH_SCOPES,
                 ];
                 if ($configuracao->client_secret) $formulario['client_secret'] = $configuracao->client_secret;
                 $resposta = Http::withOptions($opcoes)->asForm()->acceptJson()->timeout(20)->post($configuracao->token_url, $formulario);
@@ -197,9 +306,54 @@ class SicoobPixService
         return $configuracao;
     }
 
+    private function ambienteEfetivo(PixConfiguracao $configuracao): string
+    {
+        $host = mb_strtolower((string) parse_url($configuracao->api_url, PHP_URL_HOST));
+
+        return $configuracao->ambiente === 'sandbox' || str_starts_with($host, 'sandbox.')
+            ? 'sandbox'
+            : 'producao';
+    }
+
+    private function urlWebhook(?string $url): string
+    {
+        $url = rtrim(trim((string) ($url ?: config('pix.webhook_url'))), '/');
+        $host = mb_strtolower((string) parse_url($url, PHP_URL_HOST));
+        $caminho = (string) parse_url($url, PHP_URL_PATH);
+        $hostEhIp = filter_var($host, FILTER_VALIDATE_IP) !== false;
+        $ipEhPublico = filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+
+        if (! filter_var($url, FILTER_VALIDATE_URL)
+            || parse_url($url, PHP_URL_SCHEME) !== 'https'
+            || $host === ''
+            || $host === 'localhost'
+            || ($hostEhIp && ! $ipEhPublico)
+            || str_ends_with($caminho, '/pix')) {
+            throw new RuntimeException('Configure PIX_WEBHOOK_URL com uma URL-base HTTPS pública, sem o sufixo /pix.');
+        }
+
+        return $url;
+    }
+
     private function falha(int $status, mixed $dados, string $acao): never
     {
         $mensagem = is_array($dados) ? ($dados['detail'] ?? $dados['message'] ?? $dados['error_description'] ?? null) : null;
+        $violacoes = collect(is_array($dados) ? ($dados['violacoes'] ?? $dados['violations'] ?? []) : [])
+            ->map(function (mixed $violacao): ?string {
+                if (is_string($violacao)) return trim($violacao) ?: null;
+                if (! is_array($violacao)) return null;
+
+                $propriedade = $violacao['propriedade'] ?? $violacao['property'] ?? $violacao['campo'] ?? null;
+                $razao = $violacao['razao'] ?? $violacao['reason'] ?? $violacao['mensagem'] ?? $violacao['message'] ?? null;
+                if (! is_string($razao) || trim($razao) === '') return null;
+
+                return is_string($propriedade) && trim($propriedade) !== ''
+                    ? trim($propriedade).': '.trim($razao)
+                    : trim($razao);
+            })
+            ->filter()->unique()->take(3)->implode(' ');
+
+        if ($violacoes !== '') $mensagem = trim((string) $mensagem.' '.$violacoes);
         throw new RuntimeException('Não foi possível '.$acao.' (HTTP '.$status.').'.($mensagem ? ' '.$mensagem : ''));
     }
 }

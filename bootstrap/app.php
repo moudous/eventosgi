@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Console\Scheduling\Schedule;
 use App\Http\Middleware\AllowGiEmbedding;
 use App\Http\Middleware\RequireGiPermission;
 use App\Http\Middleware\VerificarTokenFormulario;
@@ -14,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
         health: '/health',
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('pix:conciliar-canceladas')->everyTenMinutes()->withoutOverlapping();
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         // Espaços e quebras de linha fazem parte do código dos templates em construção.
         $middleware->trimStrings(except: [fn ($request) => $request->is('eventos/*/pagina/criador/*')]);

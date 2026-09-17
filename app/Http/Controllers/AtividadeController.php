@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\PagamentoPixConfirmadoException;
 use App\Models\Atividade;
 use App\Models\Categoria;
 use App\Models\Evento;
@@ -12,6 +13,7 @@ use App\Models\PixCobranca;
 use App\Rules\EmailValido;
 use App\Services\ArmazemService;
 use App\Services\CaptchaInscricaoService;
+use App\Services\CancelamentoInscricaoService;
 use App\Services\ComprovanteInscricaoService;
 use App\Services\ConteudoEditorFormularioService;
 use App\Services\DistribuicaoVagasService;
@@ -288,11 +290,14 @@ class AtividadeController
             'respostasComprovante' => $inscricao ? $comprovante->respostas($inscricao) : [],
             'qrPresenca' => $inscricao ? $comprovante->qrPresenca($inscricao) : null,
             'presencaInscricao' => $inscricao ? $comprovante->presenca($inscricao) : null,
-            'cancelamentoBloqueadoPix' => $inscricao && ($atividade->temPagamentoPix() || $cobrancasPix->isNotEmpty()),
+            'cancelamentoBloqueadoPix' => $cobrancasPix->contains(
+                fn (PixCobranca $cobranca): bool => $cobranca->pagamentoConfirmado(),
+            ),
             'cobrancasPix' => $cobrancasPix->map(fn ($cobranca) => [
                 'model' => $cobranca,
                 'qr' => app(SicoobPixService::class)->qrCode($cobranca),
             ]),
+            'pixAmbiente' => \App\Models\PixConfiguracao::atual()?->ambiente,
         ]);
     }
     /**
@@ -570,46 +575,43 @@ class AtividadeController
         ]);
     }
 
-    public function apagarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, GiEmailService $email, DistribuicaoVagasService $distribuicao): RedirectResponse
+    public function apagarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, GiEmailService $email, CancelamentoInscricaoService $cancelamento): RedirectResponse
     {
         [$inscricao, $sessao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
-        if ($atividade->temPagamentoPix() || $inscricao->cobrancasPix()->exists()) {
-            return back()->with('comprovante_erro', 'Inscrições com pagamento PIX não podem ser apagadas.');
+        if ($request->input('confirmacao') !== 'CANCELAR') {
+            return back()->with('comprovante_erro', 'Marque a confirmação antes de cancelar a inscrição.');
         }
-        if ($request->input('confirmacao') !== 'APAGAR') {
-            return back()->with('comprovante_erro', 'Marque a confirmação antes de apagar a inscrição.');
+        try {
+            $cancelamento->cancelar($inscricao, 'Cancelada pelo participante no formulário público.');
+        } catch (PagamentoPixConfirmadoException $erro) {
+            return back()->with('comprovante_erro', $erro->getMessage());
+        } catch (Throwable $erro) {
+            report($erro);
+            return back()->with('comprovante_erro', 'A inscrição não foi cancelada porque não foi possível confirmar o cancelamento da cobrança no Sicoob. Tente novamente.');
         }
+
         $atividade->load('evento');
-        $apagadaEm = now();
+        $canceladaEm = now();
+        $avisoEmail = '';
         try {
             $email->enviar(
                 $sessao['email'],
                 $sessao['nome'] ?? null,
-                'Inscrição apagada — '.$atividade->nome,
+                'Inscrição cancelada — '.$atividade->nome,
                 '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#22303f">'
-                    .'<p>Olá!</p><p>Sua inscrição foi apagada definitivamente.</p>'
+                    .'<p>Olá!</p><p>Sua inscrição foi cancelada.</p>'
                     .'<p><strong>Atividade:</strong> '.e($atividade->nome).'<br>'
                     .'<strong>Evento:</strong> '.e($atividade->evento?->nome ?? 'Não informado').'<br>'
-                    .'<strong>Data e hora:</strong> '.$apagadaEm->format('d/m/Y \à\s H:i:s').'</p>'
-                    .'<p>Esta inscrição e suas respostas não podem ser recuperadas.</p></div>',
-                'inscricao-apagada-'.$inscricao->id.'-'.bin2hex(random_bytes(8)),
+                    .'<strong>Data e hora:</strong> '.$canceladaEm->format('d/m/Y \à\s H:i:s').'</p>'
+                    .'<p>O registro e a cobrança PIX foram preservados para segurança e auditoria.</p></div>',
+                'inscricao-cancelada-'.$inscricao->id.'-'.bin2hex(random_bytes(8)),
             );
         } catch (Throwable $excecao) {
             report($excecao);
-            return back()->with('comprovante_erro', 'A inscrição não foi apagada porque não foi possível enviar o aviso por e-mail. Tente novamente.');
+            $avisoEmail = ' Não foi possível enviar o aviso por e-mail.';
         }
 
-        foreach ($formularios->camposDeArquivo($atividade) as $campo) {
-            foreach ((array) data_get($inscricao->resposta, $campo, []) as $arquivo) {
-                if (is_string($arquivo) && str_starts_with($arquivo, FormularioInscricaoService::PASTA_ANEXOS.'/')) {
-                    Storage::disk(FormularioInscricaoService::DISCO_ANEXOS)->delete($arquivo);
-                }
-            }
-        }
-        $inscricao->delete();
-        $distribuicao->recalcular($atividade->refresh());
-
-        return back()->with('status', 'Sua inscrição foi apagada. Enviamos a confirmação para '.$sessao['email'].'.');
+        return back()->with('status', 'Sua inscrição foi cancelada com segurança e a vaga foi liberada.'.$avisoEmail);
     }
 
     /** @return array{InscricaoAtividade, array<string, mixed>} */
@@ -635,7 +637,9 @@ class AtividadeController
             ? max(1, $request->integer('page'))
             : ($request->exists('pesquisar') ? 1 : $estado['page']);
         $porPagina = 20;
-        $query = InscricaoAtividade::query()->with('sessao')->withCount('cobrancasPix')->where('atividade_id', $atividade->id);
+        $query = InscricaoAtividade::query()->with('sessao')->withCount([
+            'cobrancasPix as cobrancas_pix_confirmadas_count' => fn ($cobrancas) => $cobrancas->confirmadas(),
+        ])->where('atividade_id', $atividade->id);
 
         if ($pesquisar !== '') {
             $participantes = Participante::query()->where('nome', 'like', "%{$pesquisar}%")
@@ -665,51 +669,34 @@ class AtividadeController
         InscricaoAtividade $inscricao,
         GiPermissionService $permissoes,
         HistoricoService $historico,
-        DistribuicaoVagasService $distribuicao,
+        CancelamentoInscricaoService $cancelamento,
     ): JsonResponse {
         $permissoes->exigir('atividades.inscricoes.excluir', $request);
         $request->validate(
             ['confirmacao' => ['required', 'accepted']],
-            ['confirmacao.accepted' => 'Marque que tem certeza antes de excluir a inscrição.'],
+            ['confirmacao.accepted' => 'Marque que tem certeza antes de cancelar a inscrição.'],
         );
         abort_unless((int) $inscricao->atividade_id === (int) $atividade->id, 404);
 
-        $arquivos = DB::transaction(function () use ($request, $atividade, $inscricao, $historico): array {
-            $registro = InscricaoAtividade::query()->whereKey($inscricao->id)->lockForUpdate()->firstOrFail();
-            abort_unless((int) $registro->atividade_id === (int) $atividade->id, 404);
-
-            // Além da checagem exibida na tela, trava o intervalo do índice durante a
-            // transação para impedir que uma cobrança seja criada ao mesmo tempo.
-            if (PixCobranca::query()->where('inscricao_atividade_id', $registro->id)->lockForUpdate()->exists()) {
-                abort(409, 'Esta inscrição possui cobrança PIX vinculada e não pode ser excluída.');
-            }
-
-            $arquivos = collect(\Illuminate\Support\Arr::flatten((array) $registro->resposta))
-                ->filter(fn ($valor) => is_string($valor)
-                    && str_starts_with($valor, FormularioInscricaoService::PASTA_ANEXOS.'/')
-                    && ! str_contains($valor, '..'))
-                ->unique()->values()->all();
-            $historico->atividade($atividade, 'Inscrição excluída', [
-                'inscricao_id' => $registro->id,
-                'participante_id' => $registro->participante_id,
-                'participante_email' => $registro->participante_email,
-                'sessao_atividade_id' => $registro->sessao_atividade_id,
-                'lista_reserva' => (bool) $registro->lista_reserva,
-                'inscrita_em' => $registro->created_at?->format('d/m/Y H:i:s'),
-            ], $request);
-            $registro->delete();
-
-            return $arquivos;
-        });
-
-        foreach ($arquivos as $arquivo) {
-            Storage::disk(FormularioInscricaoService::DISCO_ANEXOS)->delete($arquivo);
-            // Arquivos anteriores à adoção do disco privado podem estar no public.
-            Storage::disk('public')->delete($arquivo);
+        try {
+            $cancelamento->cancelar($inscricao, 'Cancelada administrativamente.');
+        } catch (PagamentoPixConfirmadoException $erro) {
+            abort(409, $erro->getMessage());
+        } catch (Throwable $erro) {
+            report($erro);
+            abort(502, 'A inscrição não foi cancelada porque não foi possível confirmar o cancelamento da cobrança no Sicoob.');
         }
-        $distribuicao->recalcular($atividade->refresh());
 
-        return response()->json(['message' => 'Inscrição excluída com sucesso.']);
+        $historico->atividade($atividade, 'Inscrição cancelada', [
+            'inscricao_id' => $inscricao->id,
+            'participante_id' => $inscricao->participante_id,
+            'participante_email' => $inscricao->participante_email,
+            'sessao_atividade_id' => $inscricao->sessao_atividade_id,
+            'lista_reserva' => (bool) $inscricao->lista_reserva,
+            'inscrita_em' => $inscricao->created_at?->format('d/m/Y H:i:s'),
+        ], $request);
+
+        return response()->json(['message' => 'Inscrição cancelada com segurança.']);
     }
 
     /**

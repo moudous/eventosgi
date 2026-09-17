@@ -134,17 +134,18 @@ if (str_contains($htmlJaInscrito, 'Vagas restantes:')
     || ! str_contains($htmlJaInscrito, 'Inscrição além do limite de vagas')) {
     throw new RuntimeException('Quem já se inscreveu deve ver a condição de reserva somente junto às respostas do comprovante.');
 }
-$htmlPix = view('atividades.formulario-publico', [
+$htmlPixPendente = view('atividades.formulario-publico', [
     'atividade' => $atividade, 'config' => $config,
     'identificacao' => ['email' => 'pessoa@example.com'], 'participante' => $participante,
     'estado' => ['aberto' => false, 'motivo' => 'duplicada', 'mensagem' => Atividade::MENSAGEM_JA_INSCRITO, 'lista_reserva' => false],
     'inscricao' => $inscricaoReserva, 'dadosComprovante' => [], 'respostasComprovante' => [], 'qrPresenca' => null,
-    'cancelamentoBloqueadoPix' => true,
+    'cancelamentoBloqueadoPix' => false,
 ])->render();
-if (! preg_match('/<button[^>]*disabled[^>]*>.*?Apagar inscrição/s', $htmlPix)
-    || ! str_contains($htmlPix, 'Inscrições com pagamento PIX não podem ser apagadas.')
-    || str_contains($htmlPix, 'id="apagarInscricaoModal"')) {
-    throw new RuntimeException('A inscrição com PIX deve exibir o botão de exclusão desabilitado e não renderizar o modal.');
+if (! str_contains($htmlPixPendente, 'data-bs-target="#apagarInscricaoModal"')
+    || ! str_contains($htmlPixPendente, 'id="apagarInscricaoModal"')
+    || preg_match('/<button[^>]*disabled[^>]*>.*?Cancelar inscrição/s', $htmlPixPendente)
+    || ! str_contains($htmlPixPendente, 'value="CANCELAR"')) {
+    throw new RuntimeException('A inscrição com PIX aguardando pagamento deve permitir o cancelamento seguro.');
 }
 $configComPix = $config;
 $configComPix['campos'][] = ['nome' => 'pagamento', 'label' => 'Pagamento', 'tipo' => 'pagamento_pix', 'valor_pix' => 50];
@@ -166,7 +167,9 @@ $htmlPagamentoConfirmado = view('atividades.formulario-publico', [
 ])->render();
 if (str_contains($htmlPagamentoConfirmado, 'alt="QR Code para pagamento PIX"')
     || ! str_contains($htmlPagamentoConfirmado, 'Baixar comprovante PIX')
-    || ! str_contains($htmlPagamentoConfirmado, '/pix/321/comprovante.pdf')) {
+    || ! str_contains($htmlPagamentoConfirmado, '/pix/321/comprovante.pdf')
+    || ! preg_match('/<button[^>]*disabled[^>]*>.*?Cancelar inscrição/s', $htmlPagamentoConfirmado)
+    || str_contains($htmlPagamentoConfirmado, 'id="apagarInscricaoModal"')) {
     throw new RuntimeException('Após a confirmação, o QR Code deve ser substituído pelo link do comprovante PIX.');
 }
 $inscricaoReserva->participante_email = 'pessoa@example.com';

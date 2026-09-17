@@ -135,12 +135,16 @@
                     @forelse($cobrancasPix ?? [] as $itemPix)
                         @php
                             $cobrancaPix = $itemPix['model'];
+                            $cobrancaSandboxEmProducao = ($pixAmbiente ?? null) === 'producao' && $cobrancaPix->ambiente === 'sandbox';
                         @endphp
                         <div class="row g-4 align-items-center {{ !$loop->last ? 'border-bottom pb-4 mb-4' : '' }}">
-                            @if($cobrancaPix->status !== 'CONCLUIDA' && $itemPix['qr'])<div class="col-md-5 text-center"><img src="{{ $itemPix['qr']['imagem'] }}" width="260" height="260" alt="QR Code para pagamento PIX"></div>@endif
+                            @if(!$cobrancaSandboxEmProducao && $cobrancaPix->status !== 'CONCLUIDA' && $itemPix['qr'])<div class="col-md-5 text-center"><img src="{{ $itemPix['qr']['imagem'] }}" width="260" height="260" alt="QR Code para pagamento PIX"></div>@endif
                             <div class="col">
                                 <div class="fs-4 fw-bold mb-2">R$ {{ number_format((float) $cobrancaPix->valor, 2, ',', '.') }}</div>
-                                @if($cobrancaPix->status === 'CONCLUIDA')
+                                @if($cobrancaSandboxEmProducao)
+                                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>Esta cobrança foi criada no ambiente de testes e não movimenta dinheiro.</div>
+                                    <form method="POST" action="{{ request()->fullUrl() }}">@csrf<input type="hidden" name="acao" value="gerar_pix"><button class="btn btn-primary"><i class="bi bi-arrow-repeat me-1"></i>Gerar cobrança em produção</button></form>
+                                @elseif($cobrancaPix->status === 'CONCLUIDA')
                                     <div class="alert alert-success">
                                         <i class="bi bi-check-circle-fill me-1"></i>Pagamento confirmado
                                         @if($cobrancaPix->pago_em) em {{ $cobrancaPix->pago_em->format('d/m/Y H:i') }}@endif.
@@ -167,10 +171,10 @@
         <div class="d-flex flex-wrap gap-2 mb-3">
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#comprovanteModal"><i class="bi bi-printer me-1"></i>Imprimir comprovante</button>
             @if($cancelamentoBloqueadoPix ?? false)
-            <button type="button" class="btn btn-outline-danger" disabled aria-disabled="true" title="Inscrições com pagamento PIX não podem ser apagadas"><i class="bi bi-trash me-1"></i>Apagar inscrição</button>
-            <span class="align-self-center small text-muted"><i class="bi bi-lock-fill me-1"></i>Inscrições com pagamento PIX não podem ser apagadas.</span>
+            <button type="button" class="btn btn-outline-danger" disabled aria-disabled="true" title="Inscrições com pagamento PIX confirmado não podem ser canceladas"><i class="bi bi-x-circle me-1"></i>Cancelar inscrição</button>
+            <span class="align-self-center small text-muted"><i class="bi bi-lock-fill me-1"></i>Esta inscrição possui pagamento PIX confirmado e não pode ser cancelada.</span>
             @else
-            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#apagarInscricaoModal"><i class="bi bi-trash me-1"></i>Apagar inscrição</button>
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#apagarInscricaoModal"><i class="bi bi-x-circle me-1"></i>Cancelar inscrição</button>
             @endif
         </div>
 
@@ -196,9 +200,9 @@
         @if(!($cancelamentoBloqueadoPix ?? false))
         <div class="modal fade" id="apagarInscricaoModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="POST" action="{{ route('inscricoes.apagar', ['atividade' => $atividade->hash_publica]) }}">@csrf @method('DELETE')
-                <div class="modal-header"><h2 class="modal-title fs-5">Apagar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
-                <div class="modal-body"><div class="alert alert-danger mb-3"><strong>Esta ação é definitiva.</strong> A inscrição, as respostas e os arquivos enviados serão apagados e não será possível recuperá-los.</div><label class="form-check"><input class="form-check-input" type="checkbox" name="confirmacao" value="APAGAR" required><span class="form-check-label">Confirmo que desejo apagar esta inscrição.</span></label></div>
-                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger"><i class="bi bi-trash me-1"></i>Apagar definitivamente</button></div>
+                <div class="modal-header"><h2 class="modal-title fs-5">Cancelar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+                <div class="modal-body"><div class="alert alert-warning mb-3"><strong>A cobrança será verificada no Sicoob.</strong> Se o PIX estiver confirmado, o cancelamento será bloqueado. Se estiver pendente, a cobrança será removida e a vaga liberada. O registro será preservado para auditoria.</div><label class="form-check"><input class="form-check-input" type="checkbox" name="confirmacao" value="CANCELAR" required><span class="form-check-label">Confirmo que desejo cancelar esta inscrição.</span></label></div>
+                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Voltar</button><button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>Cancelar inscrição</button></div>
             </form></div></div>
         </div>
         @endif

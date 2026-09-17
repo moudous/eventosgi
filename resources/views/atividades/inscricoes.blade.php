@@ -94,7 +94,7 @@
             'presente' => (bool) $inscricao->presente,
             'data_presenca' => $inscricao->data_presenca?->format('d/m/Y H:i:s'),
             'presenca_url' => route('atividades.inscricoes.presenca', $inscricao),
-            'possui_pix' => (int) $inscricao->cobrancas_pix_count > 0,
+            'possui_pix_confirmado' => (int) $inscricao->cobrancas_pix_confirmadas_count > 0,
             'exclusao_url' => route('atividades.inscricoes.destroy', [$atividade, $inscricao]),
             'exclusao_identificacao' => $participantes->get($inscricao->participante_id)
                 ?: ($inscricao->participante_email ?: 'Inscrição #'.$inscricao->id),
@@ -169,10 +169,10 @@
                             @if($podeValidarPresenca)<button type="button" class="btn btn-sm {{ $linha['presente'] ? 'btn-outline-danger' : 'btn-outline-success' }} alternar-presenca" data-inscricao="{{ $linha['id'] }}" title="{{ $linha['presente'] ? 'Remover presença' : 'Marcar presença' }}" aria-label="{{ $linha['presente'] ? 'Remover presença' : 'Marcar presença' }}"><i class="bi {{ $linha['presente'] ? 'bi-person-x-fill' : 'bi-person-check-fill' }}" aria-hidden="true"></i></button>@endif
                             <button type="button" class="btn btn-sm btn-outline-dark ver-respostas" data-inscricao="{{ $linha['id'] }}" title="Visualizar respostas" aria-label="Visualizar respostas"><i class="bi bi-eye-fill" aria-hidden="true"></i></button>
                             @if($podeExcluirInscricao)
-                                @if($linha['possui_pix'])
-                                    <button type="button" class="btn btn-sm btn-outline-danger" disabled title="Esta inscrição possui cobrança PIX e não pode ser excluída" aria-label="Exclusão indisponível: inscrição com PIX"><i class="bi bi-trash-fill" aria-hidden="true"></i></button>
+                                @if($linha['possui_pix_confirmado'])
+                                    <button type="button" class="btn btn-sm btn-outline-danger" disabled title="Esta inscrição possui pagamento PIX confirmado e não pode ser cancelada" aria-label="Cancelamento indisponível: pagamento PIX confirmado"><i class="bi bi-x-circle-fill" aria-hidden="true"></i></button>
                                 @else
-                                    <button type="button" class="btn btn-sm btn-outline-danger excluir-inscricao" data-inscricao="{{ $linha['id'] }}" title="Excluir inscrição" aria-label="Excluir inscrição #{{ $linha['id'] }}"><i class="bi bi-trash-fill" aria-hidden="true"></i></button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger excluir-inscricao" data-inscricao="{{ $linha['id'] }}" title="Cancelar inscrição" aria-label="Cancelar inscrição #{{ $linha['id'] }}"><i class="bi bi-x-circle-fill" aria-hidden="true"></i></button>
                                 @endif
                             @endif
                         </td>
@@ -194,14 +194,14 @@
 
 @if($podeExcluirInscricao)
 <div class="modal fade" id="excluirInscricaoModal" tabindex="-1" aria-labelledby="excluirInscricaoTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-    <div class="modal-header"><h2 class="modal-title fs-5" id="excluirInscricaoTitulo"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Excluir inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-header"><h2 class="modal-title fs-5" id="excluirInscricaoTitulo"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Cancelar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
     <div class="modal-body">
-        <p>Você está prestes a excluir definitivamente a inscrição <strong id="excluirInscricaoNumero"></strong> de <strong id="excluirInscricaoParticipante"></strong>.</p>
-        <p class="text-danger small">As respostas, a presença e os anexos desta inscrição serão removidos. Esta ação não pode ser desfeita.</p>
-        <div class="form-check border rounded p-3 ps-5 bg-light"><input class="form-check-input" type="checkbox" value="1" id="confirmarExclusaoInscricao"><label class="form-check-label fw-semibold" for="confirmarExclusaoInscricao">Tenho certeza de que desejo excluir esta inscrição.</label></div>
+        <p>Você está prestes a cancelar a inscrição <strong id="excluirInscricaoNumero"></strong> de <strong id="excluirInscricaoParticipante"></strong>.</p>
+        <p class="text-muted small">Cobranças pendentes serão removidas no Sicoob antes de liberar a vaga. Respostas, anexos, TXID e histórico serão preservados para auditoria.</p>
+        <div class="form-check border rounded p-3 ps-5 bg-light"><input class="form-check-input" type="checkbox" value="1" id="confirmarExclusaoInscricao"><label class="form-check-label fw-semibold" for="confirmarExclusaoInscricao">Tenho certeza de que desejo cancelar esta inscrição.</label></div>
         <div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="excluirInscricaoErro" role="alert"></div>
     </div>
-    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-danger" id="confirmarExclusaoInscricaoBotao" disabled><i class="bi bi-trash-fill me-1"></i>Excluir definitivamente</button></div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Voltar</button><button type="button" class="btn btn-danger" id="confirmarExclusaoInscricaoBotao" disabled><i class="bi bi-x-circle-fill me-1"></i>Cancelar inscrição</button></div>
 </div></div></div>
 @endif
 
@@ -396,7 +396,7 @@ let inscricaoParaExcluir = null;
 
 document.querySelectorAll('.excluir-inscricao').forEach(botao => botao.addEventListener('click', () => {
     const inscricao = inscricoes[botao.dataset.inscricao];
-    if (!inscricao || inscricao.possui_pix) return;
+    if (!inscricao || inscricao.possui_pix_confirmado) return;
     inscricaoParaExcluir = inscricao;
     confirmarExclusaoInscricao.checked = false;
     confirmarExclusaoInscricaoBotao.disabled = true;
@@ -422,10 +422,10 @@ confirmarExclusaoInscricaoBotao.addEventListener('click', async () => {
             body: JSON.stringify({confirmacao: true}),
         });
         const dados = await resposta.json().catch(() => ({}));
-        if (!resposta.ok) throw new Error(dados.message || 'Não foi possível excluir a inscrição.');
+        if (!resposta.ok) throw new Error(dados.message || 'Não foi possível cancelar a inscrição.');
         window.location.reload();
     } catch (erro) {
-        excluirInscricaoErro.textContent = erro.message || 'Não foi possível excluir a inscrição.';
+        excluirInscricaoErro.textContent = erro.message || 'Não foi possível cancelar a inscrição.';
         excluirInscricaoErro.classList.remove('d-none');
         confirmarExclusaoInscricaoBotao.disabled = !confirmarExclusaoInscricao.checked;
     }

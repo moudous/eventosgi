@@ -1,7 +1,15 @@
 <?php
 
 use App\Http\Controllers\Api\FormularioPublicoController;
+use App\Http\Controllers\Api\SicoobPixWebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Endpoint público do PSP: sem sessão, CSRF, permissão do GI ou token do formulário.
+// O Sicoob recebe /api/sicoob como URL-base e publica as notificações em /pix.
+Route::get('/sicoob/pix', [SicoobPixWebhookController::class, 'status'])
+    ->middleware('throttle:60,1')->name('sicoob.pix.status');
+Route::post('/sicoob/pix', [SicoobPixWebhookController::class, 'receber'])
+    ->middleware('throttle:120,1')->name('sicoob.pix.webhook');
 
 Route::middleware('formulario.token')->prefix('v1')->name('api.v1.')->group(function (): void {
     Route::get('/formularios/{atividade}', [FormularioPublicoController::class, 'mostrar'])->name('formularios.mostrar');

@@ -29,4 +29,17 @@ class PixConfiguracao extends Model
     {
         return static::query()->first();
     }
+
+    /** Verifica os formatos de chave aceitos pelo DICT sem expor a chave. */
+    public static function chavePixValida(?string $chave): bool
+    {
+        $chave = trim((string) $chave);
+        if ($chave === '' || strlen($chave) > 77) return false;
+
+        return preg_match('/^\d{11}$/', $chave) === 1
+            || preg_match('/^\d{14}$/', $chave) === 1
+            || preg_match('/^\+[1-9]\d{1,14}$/', $chave) === 1
+            || filter_var($chave, FILTER_VALIDATE_EMAIL) !== false
+            || preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $chave) === 1;
+    }
 }

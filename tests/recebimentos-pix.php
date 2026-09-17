@@ -20,7 +20,7 @@ DB::purge('recebimentos_test');
 try {
     Schema::create('eventos', function (Blueprint $t): void { $t->id(); $t->string('nome'); $t->timestamps(); $t->softDeletes(); });
     Schema::create('atividades', function (Blueprint $t): void { $t->id(); $t->string('nome'); $t->unsignedBigInteger('evento_id'); $t->longText('formulario')->nullable(); $t->timestamps(); $t->softDeletes(); });
-    Schema::create('inscricoes_atividade', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('atividade_id'); $t->unsignedBigInteger('participante_id')->nullable(); $t->string('participante_email')->nullable(); $t->json('resposta'); $t->timestamps(); });
+    Schema::create('inscricoes_atividade', function (Blueprint $t): void { $t->id(); $t->unsignedBigInteger('atividade_id'); $t->unsignedBigInteger('participante_id')->nullable(); $t->string('participante_email')->nullable(); $t->boolean('ativa')->nullable()->default(true); $t->json('resposta'); $t->timestamps(); });
     Schema::create('pix_cobrancas', function (Blueprint $t): void {
         $t->id(); $t->unsignedBigInteger('inscricao_atividade_id'); $t->string('campo'); $t->string('txid', 35)->unique(); $t->decimal('valor', 12, 2); $t->string('status');
         $t->text('pix_copia_cola')->nullable(); $t->string('location', 1000)->nullable(); $t->json('resposta_api')->nullable(); $t->timestamp('pago_em')->nullable(); $t->timestamps();

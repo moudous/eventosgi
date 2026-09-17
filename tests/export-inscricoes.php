@@ -21,6 +21,7 @@ DB::purge('cert');
 Schema::connection('teste_exportacao')->create('inscricoes_atividade', function (Blueprint $table): void {
     $table->id();
     $table->unsignedBigInteger('atividade_id');
+    $table->boolean('ativa')->nullable()->default(true);
     $table->unsignedBigInteger('participante_id')->nullable();
     $table->string('participante_email')->nullable();
     $table->json('resposta')->nullable();

@@ -204,6 +204,9 @@ Route::prefix('configuracao')->name('configuracao.')->group(function (): void {
     Route::get('/', [ConfiguracaoController::class, 'index'])->middleware('gi.permission:configuracao.visualizar,configuracao.pix')->name('index');
     Route::put('/pix', [ConfiguracaoController::class, 'salvarPix'])->middleware('gi.permission:configuracao.pix')->name('pix.update');
     Route::post('/pix/testar', [ConfiguracaoController::class, 'testarPix'])->middleware('gi.permission:configuracao.pix')->name('pix.testar');
+    Route::post('/pix/webhook', [ConfiguracaoController::class, 'cadastrarWebhookPix'])->middleware('gi.permission:configuracao.pix')->name('pix.webhook.store');
+    Route::post('/pix/webhook/consultar', [ConfiguracaoController::class, 'consultarWebhookPix'])->middleware('gi.permission:configuracao.pix')->name('pix.webhook.show');
+    Route::delete('/pix/webhook', [ConfiguracaoController::class, 'removerWebhookPix'])->middleware('gi.permission:configuracao.pix')->name('pix.webhook.destroy');
     Route::post('/faixas-ip', [ConfiguracaoController::class, 'guardarFaixa'])->middleware('gi.permission:configuracao.faixa.criar')->name('faixas-ip.store');
     Route::patch('/faixas-ip/{faixa}', [ConfiguracaoController::class, 'alternarFaixa'])->middleware('gi.permission:configuracao.faixa.ativar_desativar')->name('faixas-ip.toggle');
     Route::delete('/faixas-ip/{faixa}', [ConfiguracaoController::class, 'removerFaixa'])->middleware('gi.permission:configuracao.faixa.excluir')->name('faixas-ip.destroy');
