@@ -33,6 +33,7 @@ class GiUsuarioSynchronizer
                 [
                     'nome' => $dados['nome'] ?? $dados['name'] ?? 'Sem nome',
                     'email' => $dados['email'] ?? null,
+                    'foto_url' => $this->fotoUrl($dados),
                     'perfil' => data_get($dados, 'perfil.nome'),
                     'perfil_id' => data_get($dados, 'perfil.id'),
                     'perfis' => $dados['perfis'] ?? null,
@@ -43,5 +44,15 @@ class GiUsuarioSynchronizer
         }
 
         return count($usuarios);
+    }
+
+    private function fotoUrl(array $dados): ?string
+    {
+        foreach (['foto_url', 'foto', 'avatar_url', 'picture', 'google.picture'] as $campo) {
+            $valor = data_get($dados, $campo);
+            if (is_string($valor) && trim($valor) !== '') return mb_substr(trim($valor), 0, 2048);
+        }
+
+        return null;
     }
 }

@@ -23,6 +23,7 @@ use App\Http\Controllers\PresencaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardExportController;
 use App\Http\Controllers\RecebimentoPixController;
+use App\Http\Controllers\AvaliadorController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -106,6 +107,17 @@ Route::prefix('usuarios')->name('usuarios.')->group(function (): void {
         ->middleware('gi.permission:usuarios.importar')->name('import');
     Route::get('/{usuario}', [UsuarioController::class, 'show'])
         ->middleware('gi.permission:usuarios.visualizar')->name('show');
+});
+
+Route::prefix('avaliadores')->name('avaliadores.')->group(function (): void {
+    Route::get('/', [AvaliadorController::class, 'index'])->middleware('gi.permission:avaliadores.listar')->name('index');
+    Route::get('/dados', [AvaliadorController::class, 'dados'])->middleware('gi.permission:avaliadores.listar')->name('dados');
+    Route::get('/criar', [AvaliadorController::class, 'create'])->middleware('gi.permission:avaliadores.criar')->name('create');
+    Route::post('/', [AvaliadorController::class, 'store'])->middleware('gi.permission:avaliadores.criar')->name('store');
+    Route::get('/{avaliador}', [AvaliadorController::class, 'show'])->middleware('gi.permission:avaliadores.visualizar')->name('show');
+    Route::get('/{avaliador}/editar', [AvaliadorController::class, 'edit'])->middleware('gi.permission:avaliadores.editar')->name('edit');
+    Route::put('/{avaliador}', [AvaliadorController::class, 'update'])->middleware('gi.permission:avaliadores.editar')->name('update');
+    Route::delete('/{avaliador}', [AvaliadorController::class, 'destroy'])->middleware('gi.permission:avaliadores.excluir')->name('destroy');
 });
 
 Route::prefix('eventos')->name('eventos.')->group(function (): void {
@@ -333,14 +345,15 @@ Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     Route::put('/{submissao}', [SubmissaoController::class, 'update'])->middleware('gi.permission:submissoes.editar')->name('update');
     Route::patch('/{submissao}/alternar', [SubmissaoController::class, 'alternar'])->middleware('gi.permission:submissoes.ativar_desativar')->name('alternar');
     Route::delete('/{submissao}', [SubmissaoController::class, 'destroy'])->middleware('gi.permission:submissoes.excluir')->name('destroy');
-    Route::get('/{submissao}/inscritos', [SubmissaoController::class, 'inscritos'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos');
-    Route::get('/{submissao}/inscritos/dados', [SubmissaoController::class, 'inscritosDados'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos.dados');
+    Route::get('/{submissao}/inscritos', [SubmissaoController::class, 'inscritos'])->middleware('gi.permission:submissoes.inscritos,submissoes.avaliar,submissoes.avaliar_meus_trabalhos')->name('inscritos');
+    Route::get('/{submissao}/inscritos/dados', [SubmissaoController::class, 'inscritosDados'])->middleware('gi.permission:submissoes.inscritos,submissoes.avaliar,submissoes.avaliar_meus_trabalhos')->name('inscritos.dados');
     Route::get('/{submissao}/inscritos/notificacoes/{tipo}', [SubmissaoController::class, 'resumoNotificacao'])->middleware('gi.permission:submissoes.inscritos.notificacoes')->name('inscritos.notificacoes.resumo');
     Route::post('/{submissao}/inscritos/notificacoes/{tipo}', [SubmissaoController::class, 'notificarResultados'])->middleware('gi.permission:submissoes.inscritos.notificacoes')->name('inscritos.notificacoes.enviar');
-    Route::get('/{submissao}/inscritos/{trabalho}', [SubmissaoController::class, 'visualizarTrabalho'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.visualizar-trabalho');
-    Route::get('/{submissao}/inscritos/{trabalho}/historico', [SubmissaoController::class, 'historico'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.historico');
-    Route::get('/{submissao}/inscritos/{trabalho}/e-poster', [SubmissaoController::class, 'visualizarEposter'])->middleware('gi.permission:submissoes.inscritos.trabalhos')->name('inscritos.e-poster');
-    Route::patch('/{submissao}/inscritos/{trabalho}/avaliar', [SubmissaoController::class, 'avaliar'])->name('inscritos.avaliar');
+    Route::get('/{submissao}/inscritos/{trabalho}', [SubmissaoController::class, 'visualizarTrabalho'])->middleware('gi.permission:submissoes.inscritos.trabalhos,submissoes.avaliar,submissoes.avaliar_meus_trabalhos')->name('inscritos.visualizar-trabalho');
+    Route::get('/{submissao}/inscritos/{trabalho}/historico', [SubmissaoController::class, 'historico'])->middleware('gi.permission:submissoes.inscritos.trabalhos,submissoes.avaliar,submissoes.avaliar_meus_trabalhos')->name('inscritos.historico');
+    Route::get('/{submissao}/inscritos/{trabalho}/e-poster', [SubmissaoController::class, 'visualizarEposter'])->middleware('gi.permission:submissoes.inscritos.trabalhos,submissoes.avaliar,submissoes.avaliar_meus_trabalhos')->name('inscritos.e-poster');
+    Route::patch('/{submissao}/inscritos/{trabalho}/avaliador', [SubmissaoController::class, 'alterarAvaliador'])->middleware('gi.permission:submissoes.inscritos')->name('inscritos.alterar-avaliador');
+    Route::patch('/{submissao}/inscritos/{trabalho}/avaliar', [SubmissaoController::class, 'avaliar'])->middleware('gi.permission:submissoes.avaliar,submissoes.avaliar_meus_trabalhos')->name('inscritos.avaliar');
     Route::patch('/{submissao}/inscritos/{trabalho}/status', [SubmissaoController::class, 'alterarStatus'])->middleware('gi.permission:submissoes.trabalhos.alterar_status')->name('inscritos.alterar-status');
     Route::patch('/{submissao}/inscritos/{trabalho}/restaurar', [SubmissaoController::class, 'restaurar'])->middleware('gi.permission:submissoes.trabalhos.restaurar')->name('inscritos.restaurar');
     Route::delete('/{submissao}/inscritos/{trabalho}/definitivo', [SubmissaoController::class, 'excluirDefinitivamente'])->middleware('gi.permission:submissoes.trabalhos.excluir_definitivamente')->name('inscritos.excluir-definitivamente');

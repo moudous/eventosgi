@@ -1,0 +1,6 @@
+@extends('layouts.app')
+@section('title','Visualizar avaliador')
+@section('content')
+<div class="mb-4 d-flex flex-wrap justify-content-between gap-3"><div><h1 class="page-title">Visualizar avaliador</h1><p class="page-description mb-0">Dados do avaliador e do usuário vinculado.</p></div><div class="d-flex gap-2"><a href="{{ route('avaliadores.index') }}" class="btn btn-outline-secondary">Voltar</a>@if(app(\App\Services\GiPermissionService::class)->permite('avaliadores.editar'))<a href="{{ route('avaliadores.edit',$avaliador) }}" class="btn btn-primary"><i class="bi bi-pencil-fill me-1"></i>Editar</a>@endif</div></div>
+<div class="card content-card"><div class="card-body p-4"><div class="row g-4"><div class="col-md-2"><div class="small fw-bold text-secondary mb-1">ID</div>{{ $avaliador->id }}</div><div class="col-md-6"><div class="small fw-bold text-secondary mb-1">Nome completo</div>{{ $avaliador->nome }}</div><div class="col-md-4"><div class="small fw-bold text-secondary mb-1">Trabalhos vinculados</div>{{ $avaliador->trabalhos_count }}</div><div class="col-12"><div class="small fw-bold text-secondary mb-2">Usuário</div>@include('avaliadores.partials.usuario',['usuario'=>$avaliador->usuario])</div></div></div></div>
+@endsection

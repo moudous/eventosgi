@@ -14,7 +14,7 @@ class InscricaoSubmissaoTrabalho extends Model
     protected $table = 'inscritos_submissao_trabalhos';
 
     protected $fillable = [
-        'inscrito_submissao_id', 'titulo_trabalho', 'conteudo', 'categoria_trabalho', 'palavras_chave', 'tem_apoio_financeiro', 'apoiador',
+        'inscrito_submissao_id', 'avaliador_id', 'titulo_trabalho', 'conteudo', 'categoria_trabalho', 'palavras_chave', 'tem_apoio_financeiro', 'apoiador',
         'apresentacao', 'aprovacao_comite_etica', 'protocolo_comite_etica', 'status', 'nota', 'situacao',
         'eposter_arquivo', 'eposter_nome_original', 'eposter_enviado_em', 'notificacao_resultado_versao',
     ];
@@ -33,6 +33,7 @@ class InscricaoSubmissaoTrabalho extends Model
 
     protected $casts = [
         'inscrito_submissao_id' => 'integer',
+        'avaliador_id' => 'integer',
         'tem_apoio_financeiro' => 'boolean',
         'aprovacao_comite_etica' => 'boolean',
         'nota' => 'decimal:2',
@@ -43,6 +44,11 @@ class InscricaoSubmissaoTrabalho extends Model
     public function inscricao(): BelongsTo
     {
         return $this->belongsTo(InscricaoSubmissao::class, 'inscrito_submissao_id');
+    }
+
+    public function avaliador(): BelongsTo
+    {
+        return $this->belongsTo(Avaliador::class);
     }
 
     public function autores(): HasMany

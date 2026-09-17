@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Evento;
+use App\Models\Avaliador;
 use App\Models\InscricaoSubmissaoTrabalho;
 use App\Models\Submissao;
 use App\Services\ArmazemService;
@@ -137,13 +138,15 @@ class SubmissaoController
             'submissao' => $submissao,
             'estadoTabela' => $armazem->recuperar('submissoes.inscritos.'.$submissao->id, $request),
             'permissoes' => app(GiPermissionService::class),
+            'avaliadores' => Avaliador::query()->with('usuario')->orderBy('nome')->get(),
         ]);
     }
 
-    public function visualizarTrabalho(Submissao $submissao, int $trabalho): View
+    public function visualizarTrabalho(Request $request, Submissao $submissao, int $trabalho): View
     {
         $permissoes = app(GiPermissionService::class);
         $registro = $submissao->trabalhos()->withTrashed()->with(['inscricao', 'autores'])->whereKey($trabalho)->firstOrFail();
+        $this->autorizarEscopoDoAvaliador($request, $registro);
 
         return view('submissoes.visualizar-trabalho', [
             'submissao' => $submissao,
@@ -152,9 +155,10 @@ class SubmissaoController
         ]);
     }
 
-    public function visualizarEposter(Submissao $submissao, int $trabalho): BinaryFileResponse
+    public function visualizarEposter(Request $request, Submissao $submissao, int $trabalho): BinaryFileResponse
     {
         $registro = $submissao->trabalhos()->withTrashed()->whereKey($trabalho)->firstOrFail();
+        $this->autorizarEscopoDoAvaliador($request, $registro);
         abort_unless($registro->temEposter(), 404);
         $caminho = storage_path('app/private/eposters/'.$registro->eposter_arquivo);
         abort_unless(is_file($caminho), 404);
@@ -173,16 +177,25 @@ class SubmissaoController
         $permissoes = app(GiPermissionService::class);
         $podeAlterarStatus = $permissoes->permite('submissoes.trabalhos.alterar_status');
         $podeVerAutores = $permissoes->permite('submissoes.inscritos.trabalhos.autores');
-        $relacionamentos = ['inscricao'];
+        $podeDistribuir = $permissoes->permite('submissoes.inscritos');
+        $relacionamentos = ['inscricao', 'avaliador.usuario'];
         if ($podeVerAutores) $relacionamentos[] = 'autores';
         $query = $submissao->trabalhos()->withTrashed()->with($relacionamentos);
+        if ($permissoes->permite('submissoes.avaliar_meus_trabalhos', $request)
+            && ! $permissoes->permite('submissoes.avaliar', $request)) {
+            $usuarioId = (int) $request->session()->get('gi_context.usuario.id', 0);
+            $query->whereHas('avaliador', fn ($avaliador) => $avaliador->where('usuario_id', $usuarioId));
+        }
         $total = (clone $query)->count();
+        $filtroAvaliador = max(0, (int) $request->input('filtro_avaliador', 0));
+        if ($filtroAvaliador > 0) $query->where('avaliador_id', $filtroAvaliador);
         $busca = trim((string) $request->input('search.value', ''));
 
         if ($busca !== '') {
             $query->where(function ($consulta) use ($busca, $podeVerAutores): void {
                 $consulta->where('titulo_trabalho', 'like', "%{$busca}%")
                     ->orWhere('situacao', 'like', "%{$busca}%");
+                $consulta->orWhereHas('avaliador', fn ($avaliador) => $avaliador->where('nome', 'like', "%{$busca}%"));
                 if ($podeVerAutores) {
                     $consulta->orWhereHas('inscricao', fn ($inscrito) => $inscrito->where('email', 'like', "%{$busca}%"))
                         ->orWhereHas('autores', fn ($autores) => $autores->where('nome', 'like', "%{$busca}%"));
@@ -197,6 +210,7 @@ class SubmissaoController
             $tabelaTrabalhos.'.titulo_trabalho',
             'inscritos_submissao.email',
             $tabelaTrabalhos.'.id',
+            $tabelaTrabalhos.'.avaliador_id',
             $tabelaTrabalhos.'.status',
             $tabelaTrabalhos.'.situacao',
             $tabelaTrabalhos.'.updated_at',
@@ -211,7 +225,10 @@ class SubmissaoController
             intdiv($inicio, $tamanho) + 1,
             $busca,
             $tamanho,
+            ['filtro_avaliador' => $filtroAvaliador],
         );
+
+        $avaliadores = Avaliador::query()->with('usuario')->orderBy('nome')->get();
 
         $dados = $query->orderBy($coluna, $direcao)->skip($inicio)->take($tamanho)->get()
             ->map(fn (InscricaoSubmissaoTrabalho $trabalho): array => [
@@ -219,6 +236,12 @@ class SubmissaoController
                 'titulo_trabalho' => e($trabalho->titulo_trabalho),
                 'email' => $podeVerAutores ? e($trabalho->inscricao?->email ?? '—') : '—',
                 'autores' => $podeVerAutores ? e($trabalho->autores->pluck('nome')->implode(', ')) : '—',
+                'avaliador' => view('submissoes.partials.avaliador-trabalho', [
+                    'submissao' => $submissao,
+                    'trabalho' => $trabalho,
+                    'avaliadores' => $avaliadores,
+                    'podeDistribuir' => $podeDistribuir,
+                ])->render(),
                 'status' => $trabalho->trashed()
                     ? '<span class="badge text-bg-danger">Apagado</span>'
                     : $this->rotuloStatus($trabalho->status, $podeAlterarStatus, $submissao, $trabalho),
@@ -246,11 +269,12 @@ class SubmissaoController
 
     public function avaliar(Request $request, Submissao $submissao, int $trabalho): JsonResponse
     {
-        app(GiPermissionService::class)->exigir('submissoes.avaliar');
+        app(GiPermissionService::class)->exigirAlguma(['submissoes.avaliar', 'submissoes.avaliar_meus_trabalhos'], $request);
         $decisao = $request->validate([
             'situacao' => ['required', 'string', 'in:aprovado,reprovado'],
         ])['situacao'];
         $registro = $submissao->trabalhos()->whereKey($trabalho)->firstOrFail();
+        $this->autorizarEscopoDoAvaliador($request, $registro);
         $alterouDecisao = $registro->status !== 'avaliado' || $registro->situacao !== $decisao;
         $registro->update([
             'status' => 'avaliado',
@@ -269,6 +293,32 @@ class SubmissaoController
         }
 
         return response()->json(['message' => 'Trabalho '.($decisao === 'aprovado' ? 'aprovado' : 'reprovado').' com sucesso.']);
+    }
+
+    public function alterarAvaliador(Request $request, Submissao $submissao, int $trabalho): JsonResponse
+    {
+        $dados = $request->validate([
+            'avaliador_id' => ['nullable', 'integer', 'exists:avaliadores,id'],
+        ]);
+        $registro = $submissao->trabalhos()->whereKey($trabalho)->firstOrFail();
+        $anterior = $registro->avaliador_id;
+        $novo = $dados['avaliador_id'] ?? null;
+        $registro->update(['avaliador_id' => $novo]);
+
+        if ((int) $anterior !== (int) $novo) {
+            $nomes = Avaliador::query()->whereIn('id', array_filter([$anterior, $novo]))->pluck('nome', 'id');
+            $registro->historicos()->create([
+                'historico' => $novo ? 'Avaliador definido como '.$nomes->get($novo) : 'Avaliador removido',
+                'usuario' => $this->usuarioGi($request),
+                'dados' => ['avaliador' => [
+                    'antes' => $anterior ? $nomes->get($anterior) : null,
+                    'depois' => $novo ? $nomes->get($novo) : null,
+                ]],
+                'data_hora' => now(),
+            ]);
+        }
+
+        return response()->json(['message' => $novo ? 'Avaliador vinculado com sucesso.' : 'Avaliador removido com sucesso.']);
     }
 
     public function alterarStatus(Request $request, Submissao $submissao, int $trabalho): JsonResponse
@@ -312,6 +362,7 @@ class SubmissaoController
     {
         app(GiPermissionService::class)->exigir('submissoes.inscritos.trabalhos.autores');
         $registro = $submissao->trabalhos()->withTrashed()->whereKey($trabalho)->firstOrFail();
+        $this->autorizarEscopoDoAvaliador($request, $registro);
         $query = $registro->historicos();
         $total = $query->count();
         $inicio = max(0, (int) $request->input('start', 0));
@@ -326,6 +377,20 @@ class SubmissaoController
             ]);
 
         return response()->json(['draw' => (int) $request->input('draw'), 'recordsTotal' => $total, 'recordsFiltered' => $total, 'data' => $dados]);
+    }
+
+    private function autorizarEscopoDoAvaliador(Request $request, InscricaoSubmissaoTrabalho $trabalho): void
+    {
+        $permissoes = app(GiPermissionService::class);
+        if (! $permissoes->permite('submissoes.avaliar_meus_trabalhos', $request)
+            || $permissoes->permite('submissoes.avaliar', $request)) return;
+
+        $usuarioId = (int) $request->session()->get('gi_context.usuario.id', 0);
+        abort_unless(
+            $trabalho->avaliador()->where('usuario_id', $usuarioId)->exists(),
+            403,
+            'Este trabalho não está vinculado ao avaliador logado.',
+        );
     }
 
     public function resumoNotificacao(

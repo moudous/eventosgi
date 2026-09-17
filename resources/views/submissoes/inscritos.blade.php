@@ -1,8 +1,14 @@
 @extends('layouts.app')
 @section('title', 'Trabalhos submetidos')
 @push('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
 <link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 <style>
+    #inscritosTable_wrapper .dt-layout-end { display: flex; align-items: end; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+    .filtro-avaliador-dt { min-width: 260px; }
+    .filtro-avaliador-dt label { display: block; margin-bottom: .25rem; font-size: .875rem; font-weight: 600; }
+    .avaliador-trabalho + .select2 { min-width: 180px; }
     #historicoModal .history-data-item { align-items: flex-start; flex-wrap: wrap; }
     #historicoModal .history-data-values { flex-wrap: wrap; justify-content: flex-start; max-width: 100%; }
     #historicoModal .history-data-value { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
@@ -21,7 +27,8 @@
     </div>
 </div>
 <div id="actionFeedback" class="alert alert-dismissible fade d-none"><span></span><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
-<div class="card content-card"><div class="card-body p-0"><div class="table-responsive"><table id="inscritosTable" class="table table-hover align-middle w-100 mb-0"><thead><tr><th>ID</th><th>Título do trabalho</th><th>E-mail</th><th>Autores</th><th>Status</th><th>Situação</th><th>Alterado em</th><th data-dt-order="disable">Ações</th></tr></thead></table></div></div></div>
+<div id="filtroAvaliadorTrabalhos" class="filtro-avaliador-dt d-none"><label for="filtro_avaliador">Avaliador</label><select id="filtro_avaliador" class="form-select form-select-sm"><option value="0">Todos os avaliadores</option>@foreach($avaliadores as $avaliador)<option value="{{ $avaliador->id }}" @selected((int)($estadoTabela['filtro_avaliador']??0)===$avaliador->id)>{{ $avaliador->nome }}</option>@endforeach</select></div>
+<div class="card content-card"><div class="card-body p-0"><div class="table-responsive"><table id="inscritosTable" class="table table-hover align-middle w-100 mb-0"><thead><tr><th>ID</th><th>Título do trabalho</th><th>E-mail</th><th>Autores</th><th>Avaliador</th><th>Status</th><th>Situação</th><th>Alterado em</th><th data-dt-order="disable">Ações</th></tr></thead></table></div></div></div>
 
 @if($permissoes->permite('submissoes.inscritos.notificacoes'))
     @php($podeEditarEmailsNotificacao = $permissoes->permite('submissoes.inscritos.editar_emails_notificacao'))
@@ -57,10 +64,12 @@
 @include('partials.historico-modal', ['historicoUsuarioRotulo' => 'Responsável'])
 @endsection
 @push('scripts')
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script><script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script><script src="https://cdn.datatables.net/2.3.2/js/dataTables.bootstrap5.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{
-    const table=new DataTable('#inscritosTable',{processing:true,serverSide:true,order:[[0,'desc']],pageLength:@json($estadoTabela['por_pagina']),displayStart:@json(($estadoTabela['page']-1)*$estadoTabela['por_pagina']),search:{search:@json($estadoTabela['pesquisar'])},ajax:@json(route('submissoes.inscritos.dados',$submissao, false)),columns:[{data:'id'},{data:'titulo_trabalho'},{data:'email'},{data:'autores'},{data:'status'},{data:'situacao'},{data:'updated_at'},{data:'acoes',orderable:false,searchable:false}],language:{processing:'Carregando...',emptyTable:'Nenhum trabalho enviado.',info:'Exibindo _START_ a _END_ de _TOTAL_ trabalhos',infoEmpty:'Nenhum trabalho encontrado',lengthMenu:'Exibir _MENU_',search:'Pesquisar:',zeroRecords:'Nenhum trabalho encontrado.',paginate:{next:'Próxima',previous:'Anterior'}}});
+    const ativarSelects=()=>$('.avaliador-trabalho').not('.select2-hidden-accessible').select2({theme:'bootstrap-5',width:'100%',minimumResultsForSearch:0,language:{noResults:()=> 'Nenhum avaliador encontrado'}});
+    const table=new DataTable('#inscritosTable',{processing:true,serverSide:true,order:[[0,'desc']],pageLength:@json($estadoTabela['por_pagina']),displayStart:@json(($estadoTabela['page']-1)*$estadoTabela['por_pagina']),search:{search:@json($estadoTabela['pesquisar'])},ajax:{url:@json(route('submissoes.inscritos.dados',$submissao, false)),data:d=>{d.filtro_avaliador=document.getElementById('filtro_avaliador').value}},columns:[{data:'id'},{data:'titulo_trabalho'},{data:'email'},{data:'autores'},{data:'avaliador'},{data:'status'},{data:'situacao'},{data:'updated_at'},{data:'acoes',orderable:false,searchable:false}],drawCallback:ativarSelects,language:{processing:'Carregando...',emptyTable:'Nenhum trabalho enviado.',info:'Exibindo _START_ a _END_ de _TOTAL_ trabalhos',infoEmpty:'Nenhum trabalho encontrado',lengthMenu:'Exibir _MENU_',search:'Pesquisar:',zeroRecords:'Nenhum trabalho encontrado.',paginate:{next:'Próxima',previous:'Anterior'}}});
+    const filtroAvaliador=document.getElementById('filtroAvaliadorTrabalhos'),areaPesquisa=document.querySelector('#inscritosTable_wrapper .dt-search');if(areaPesquisa){areaPesquisa.parentElement.insertBefore(filtroAvaliador,areaPesquisa);filtroAvaliador.classList.remove('d-none')}$('#filtro_avaliador').select2({theme:'bootstrap-5',width:'100%',minimumResultsForSearch:0,language:{noResults:()=> 'Nenhum avaliador encontrado'}}).on('change',()=>table.ajax.reload(null,true));
     const feedback=document.getElementById('actionFeedback');
     const mostrarFeedback=(mensagem,erro=false)=>{feedback.querySelector('span').textContent=mensagem;feedback.classList.remove('d-none','alert-danger','alert-success');feedback.classList.add('show',erro?'alert-danger':'alert-success')};
     let historyTable=null;const historyModal=new bootstrap.Modal('#historicoModal');
@@ -99,6 +108,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         const botao=e.target.closest('[data-action-url]');if(!botao)return;const definitivo=botao.dataset.action==='force-delete';const decisao=botao.dataset.decisao;const pergunta=definitivo?'Excluir este trabalho definitivamente? Os dados e autores não poderão ser recuperados.':decisao?`Deseja ${decisao} este trabalho?`:'Restaurar este trabalho para o usuário?';if(!confirm(pergunta))return;botao.disabled=true;try{const cabecalhos={Accept:'application/json','X-CSRF-TOKEN':@json(csrf_token())};if(decisao)cabecalhos['Content-Type']='application/json';const resposta=await fetch(botao.dataset.actionUrl,{method:botao.dataset.method,credentials:'same-origin',headers:cabecalhos,body:decisao?JSON.stringify({situacao:decisao}):undefined});const dados=await resposta.json();if(!resposta.ok)throw new Error(dados.message);mostrarFeedback(dados.message);table.ajax.reload(null,false)}catch(erro){mostrarFeedback(erro.message||'Falha na operação.',true);botao.disabled=false}
     };
     document.getElementById('inscritosTable').addEventListener('change',async e=>{const campo=e.target.closest('[data-status-url]');if(!campo)return;const anterior=campo.dataset.statusAtual;campo.disabled=true;try{const resposta=await fetch(campo.dataset.statusUrl,{method:'PATCH',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':@json(csrf_token())},body:JSON.stringify({status:campo.value})});const dados=await resposta.json();if(!resposta.ok)throw new Error(dados.message);campo.dataset.statusAtual=campo.value;mostrarFeedback(dados.message);table.ajax.reload(null,false)}catch(erro){campo.value=anterior;mostrarFeedback(erro.message||'Falha ao alterar o status.',true)}finally{campo.disabled=false}});
+    $('#inscritosTable').on('change','[data-avaliador-url]',async function(){const campo=this;const anterior=campo.dataset.avaliadorAtual;campo.disabled=true;try{const resposta=await fetch(campo.dataset.avaliadorUrl,{method:'PATCH',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':@json(csrf_token())},body:JSON.stringify({avaliador_id:campo.value||null})});const dados=await resposta.json();if(!resposta.ok)throw new Error(dados.message);campo.dataset.avaliadorAtual=campo.value;mostrarFeedback(dados.message);table.ajax.reload(null,false)}catch(erro){campo.value=anterior;$(campo).trigger('change.select2');mostrarFeedback(erro.message||'Falha ao alterar o avaliador.',true)}finally{campo.disabled=false}});
 
     document.querySelectorAll('[data-notification-modal]').forEach(modal=>{
         let resumo=null;

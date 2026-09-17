@@ -61,6 +61,7 @@ submissoes.inscritos.notificacoes
 submissoes.inscritos.trabalhos
 submissoes.inscritos.trabalhos.autores
 submissoes.avaliar
+submissoes.avaliar_meus_trabalhos
 submissoes.trabalhos.restaurar
 submissoes.trabalhos.excluir_definitivamente
 submissoes.trabalhos.alterar_status
@@ -71,6 +72,11 @@ templates.excluir
 usuarios.listar
 usuarios.importar
 usuarios.visualizar
+avaliadores.listar
+avaliadores.criar
+avaliadores.visualizar
+avaliadores.editar
+avaliadores.excluir
 biblioteca.listar
 biblioteca.enviar
 biblioteca.recortar

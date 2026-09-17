@@ -12,6 +12,7 @@ class Usuario extends Model
         'id',
         'nome',
         'email',
+        'foto_url',
         'perfil',
         'perfil_id',
         'perfis',
@@ -25,4 +26,9 @@ class Usuario extends Model
         'perfis' => 'array',
         'ultimo_acesso' => 'datetime',
     ];
+
+    public function avaliador(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Avaliador::class);
+    }
 }
