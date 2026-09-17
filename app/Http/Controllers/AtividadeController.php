@@ -164,6 +164,11 @@ class AtividadeController
             'config.mensagem_identificacao' => ['nullable', 'string', 'max:2000'],
             'config.editor.exibir' => ['sometimes', 'boolean'],
             'config.editor.conteudo' => ['nullable', 'string', 'max:500000'],
+            'config.rastreios' => ['sometimes', 'array', 'max:100'],
+            'config.rastreios.*.titulo' => ['required', 'string', 'max:80'],
+            'config.rastreios.*.codigo' => ['required', 'string', 'min:5', 'max:15', 'regex:/^[a-z0-9][a-z0-9-]*[a-z0-9]$/', 'distinct'],
+            'config.rastreios.*.ativo' => ['required', 'boolean'],
+            'config.rastreios.*.predefinido' => ['sometimes', 'boolean'],
         ], [
             'config.limite_inscricoes.required_if' => 'Informe a quantidade de inscrições disponíveis ao ativar o limite.',
             'config.limite_inscricoes.integer' => 'A quantidade de inscrições deve ser um número inteiro.',
@@ -183,6 +188,12 @@ class AtividadeController
             }
         });
         if ($validator->fails()) return back()->withErrors(['formulario' => $validator->errors()->first()])->withInput();
+        $config['rastreios'] = collect($config['rastreios'] ?? [])->map(fn (array $rastreio) => [
+            'titulo' => trim((string) $rastreio['titulo']),
+            'codigo' => mb_strtolower(trim((string) $rastreio['codigo']), 'UTF-8'),
+            'ativo' => ! empty($rastreio['ativo']),
+            'predefinido' => ! empty($rastreio['predefinido']),
+        ])->values()->all();
         $distribuicao->validarConfiguracao($config);
 
         // Sem atividades.formulario.estrutura o bloco Estrutura nem e exibido, entao o

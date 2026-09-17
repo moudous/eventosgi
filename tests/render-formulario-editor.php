@@ -33,6 +33,13 @@ $html = view('atividades.formulario', [
 if (! str_contains($html, 'id="editor_exibir"') || ! str_contains($html, 'new Quill')) {
     throw new RuntimeException('O editor rico não foi renderizado.');
 }
+if (! str_contains($html, 'id="abrirRastreios"')
+    || ! str_contains($html, 'id="rastreiosModal"')
+    || ! str_contains($html, "{titulo:'Instagram',codigo:'instagram'}")
+    || ! str_contains($html, 'rastreios:lerRastreios()')
+    || ! str_contains($html, "endereco.searchParams.set('utm', codigo)")) {
+    throw new RuntimeException('O gerenciador de origens e URLs UTM não foi renderizado.');
+}
 preg_match_all('#<script(?:\s[^>]*)?>(.*?)</script>#s', $html, $scripts);
 file_put_contents('/tmp/formulario-editor-renderizado.js', implode("\n", $scripts[1]));
 echo "OK: editor rico renderizado para validação do JavaScript.\n";

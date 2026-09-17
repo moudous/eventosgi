@@ -439,6 +439,7 @@ class FormularioInscricaoService
                     'sessao_atividade_id' => $sessao?->id,
                     'participante_id' => $participante?->id,
                     'participante_email' => $participante ? ($emailIdentificado ?: $participante->email) : null,
+                    'utm_rastreio' => $this->rastreioAtivo($request, $atividade),
                     'lista_reserva' => $listaReserva,
                     'resposta' => $resposta,
                     'codigo_qr' => ! empty($atividade->formulario['registrar_presenca_qrcode']) ? $this->presencaQr->novoCodigo() : null,
@@ -459,6 +460,21 @@ class FormularioInscricaoService
                 'lista_reserva' => $listaReserva,
             ];
         });
+    }
+
+    /** Aceita apenas codigos ativos configurados para esta atividade. */
+    private function rastreioAtivo(Request $request, Atividade $atividade): ?string
+    {
+        $codigo = mb_strtolower(trim((string) $request->query('utm', '')), 'UTF-8');
+        if (! preg_match('/^[a-z0-9][a-z0-9-]{3,13}[a-z0-9]$/', $codigo)) return null;
+
+        $ativo = collect($atividade->formulario['rastreios'] ?? [])->contains(
+            fn ($rastreio) => is_array($rastreio)
+                && ! empty($rastreio['ativo'])
+                && hash_equals((string) ($rastreio['codigo'] ?? ''), $codigo),
+        );
+
+        return $ativo ? $codigo : null;
     }
 
     private function guardarAnexo(UploadedFile $arquivo): string
