@@ -17,6 +17,8 @@ $publicas = [
     '/biblioteca/arquivos/'.str_repeat('a', 36).'.png/visualizar',
     '/personalizacao/imagens/'.str_repeat('b', 36).'.jpg/visualizar',
     '/inscricoes/1/arquivos/documento/0/visualizar',
+    '/formularios/'.str_repeat('a', 64).'/pix/321/status',
+    '/formularios/'.str_repeat('a', 64).'/pix/321/comprovante.pdf',
 ];
 
 foreach ($publicas as $url) {

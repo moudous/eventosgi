@@ -30,6 +30,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\File;
@@ -575,12 +576,22 @@ class AtividadeController
         ]);
     }
 
-    public function statusPix(Request $request, Atividade $atividade, PixCobranca $cobranca, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao): JsonResponse
+    public function statusPix(Request $request, Atividade $atividade, PixCobranca $cobranca, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, SicoobPixService $sicoob): JsonResponse
     {
         [$inscricao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
         abort_unless((int) $cobranca->inscricao_atividade_id === (int) $inscricao->id, 404);
 
         $cobranca->refresh();
+        // O webhook é o caminho principal. Esta consulta espaçada recupera notificações
+        // perdidas sem fazer uma chamada bancária a cada polling de 5 segundos da tela.
+        if (! $cobranca->pagamentoConfirmado()
+            && Cache::add('pix-conciliacao-tela:'.$cobranca->id, true, now()->addSeconds(30))) {
+            try {
+                $cobranca = $sicoob->consultar($cobranca);
+            } catch (Throwable $erro) {
+                report($erro);
+            }
+        }
 
         return response()->json([
             'pago' => $cobranca->pagamentoConfirmado(),

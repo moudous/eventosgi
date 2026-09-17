@@ -17,6 +17,9 @@ class AllowGiEmbedding
         'inscricoes.legado',
         'inscricoes.editor.imagem',
         'inscricoes.comprovante.*',
+        // Status e comprovante do PIX continuam validados pela sessão do participante,
+        // mas são usados no formulário público e não podem exigir o iframe administrativo.
+        'inscricoes.pix.*',
         'inscricoes.apagar',
         'inscricoes.arquivo',
         'senha-participante.*',

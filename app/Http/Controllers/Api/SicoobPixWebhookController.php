@@ -66,6 +66,14 @@ class SicoobPixWebhookController
             if ($processada === false) $ignoradas++;
         }
 
+        Log::info('Notificação do webhook PIX processada.', [
+            'txids_recebidos' => $txids->count(),
+            'txids_conhecidos' => $cobrancas->count(),
+            'confirmadas' => $confirmadas,
+            'ignoradas' => $ignoradas,
+            'erros' => $erros,
+        ]);
+
         // Falhas transitórias retornam erro para o PSP poder reenviar a notificação.
         return response()->json([
             'recebido' => true,
