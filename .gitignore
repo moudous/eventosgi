@@ -26,6 +26,7 @@
 /storage/pail
 /storage/framework/cache/*
 /templates/
+/templates-build/
 /vendor
 /backup/
 _ide_helper.php

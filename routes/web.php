@@ -125,6 +125,26 @@ Route::prefix('eventos')->name('eventos.')->group(function (): void {
 
 // A edição exige permissão; a visualização é pública para sites externos poderem
 // incorporá-la diretamente em um iframe.
+Route::get('/templates-build/previa/{build}/{acesso}/{caminho}', [\App\Http\Controllers\TemplateBuildController::class, 'previaAsset'])
+    ->where('caminho', '.*')->name('templates-build.previa-asset');
+
+Route::prefix('eventos/{evento}/pagina/criador')->name('eventos.pagina.criador.')
+    ->middleware('gi.permission:eventos.pagina.editar,templates.codigo_fonte.editar')->group(function (): void {
+        $controller = \App\Http\Controllers\TemplateBuildController::class;
+        Route::get('/', [$controller, 'index'])->name('index');
+        Route::get('/templates', [$controller, 'listar'])->name('listar');
+        Route::post('/templates', [$controller, 'criar'])->name('criar');
+        Route::get('/templates/{build}', [$controller, 'abrir'])->name('abrir');
+        Route::get('/templates/{build}/arquivo', [$controller, 'arquivo'])->name('arquivo');
+        Route::put('/templates/{build}/arquivos', [$controller, 'salvar'])->name('salvar');
+        Route::post('/templates/{build}/estrutura', [$controller, 'estrutura'])->name('estrutura');
+        Route::post('/templates/{build}/upload', [$controller, 'upload'])->name('upload');
+        Route::post('/templates/{build}/versao', [$controller, 'versao'])->name('versao');
+        Route::get('/templates/{build}/exportar', [$controller, 'exportar'])->name('exportar');
+        Route::get('/templates/{build}/visualizar', [$controller, 'visualizar'])->name('visualizar');
+        Route::get('/templates/{build}/assets/{caminho}', [$controller, 'asset'])->where('caminho', '.*')->name('asset');
+    });
+
 Route::prefix('eventos/{evento}/pagina')->name('eventos.pagina.')->group(function (): void {
     // eventos.pagina.editar permanece como compatibilidade para perfis antigos. As
     // permissões novas permitem liberar apenas variáveis ou apenas código-fonte.

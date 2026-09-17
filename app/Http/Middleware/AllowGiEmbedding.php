@@ -26,6 +26,8 @@ class AllowGiEmbedding
         // A rota aceita subpastas, portanto esta exceção vale também para templates
         // importados futuramente e para qualquer estrutura interna de assets.
         'templates.asset',
+        // O controlador exige um token temporário vinculado ao template em construção.
+        'templates-build.previa-asset',
     ];
 
     public function handle(Request $request, Closure $next): Response

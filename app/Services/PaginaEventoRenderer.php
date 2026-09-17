@@ -53,6 +53,12 @@ class PaginaEventoRenderer
         );
     }
 
+    /** Prévia de um modelo em construção, usando a mesma linguagem da página publicada. */
+    public function renderizarModelo(string $modelo, Evento $evento, callable $asset): string
+    {
+        return $this->processar($modelo, $this->contexto($evento), $asset);
+    }
+
     /**
      * Dados oferecidos ao template.
      *

@@ -45,7 +45,7 @@ class TemplatePaginaService
      * Lista fechada de proposito: um .php ou .phtml gravado junto dos assets viraria
      * codigo executavel se um dia a pasta fosse exposta por engano.
      */
-    private const EXTENSOES = ['html', 'css', 'js', 'json', 'map', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot', 'txt', 'md'];
+    private const EXTENSOES = ['html', 'css', 'js', 'json', 'map', 'pdf', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'otf', 'eot', 'txt', 'md'];
 
     /** Arquivos que podem ser tratados como código-fonte no editor administrativo. */
     private const EXTENSOES_EDITAVEIS = ['html', 'css', 'js', 'json', 'map', 'svg', 'txt', 'md'];
@@ -463,7 +463,7 @@ class TemplatePaginaService
     private function mime(string $extensao): string
     {
         return [
-            'css' => 'text/css', 'js' => 'text/javascript', 'json' => 'application/json',
+            'css' => 'text/css', 'js' => 'text/javascript', 'json' => 'application/json', 'pdf' => 'application/pdf',
             'map' => 'application/json', 'svg' => 'image/svg+xml', 'png' => 'image/png',
             'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif',
             'webp' => 'image/webp', 'avif' => 'image/avif', 'ico' => 'image/x-icon',

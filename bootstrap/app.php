@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/health',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Espaços e quebras de linha fazem parte do código dos templates em construção.
+        $middleware->trimStrings(except: [fn ($request) => $request->is('eventos/*/pagina/criador/*')]);
         // Precisa rodar dentro do grupo web: depende da sessao (StartSession) e da rota ja resolvida.
         $middleware->web(append: [AllowGiEmbedding::class]);
         $middleware->alias([
