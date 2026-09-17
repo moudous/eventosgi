@@ -17,6 +17,7 @@
     $recuperacaoAberta = old('acao') === 'solicitar_codigo'
         || $errosIdentificacao->has('captcha')
         || session()->has('senha_temporaria_enviada');
+    $instituicoesEnsino = $instituicoesEnsino ?? [];
 @endphp
 <div class="container py-4" style="max-width: 900px">
     <div class="mb-4 rounded-4 p-4 p-md-5" style="background: {{ $atividade->fundoFormulario() }}; color: {{ $estiloCard['cor_fonte'] }}; border: {{ $atividade->bordaFormulario() }};">
@@ -291,9 +292,33 @@
                             <input class="form-control" type="email" id="participante_email_institucional" name="participante[email_institucional]" maxlength="150" value="{{ old('participante.email_institucional', $participante->email_institucional) }}">
                             <div class="invalid-feedback">Informe um e-mail completo, no formato nome@dominio.com.</div>
                         </div>
-                        <div class="col-12 col-md-6">
+                        @php
+                            $instituicaoAtual = trim((string) old('participante.instituicao_ensino', $participante->instituicao_ensino));
+                            $outraInstituicaoAtiva = old('participante.instituicao_ensino_outra_ativa') === '1'
+                                || ($instituicaoAtual !== '' && !in_array($instituicaoAtual, $instituicoesEnsino, true));
+                            $novaInstituicao = old('participante.instituicao_ensino_outra', $outraInstituicaoAtiva ? $instituicaoAtual : '');
+                        @endphp
+                        <div class="col-12 col-md-8">
                             <label class="form-label" for="participante_instituicao">Instituição de ensino</label>
-                            <input class="form-control" id="participante_instituicao" name="participante[instituicao_ensino]" maxlength="80" value="{{ old('participante.instituicao_ensino', $participante->instituicao_ensino) }}">
+                            <div class="d-flex flex-column flex-sm-row gap-2 align-items-sm-center">
+                                <select class="form-select flex-grow-1 @error('participante.instituicao_ensino') is-invalid @enderror" id="participante_instituicao" name="participante[instituicao_ensino]">
+                                    <option value="">Não informada</option>
+                                    <option value="__outra__" hidden @selected($outraInstituicaoAtiva)>-</option>
+                                    @foreach($instituicoesEnsino as $instituicao)
+                                        <option value="{{ $instituicao }}" @selected(!$outraInstituicaoAtiva && $instituicaoAtual === $instituicao)>{{ $instituicao }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-check form-switch flex-shrink-0 mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="participante_instituicao_outra_ativa" name="participante[instituicao_ensino_outra_ativa]" value="1" aria-controls="participante_instituicao_outra_bloco" aria-expanded="{{ $outraInstituicaoAtiva ? 'true' : 'false' }}" @checked($outraInstituicaoAtiva)>
+                                    <label class="form-check-label" for="participante_instituicao_outra_ativa">Outra</label>
+                                </div>
+                            </div>
+                            <div id="participante_instituicao_outra_bloco" class="mt-2 @if(!$outraInstituicaoAtiva) d-none @endif">
+                                <label class="visually-hidden" for="participante_instituicao_outra">Nova instituição de ensino</label>
+                                <input class="form-control @error('participante.instituicao_ensino_outra') is-invalid @enderror" id="participante_instituicao_outra" name="participante[instituicao_ensino_outra]" maxlength="80" placeholder="Digite o nome da instituição" value="{{ $novaInstituicao }}" @if($outraInstituicaoAtiva) required @endif>
+                                <div class="form-text">Após a inscrição, esta instituição ficará disponível na lista.</div>
+                                @error('participante.instituicao_ensino_outra')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            </div>
                         </div>
                         <div class="col-6 col-md-3">
                             <label class="form-label" for="participante_sexo">Sexo</label>
@@ -534,6 +559,36 @@ if (modalNovaSenhaElemento) {
         document.getElementById('senha_nova').focus();
     });
 }
+
+const alternarOutraInstituicao = document.getElementById('participante_instituicao_outra_ativa');
+const seletorInstituicao = document.getElementById('participante_instituicao');
+const blocoOutraInstituicao = document.getElementById('participante_instituicao_outra_bloco');
+const campoOutraInstituicao = document.getElementById('participante_instituicao_outra');
+let instituicaoSelecionadaAntesDeOutra = seletorInstituicao?.value === '__outra__' ? '' : (seletorInstituicao?.value || '');
+
+const atualizarCampoOutraInstituicao = ({focar = false} = {}) => {
+    if (!alternarOutraInstituicao) return;
+    const ativo = alternarOutraInstituicao.checked;
+    blocoOutraInstituicao?.classList.toggle('d-none', !ativo);
+    alternarOutraInstituicao.setAttribute('aria-expanded', ativo ? 'true' : 'false');
+    if (seletorInstituicao) {
+        if (ativo) {
+            if (seletorInstituicao.value !== '__outra__') instituicaoSelecionadaAntesDeOutra = seletorInstituicao.value;
+            seletorInstituicao.value = '__outra__';
+            seletorInstituicao.disabled = true;
+        } else {
+            seletorInstituicao.disabled = false;
+            seletorInstituicao.value = [...seletorInstituicao.options].some(opcao => opcao.value === instituicaoSelecionadaAntesDeOutra)
+                ? instituicaoSelecionadaAntesDeOutra
+                : '';
+        }
+    }
+    if (campoOutraInstituicao) campoOutraInstituicao.required = ativo;
+    if (ativo && focar) campoOutraInstituicao?.focus();
+};
+
+alternarOutraInstituicao?.addEventListener('change', () => atualizarCampoOutraInstituicao({focar: true}));
+atualizarCampoOutraInstituicao();
 
 // Conferencia imediata no navegador. O servidor revalida tudo (App\Rules\Cpf e App\Rules\EmailValido),
 // entao aqui o objetivo e so evitar que o visitante envie e volte com erro.

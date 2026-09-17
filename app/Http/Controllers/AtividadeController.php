@@ -269,6 +269,7 @@ class AtividadeController
             'config' => $config,
             'identificacao' => $sessao,
             'participante' => $participante,
+            'instituicoesEnsino' => $participante ? $servico->instituicoesEnsino() : [],
             'estado' => $servico->estado($atividade, $participante, $sessao['email'] ?? null),
             'inscricao' => $inscricao,
             'totalInscricoes' => $totalInscricoes,

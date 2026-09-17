@@ -227,6 +227,28 @@ class FormularioInscricaoService
     }
 
     /**
+     * Instituicoes ja informadas, sem repeticoes e em ordem alfabetica.
+     *
+     * A comparacao final ignora maiusculas/minusculas para evitar que pequenas
+     * variacoes de digitacao aparecam como opcoes duplicadas no formulario.
+     *
+     * @return list<string>
+     */
+    public function instituicoesEnsino(): array
+    {
+        return Participante::query()
+            ->whereNotNull('instituicao_ensino')
+            ->distinct()
+            ->pluck('instituicao_ensino')
+            ->map(fn ($instituicao) => trim((string) $instituicao))
+            ->filter()
+            ->unique(fn (string $instituicao) => mb_strtolower($instituicao, 'UTF-8'))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+    }
+
+    /**
      * Regras do bloco "Seus dados", preenchido apenas quando ha participante identificado.
      */
     public function regrasParticipante(): array
@@ -236,6 +258,8 @@ class FormularioInscricaoService
             'participante.cpf' => ['required', new Cpf],
             'participante.sexo' => ['nullable', 'in:M,F'],
             'participante.instituicao_ensino' => ['nullable', 'string', 'max:80'],
+            'participante.instituicao_ensino_outra_ativa' => ['nullable', 'in:1'],
+            'participante.instituicao_ensino_outra' => ['nullable', 'required_if:participante.instituicao_ensino_outra_ativa,1', 'string', 'max:80'],
             'participante.email2' => ['nullable', 'max:150', new EmailValido],
             'participante.email_institucional' => ['nullable', 'max:150', new EmailValido],
         ];
@@ -298,6 +322,7 @@ class FormularioInscricaoService
             'participante.cpf' => 'CPF',
             'participante.sexo' => 'sexo',
             'participante.instituicao_ensino' => 'instituição de ensino',
+            'participante.instituicao_ensino_outra' => 'nova instituição de ensino',
             'participante.email2' => 'e-mail alternativo',
             'participante.email_institucional' => 'e-mail institucional',
         ];
@@ -320,6 +345,21 @@ class FormularioInscricaoService
                 $request->merge([$campo['nome'] => $this->apenasDigitos($request->input($campo['nome']))]);
             }
         }
+    }
+
+    /** Consolida a opcao do combo e o campo "Outra" no atributo persistido. */
+    private function normalizarInstituicaoEnsino(Request $request, bool $comParticipante): void
+    {
+        if (! $comParticipante || ! is_array($participante = $request->input('participante'))) return;
+
+        $outraAtiva = (string) ($participante['instituicao_ensino_outra_ativa'] ?? '') === '1';
+        $valor = $outraAtiva
+            ? ($participante['instituicao_ensino_outra'] ?? null)
+            : ($participante['instituicao_ensino'] ?? null);
+
+        if (is_string($valor)) $valor = trim($valor);
+        $participante['instituicao_ensino'] = $valor === '' ? null : $valor;
+        $request->merge(['participante' => $participante]);
     }
 
     private function apenasDigitos(mixed $valor): mixed
@@ -356,6 +396,7 @@ class FormularioInscricaoService
             $listaReserva = ! empty($estado['lista_reserva']);
 
             $this->normalizarCpfs($request, $atividade, $participante !== null);
+            $this->normalizarInstituicaoEnsino($request, $participante !== null);
 
             $regras = $this->regras($atividade) + ($participante ? $this->regrasParticipante() : []);
             $validados = $request->validate($regras, $this->mensagens(), $this->atributos($atividade));

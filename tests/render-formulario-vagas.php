@@ -42,6 +42,7 @@ $config = [
 $html = view('atividades.formulario-publico', [
     'atividade' => $atividade, 'config' => $config,
     'identificacao' => ['email' => 'pessoa@example.com'], 'participante' => $participante,
+    'instituicoesEnsino' => ['FCO', 'IF Goiano'],
     'estado' => ['aberto' => true, 'motivo' => null, 'mensagem' => null], 'inscricao' => null,
     'dadosComprovante' => [], 'respostasComprovante' => [],
     'qrPresenca' => null,
@@ -66,6 +67,19 @@ if (! str_contains($html, 'name="declaracao" value="1"') || ! str_contains($html
 }
 if (! str_contains($html, 'id="inicio-formulario"') || ! str_contains($html, 'Você já entrou com')) {
     throw new RuntimeException('A âncora do início do formulário não foi renderizada no aviso de identificação.');
+}
+if (! str_contains($html, 'id="participante_instituicao"')
+    || ! str_contains($html, '<option value="FCO"')
+    || ! str_contains($html, '<option value="__outra__"')
+    || ! str_contains($html, 'name="participante[instituicao_ensino_outra_ativa]"')
+    || ! str_contains($html, 'id="participante_instituicao_outra_bloco"')
+    || ! str_contains($html, 'atualizarCampoOutraInstituicao')) {
+    throw new RuntimeException('A instituição deve usar o combo cadastrado e revelar a opção Outra pelo controle lateral.');
+}
+if (! str_contains($html, "seletorInstituicao.value = '__outra__'")
+    || ! str_contains($html, '? instituicaoSelecionadaAntesDeOutra')
+    || ! str_contains($html, ": '';")) {
+    throw new RuntimeException('Ao alternar Outra, o combo deve exibir um traço e depois restaurar a seleção anterior.');
 }
 if (! str_contains($html, 'id="formularioInscricaoAtividade"')
     || ! str_contains($html, "addEventListener('invalid'")
@@ -213,13 +227,27 @@ if (! str_contains($conteudoEmail, 'campo <strong>Senha</strong>')
     throw new RuntimeException('O e-mail deve orientar o uso da senha temporária no novo fluxo.');
 }
 $atividade->formulario = $config;
-$regras = app(App\Services\FormularioInscricaoService::class)->regras($atividade);
+$servicoFormulario = app(App\Services\FormularioInscricaoService::class);
+$regras = $servicoFormulario->regras($atividade);
 if (validator(['periodo' => 'manha', 'interesses' => ['arte'], 'declaracao' => '1'], $regras)->fails()
     || validator(['periodo' => 'manha', 'declaracao' => '1'], $regras)->fails()
     || validator(['periodo' => 'manha', 'interesses' => ['opcao-invalida'], 'declaracao' => '1'], $regras)->passes()
     || validator(['periodo' => 'manha', 'interesses' => ['arte']], $regras)->passes()
     || validator(['periodo' => 'manha', 'interesses' => ['arte'], 'declaracao' => '0'], $regras)->passes()) {
     throw new RuntimeException('A validação do campo checkbox não preservou obrigatoriedade e opções permitidas.');
+}
+$regrasParticipante = $servicoFormulario->regrasParticipante();
+if (validator(['participante' => ['instituicao_ensino_outra_ativa' => '1', 'instituicao_ensino_outra' => '']], $regrasParticipante)->passes()) {
+    throw new RuntimeException('Uma nova instituição deve ser obrigatória quando a opção Outra estiver ativa.');
+}
+$requisicaoInstituicao = Request::create('/', 'POST', ['participante' => [
+    'instituicao_ensino' => 'FCO',
+    'instituicao_ensino_outra_ativa' => '1',
+    'instituicao_ensino_outra' => '  Nova Faculdade  ',
+]]);
+(new ReflectionMethod($servicoFormulario, 'normalizarInstituicaoEnsino'))->invoke($servicoFormulario, $requisicaoInstituicao, true);
+if ($requisicaoInstituicao->input('participante.instituicao_ensino') !== 'Nova Faculdade') {
+    throw new RuntimeException('A instituição digitada em Outra deve substituir a opção do combo antes de salvar.');
 }
 $config['mostrar_vagas_restantes'] = true;
 $html = view('atividades.formulario-publico', [
