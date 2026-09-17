@@ -107,17 +107,41 @@ class DashboardController
 
     private function camposCombo(Atividade $atividade): array
     {
-        return collect($atividade->formulario['campos'] ?? [])->filter(
+        $camposFormulario = collect($atividade->formulario['campos'] ?? [])->filter(
             fn (array $campo) => ($campo['tipo'] ?? '') === 'select' && ! empty($campo['nome']) && ! empty($campo['opcoes']),
         )->map(fn (array $campo) => [
             'nome' => (string) $campo['nome'],
             'label' => (string) ($campo['label'] ?? $campo['nome']),
             'opcoes' => $campo['opcoes'],
+        ]);
+
+        return $camposFormulario->concat([
+            [
+                'nome' => 'participante.sexo',
+                'label' => 'Sexo',
+                'fonte' => 'participante',
+                'atributo' => 'sexo',
+                'opcoes' => [
+                    ['valor' => 'M', 'texto' => 'Masculino'],
+                    ['valor' => 'F', 'texto' => 'Feminino'],
+                ],
+            ],
+            [
+                'nome' => 'participante.instituicao_ensino',
+                'label' => 'Instituição de ensino',
+                'fonte' => 'participante',
+                'atributo' => 'instituicao_ensino',
+                'opcoes' => [],
+            ],
         ])->values()->all();
     }
 
     private function grafico(Atividade $atividade, array $campo): array
     {
+        if (($campo['fonte'] ?? '') === 'participante') {
+            return $this->graficoParticipante($atividade, $campo);
+        }
+
         $opcoes = collect($campo['opcoes'])->map(fn ($opcao) => is_array($opcao)
             ? ['valor' => (string) ($opcao['valor'] ?? ''), 'rotulo' => (string) ($opcao['texto'] ?? $opcao['valor'] ?? '')]
             : ['valor' => (string) $opcao, 'rotulo' => (string) $opcao])
@@ -142,6 +166,55 @@ class DashboardController
             'rotulo' => 'Não informado',
             'quantidade' => $semResposta,
             'percentual' => round($semResposta * 100 / $total, 1),
+        ];
+
+        return ['total' => $total, 'itens' => $itens];
+    }
+
+    /** Agrupa dados cadastrais da pessoa vinculada a cada inscricao da atividade. */
+    private function graficoParticipante(Atividade $atividade, array $campo): array
+    {
+        $atributo = (string) ($campo['atributo'] ?? '');
+        $inscricoes = InscricaoAtividade::query()
+            ->where('atividade_id', $atividade->id)
+            ->with(['participante' => fn ($query) => $query->withTrashed()])
+            ->get(['id', 'participante_id']);
+        $rotulosFixos = collect($campo['opcoes'] ?? [])->mapWithKeys(fn ($opcao) => is_array($opcao)
+            ? [(string) ($opcao['valor'] ?? '') => (string) ($opcao['texto'] ?? $opcao['valor'] ?? '')]
+            : [(string) $opcao => (string) $opcao])->filter(fn ($rotulo, $valor) => $valor !== '');
+        $contagens = $rotulosFixos->map(fn () => 0)->all();
+        $rotulos = $rotulosFixos->all();
+        $semResposta = 0;
+
+        foreach ($inscricoes as $inscricao) {
+            $valor = trim((string) ($inscricao->participante?->getAttribute($atributo) ?? ''));
+            if ($atributo === 'instituicao_ensino' && mb_strtolower($valor, 'UTF-8') === 'fco') {
+                $valor = \App\Services\FormularioInscricaoService::INSTITUICAO_PADRAO;
+            }
+            if ($valor === '' || ($rotulosFixos->isNotEmpty() && ! $rotulosFixos->has($valor))) {
+                $semResposta++;
+                continue;
+            }
+
+            $chave = $rotulosFixos->isNotEmpty() ? $valor : mb_strtolower($valor, 'UTF-8');
+            $rotulos[$chave] ??= $valor;
+            $contagens[$chave] = ($contagens[$chave] ?? 0) + 1;
+        }
+
+        if ($rotulosFixos->isEmpty()) {
+            uksort($rotulos, fn ($a, $b) => strnatcasecmp($rotulos[$a], $rotulos[$b]));
+        }
+
+        $total = $inscricoes->count();
+        $itens = collect($rotulos)->map(fn (string $rotulo, $valor) => [
+            'rotulo' => $rotulo,
+            'quantidade' => $contagens[$valor] ?? 0,
+            'percentual' => $total ? round(($contagens[$valor] ?? 0) * 100 / $total, 1) : 0,
+        ])->values()->all();
+        if ($semResposta > 0) $itens[] = [
+            'rotulo' => 'Não informado',
+            'quantidade' => $semResposta,
+            'percentual' => $total ? round($semResposta * 100 / $total, 1) : 0,
         ];
 
         return ['total' => $total, 'itens' => $itens];

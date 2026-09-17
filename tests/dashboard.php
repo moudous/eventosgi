@@ -55,6 +55,28 @@ if ($atividadeCombo) {
     }
 }
 
+$atividadeParticipantes = App\Models\Atividade::query()->first();
+if ($atividadeParticipantes) {
+    foreach ([
+        'participante.sexo' => 'Sexo',
+        'participante.instituicao_ensino' => 'Instituição de ensino',
+    ] as $campoParticipante => $rotulo) {
+        $request = Illuminate\Http\Request::create('/dashboard', 'GET', [
+            'evento' => $atividadeParticipantes->evento_id,
+            'atividade' => $atividadeParticipantes->id,
+            'campo' => $campoParticipante,
+        ]);
+        $dadosParticipante = (new App\Http\Controllers\DashboardController())($request)->getData();
+        $campoEncontrado = collect($dadosParticipante['campos'])->firstWhere('nome', $campoParticipante);
+        if (($campoEncontrado['label'] ?? null) !== $rotulo || $dadosParticipante['campoNome'] !== $campoParticipante) {
+            throw new RuntimeException("O campo cadastral {$rotulo} não está disponível no combo do dashboard.");
+        }
+        if (array_sum(array_column($dadosParticipante['grafico']['itens'], 'quantidade')) !== $dadosParticipante['grafico']['total']) {
+            throw new RuntimeException("O gráfico de {$rotulo} não representa todas as inscrições.");
+        }
+    }
+}
+
 
 $dados = $view->getData();
 $exportacao = app(App\Services\DashboardExportService::class);
