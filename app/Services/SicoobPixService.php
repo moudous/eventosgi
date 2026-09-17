@@ -170,7 +170,9 @@ class SicoobPixService
         $documento = data_get($pixRecebido, 'pagador.cpf') ?: data_get($pixRecebido, 'pagador.cnpj');
         $horario = data_get($pixRecebido, 'horario');
         try {
-            $pagoEm = $horario ? Carbon::parse($horario) : ($cobranca->pago_em ?? now());
+            $pagoEm = $horario
+                ? Carbon::parse($horario)->setTimezone(config('app.timezone'))
+                : ($cobranca->pago_em ?? now());
         } catch (\Throwable) {
             $pagoEm = $cobranca->pago_em ?? now();
         }

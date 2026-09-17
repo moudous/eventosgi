@@ -64,13 +64,24 @@ try {
     ]]]);
     $inscricao = InscricaoAtividade::create(['atividade_id' => $atividade->id, 'resposta' => []]);
 
+    $confirmarConsultaComHorarioUtc = false;
     Http::fake([
         PixConfiguracao::TOKEN_URL => Http::response(['access_token' => 'token-teste'], 200),
-        PixConfiguracao::API_URL.'/cob/*' => fn (Request $request) => Http::response([
-            'txid' => basename((string) parse_url($request->url(), PHP_URL_PATH)),
-            'status' => $request->method() === 'PATCH' ? 'REMOVIDA_PELO_USUARIO_RECEBEDOR' : 'ATIVA',
-            'pixCopiaECola' => '000201010212teste6304ABCD',
-        ], 201),
+        PixConfiguracao::API_URL.'/cob/*' => function (Request $request) use (&$confirmarConsultaComHorarioUtc) {
+            $txid = basename((string) parse_url($request->url(), PHP_URL_PATH));
+            if ($request->method() === 'GET' && $confirmarConsultaComHorarioUtc) {
+                return Http::response([
+                    'txid' => $txid,
+                    'status' => 'CONCLUIDA',
+                    'pix' => [['txid' => $txid, 'horario' => '2026-09-17T23:17:00Z']],
+                ], 200);
+            }
+            return Http::response([
+                'txid' => $txid,
+                'status' => $request->method() === 'PATCH' ? 'REMOVIDA_PELO_USUARIO_RECEBEDOR' : 'ATIVA',
+                'pixCopiaECola' => '000201010212teste6304ABCD',
+            ], 201);
+        },
     ]);
     $servico = app(SicoobPixService::class);
     $cobranca = $servico->gerarParaInscricao($inscricao->load('atividade'))[0];
@@ -157,6 +168,13 @@ try {
     if ($regenerada->id !== $sandbox->id || $regenerada->ambiente !== 'producao' || ! str_starts_with($regenerada->txid, 'EVGI')) {
         throw new RuntimeException('A cobrança do Sandbox não foi substituída corretamente ao migrar para produção.');
     }
+    $confirmarConsultaComHorarioUtc = true;
+    $confirmadaNoFusoLocal = $servico->consultar($regenerada);
+    if ($confirmadaNoFusoLocal->pago_em?->format('Y-m-d H:i:s') !== '2026-09-17 20:17:00') {
+        throw new RuntimeException('O horário UTC do Sicoob não foi convertido para America/Sao_Paulo.');
+    }
+    $confirmarConsultaComHorarioUtc = false;
+    $regenerada->update(['status' => 'ATIVA', 'pago_em' => null, 'end_to_end_id' => null]);
 
     config(['pix.webhook_url' => 'https://eventosgi.fco.edu.br/api/sicoob']);
     $configuracao->forceFill(['updated_at' => now()->addSeconds(2)])->save();
