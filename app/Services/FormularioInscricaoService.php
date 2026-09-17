@@ -18,6 +18,8 @@ use Illuminate\Validation\Rule;
 
 class FormularioInscricaoService
 {
+    public const INSTITUICAO_PADRAO = 'FCO - Faculdade de Ciências Odontológicas';
+
     public function __construct(
         private readonly DispositivoVisitanteService $dispositivo,
         private readonly DistribuicaoVagasService $distribuicao,
@@ -240,9 +242,15 @@ class FormularioInscricaoService
             ->whereNotNull('instituicao_ensino')
             ->distinct()
             ->pluck('instituicao_ensino')
-            ->map(fn ($instituicao) => trim((string) $instituicao))
+            ->map(function ($instituicao): string {
+                $instituicao = trim((string) $instituicao);
+
+                return mb_strtolower($instituicao, 'UTF-8') === 'fco'
+                    ? self::INSTITUICAO_PADRAO
+                    : $instituicao;
+            })
             ->filter()
-            ->prepend('FCO')
+            ->prepend(self::INSTITUICAO_PADRAO)
             ->unique(fn (string $instituicao) => mb_strtolower($instituicao, 'UTF-8'))
             ->sort(SORT_NATURAL | SORT_FLAG_CASE)
             ->values()

@@ -294,9 +294,14 @@
                         </div>
                         @php
                             $instituicaoAtual = trim((string) old('participante.instituicao_ensino', $participante->instituicao_ensino));
+                            if (mb_strtolower($instituicaoAtual, 'UTF-8') === 'fco') {
+                                $instituicaoAtual = \App\Services\FormularioInscricaoService::INSTITUICAO_PADRAO;
+                            }
                             $outraInstituicaoAtiva = old('participante.instituicao_ensino_outra_ativa') === '1'
                                 || ($instituicaoAtual !== '' && !in_array($instituicaoAtual, $instituicoesEnsino, true));
-                            $instituicaoSelecionada = $instituicaoAtual !== '' ? $instituicaoAtual : 'FCO';
+                            $instituicaoSelecionada = $instituicaoAtual !== ''
+                                ? $instituicaoAtual
+                                : \App\Services\FormularioInscricaoService::INSTITUICAO_PADRAO;
                             $novaInstituicao = old('participante.instituicao_ensino_outra', $outraInstituicaoAtiva ? $instituicaoAtual : '');
                         @endphp
                         <div class="col-12 col-md-8">
