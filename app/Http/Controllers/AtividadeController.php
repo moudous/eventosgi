@@ -575,6 +575,20 @@ class AtividadeController
         ]);
     }
 
+    public function statusPix(Request $request, Atividade $atividade, PixCobranca $cobranca, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao): JsonResponse
+    {
+        [$inscricao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);
+        abort_unless((int) $cobranca->inscricao_atividade_id === (int) $inscricao->id, 404);
+
+        $cobranca->refresh();
+
+        return response()->json([
+            'pago' => $cobranca->pagamentoConfirmado(),
+            'status' => trim((string) $cobranca->status),
+            'pago_em' => $cobranca->pago_em?->toIso8601String(),
+        ])->header('Cache-Control', 'private, no-store, max-age=0');
+    }
+
     public function apagarInscricao(Request $request, Atividade $atividade, FormularioInscricaoService $formularios, IdentificacaoParticipanteService $identificacao, GiEmailService $email, CancelamentoInscricaoService $cancelamento): RedirectResponse
     {
         [$inscricao, $sessao] = $this->inscricaoAutorizada($request, $atividade, $formularios, $identificacao);

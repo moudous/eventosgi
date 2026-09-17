@@ -137,8 +137,17 @@
                             $cobrancaPix = $itemPix['model'];
                             $cobrancaSandboxEmProducao = ($pixAmbiente ?? null) === 'producao' && $cobrancaPix->ambiente === 'sandbox';
                         @endphp
-                        <div class="row g-4 align-items-center {{ !$loop->last ? 'border-bottom pb-4 mb-4' : '' }}">
-                            @if(!$cobrancaSandboxEmProducao && $cobrancaPix->status !== 'CONCLUIDA' && $itemPix['qr'])<div class="col-md-5 text-center"><img src="{{ $itemPix['qr']['imagem'] }}" width="260" height="260" alt="QR Code para pagamento PIX"></div>@endif
+                        <div class="row g-4 align-items-center {{ !$loop->last ? 'border-bottom pb-4 mb-4' : '' }}"
+                            @if(!$cobrancaSandboxEmProducao && !$cobrancaPix->pagamentoConfirmado()) data-pix-status-url="{{ route('inscricoes.pix.status', ['atividade' => $atividade->hash_publica, 'cobranca' => $cobrancaPix]) }}" @endif>
+                            @if(!$cobrancaSandboxEmProducao && !$cobrancaPix->pagamentoConfirmado() && $itemPix['qr'])
+                                <div class="col-md-5 text-center" data-pix-qrcode>
+                                    <img src="{{ $itemPix['qr']['imagem'] }}" width="260" height="260" alt="QR Code para pagamento PIX">
+                                    <div class="d-flex align-items-center justify-content-center gap-2 mt-2 small text-muted" role="status" aria-live="polite" data-pix-monitor-texto>
+                                        <span class="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+                                        <span>Aguardando confirmação automática…</span>
+                                    </div>
+                                </div>
+                            @endif
                             <div class="col">
                                 <div class="fs-4 fw-bold mb-2">R$ {{ number_format((float) $cobrancaPix->valor, 2, ',', '.') }}</div>
                                 @if($cobrancaSandboxEmProducao)
@@ -536,6 +545,47 @@ document.querySelectorAll('[data-copiar-pix]').forEach(botao => botao.addEventLi
     try { await navigator.clipboard.writeText(campo.value); } catch (_) { campo.select(); document.execCommand('copy'); }
     botao.innerHTML = '<i class="bi bi-check-lg"></i> Copiado';
 }));
+
+let pixAtualizandoPagina = false;
+document.querySelectorAll('[data-pix-status-url]').forEach(item => {
+    let falhas = 0;
+    const texto = item.querySelector('[data-pix-monitor-texto] span:last-child');
+
+    const agendar = (espera = 5000) => window.setTimeout(consultar, espera);
+    const consultar = async () => {
+        if (pixAtualizandoPagina) return;
+        if (document.hidden) {
+            agendar();
+            return;
+        }
+
+        try {
+            const resposta = await fetch(item.dataset.pixStatusUrl, {
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin',
+                cache: 'no-store',
+            });
+            if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+
+            const estado = await resposta.json();
+            falhas = 0;
+            if (estado.pago) {
+                pixAtualizandoPagina = true;
+                if (texto) texto.textContent = 'Pagamento confirmado! Atualizando…';
+                window.setTimeout(() => window.location.reload(), 600);
+                return;
+            }
+            if (texto) texto.textContent = 'Aguardando confirmação automática…';
+            agendar();
+        } catch (_) {
+            falhas++;
+            if (texto && falhas >= 2) texto.textContent = 'Reconectando para verificar o pagamento…';
+            agendar(Math.min(15000, 5000 * falhas));
+        }
+    };
+
+    agendar(1500);
+});
 </script>
 @endpush
 

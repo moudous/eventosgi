@@ -276,6 +276,7 @@ Route::get('/formularios/{atividade:hash_publica}/captcha', CaptchaInscricaoCont
 Route::get('/formularios/{atividade:hash_publica}/editor/imagens/{arquivo}/visualizar', [AtividadeController::class, 'imagemEditor'])
     ->where('arquivo', '[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp)')->name('inscricoes.editor.imagem');
 Route::post('/formularios/{atividade:hash_publica}/comprovante/email', [AtividadeController::class, 'enviarComprovante'])->name('inscricoes.comprovante.email');
+Route::get('/formularios/{atividade:hash_publica}/pix/{cobranca}/status', [AtividadeController::class, 'statusPix'])->name('inscricoes.pix.status');
 Route::get('/formularios/{atividade:hash_publica}/pix/{cobranca}/comprovante.pdf', [AtividadeController::class, 'comprovantePix'])->name('inscricoes.pix.comprovante');
 Route::delete('/formularios/{atividade:hash_publica}/inscricao', [AtividadeController::class, 'apagarInscricao'])->name('inscricoes.apagar');
 Route::get('/comprovantes/{inscricao:comprovante_hash}.pdf/visualizar', [AtividadeController::class, 'comprovantePdf'])

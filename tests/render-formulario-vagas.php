@@ -149,6 +149,27 @@ if (! str_contains($htmlPixPendente, 'data-bs-target="#apagarInscricaoModal"')
 }
 $configComPix = $config;
 $configComPix['campos'][] = ['nome' => 'pagamento', 'label' => 'Pagamento', 'tipo' => 'pagamento_pix', 'valor_pix' => 50];
+$cobrancaPendente = new App\Models\PixCobranca([
+    'inscricao_atividade_id' => $inscricaoReserva->id,
+    'txid' => 'TXPENDENTE123',
+    'valor' => 50,
+    'status' => 'ATIVA',
+]);
+$cobrancaPendente->id = 320;
+$htmlPagamentoPendente = view('atividades.formulario-publico', [
+    'atividade' => $atividade, 'config' => $configComPix,
+    'identificacao' => ['email' => 'pessoa@example.com'], 'participante' => $participante,
+    'estado' => ['aberto' => false, 'motivo' => 'duplicada', 'mensagem' => Atividade::MENSAGEM_JA_INSCRITO, 'lista_reserva' => false],
+    'inscricao' => $inscricaoReserva, 'dadosComprovante' => [], 'respostasComprovante' => [], 'qrPresenca' => null,
+    'cancelamentoBloqueadoPix' => false,
+    'cobrancasPix' => collect([['model' => $cobrancaPendente, 'qr' => ['imagem' => 'data:image/png;base64,AAAA', 'codigo' => 'PIX-CODIGO']]]),
+])->render();
+if (! str_contains($htmlPagamentoPendente, 'data-pix-status-url=')
+    || ! str_contains($htmlPagamentoPendente, '/pix/320/status')
+    || ! str_contains($htmlPagamentoPendente, 'spinner-border')
+    || ! str_contains($htmlPagamentoPendente, 'Aguardando confirmação automática')) {
+    throw new RuntimeException('A cobrança pendente deve consultar o banco local e exibir o indicador de confirmação automática.');
+}
 $cobrancaConfirmada = new App\Models\PixCobranca([
     'inscricao_atividade_id' => $inscricaoReserva->id,
     'txid' => 'TX-COMPROVANTE',
