@@ -1,6 +1,14 @@
 @extends('layouts.app')
 @section('title', 'Trabalhos submetidos')
-@push('styles')<link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet">@endpush
+@push('styles')
+<link href="https://cdn.datatables.net/2.3.2/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<style>
+    #historicoModal .history-data-item { align-items: flex-start; flex-wrap: wrap; }
+    #historicoModal .history-data-values { flex-wrap: wrap; justify-content: flex-start; max-width: 100%; }
+    #historicoModal .history-data-value { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+    #historicoModal .history-data-toggle { display: block; text-decoration: none; }
+</style>
+@endpush
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between gap-3">
     <div><h1 class="page-title">Trabalhos submetidos</h1><p class="page-description mb-0">{{ $submissao->titulo }} — {{ $submissao->evento?->nome }}</p></div>
@@ -56,9 +64,38 @@ document.addEventListener('DOMContentLoaded',()=>{
     const feedback=document.getElementById('actionFeedback');
     const mostrarFeedback=(mensagem,erro=false)=>{feedback.querySelector('span').textContent=mensagem;feedback.classList.remove('d-none','alert-danger','alert-success');feedback.classList.add('show',erro?'alert-danger':'alert-success')};
     let historyTable=null;const historyModal=new bootstrap.Modal('#historicoModal');
+    const historyElement = document.getElementById('historicoModal');
+    const prepararDadosHistorico = () => {
+        historyElement.querySelectorAll('.history-data-value:not([data-recolhivel])').forEach(valor => {
+            const completo = valor.textContent;
+            const caracteres = Array.from(completo);
+            if (caracteres.length <= 120) return;
+            valor.dataset.recolhivel = 'true';
+            const resumo = caracteres.slice(0, 120).join('').trimEnd() + '...';
+            const texto = document.createElement('span');
+            texto.textContent = resumo;
+            texto.title = 'Duplo clique para ver mais ou ver menos';
+            const botao = document.createElement('button');
+            botao.type = 'button';
+            botao.className = 'btn btn-sm btn-link p-0 mt-1 history-data-toggle';
+            botao.setAttribute('aria-expanded', 'false');
+            botao.innerHTML = '<i class="bi bi-chevron-down me-1" aria-hidden="true"></i><span>Ver mais</span>';
+            const alternar = () => {
+                const expandido = botao.getAttribute('aria-expanded') !== 'true';
+                texto.textContent = expandido ? completo : resumo;
+                botao.setAttribute('aria-expanded', String(expandido));
+                botao.querySelector('i').className = 'bi me-1 bi-chevron-' + (expandido ? 'up' : 'down');
+                botao.querySelector('span').textContent = expandido ? 'Ver menos' : 'Ver mais';
+            };
+            botao.addEventListener('click', alternar);
+            texto.addEventListener('dblclick', alternar);
+            valor.replaceChildren(texto, botao);
+        });
+    };
+
     document.getElementById('inscritosTable').onclick=async e=>{
         const history=e.target.closest('[data-history-url]');
-        if(history){document.getElementById('historicoRegistro').textContent=history.dataset.historyName;if(historyTable)historyTable.destroy();historyTable=new DataTable('#historicoTable',{processing:true,serverSide:true,searching:false,ordering:false,ajax:history.dataset.historyUrl,columns:[{data:'numero'},{data:'historico'},{data:'usuario'},{data:'dados'},{data:'data_hora'}],language:{processing:'Carregando...',info:'Exibindo _START_ a _END_ de _TOTAL_ alterações',infoEmpty:'Nenhuma alteração',emptyTable:'Nenhuma alteração registrada.',lengthMenu:'Exibir _MENU_',paginate:{next:'Próxima',previous:'Anterior'}}});historyModal.show();return}
+        if(history){document.getElementById('historicoRegistro').textContent=history.dataset.historyName;if(historyTable)historyTable.destroy();historyTable=new DataTable('#historicoTable',{processing:true,serverSide:true,searching:false,ordering:false,drawCallback:prepararDadosHistorico,ajax:history.dataset.historyUrl,columns:[{data:'numero'},{data:'historico'},{data:'usuario'},{data:'dados'},{data:'data_hora'}],language:{processing:'Carregando...',info:'Exibindo _START_ a _END_ de _TOTAL_ alterações',infoEmpty:'Nenhuma alteração',emptyTable:'Nenhuma alteração registrada.',lengthMenu:'Exibir _MENU_',paginate:{next:'Próxima',previous:'Anterior'}}});historyModal.show();return}
         const botao=e.target.closest('[data-action-url]');if(!botao)return;const definitivo=botao.dataset.action==='force-delete';const decisao=botao.dataset.decisao;const pergunta=definitivo?'Excluir este trabalho definitivamente? Os dados e autores não poderão ser recuperados.':decisao?`Deseja ${decisao} este trabalho?`:'Restaurar este trabalho para o usuário?';if(!confirm(pergunta))return;botao.disabled=true;try{const cabecalhos={Accept:'application/json','X-CSRF-TOKEN':@json(csrf_token())};if(decisao)cabecalhos['Content-Type']='application/json';const resposta=await fetch(botao.dataset.actionUrl,{method:botao.dataset.method,credentials:'same-origin',headers:cabecalhos,body:decisao?JSON.stringify({situacao:decisao}):undefined});const dados=await resposta.json();if(!resposta.ok)throw new Error(dados.message);mostrarFeedback(dados.message);table.ajax.reload(null,false)}catch(erro){mostrarFeedback(erro.message||'Falha na operação.',true);botao.disabled=false}
     };
     document.getElementById('inscritosTable').addEventListener('change',async e=>{const campo=e.target.closest('[data-status-url]');if(!campo)return;const anterior=campo.dataset.statusAtual;campo.disabled=true;try{const resposta=await fetch(campo.dataset.statusUrl,{method:'PATCH',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':@json(csrf_token())},body:JSON.stringify({status:campo.value})});const dados=await resposta.json();if(!resposta.ok)throw new Error(dados.message);campo.dataset.statusAtual=campo.value;mostrarFeedback(dados.message);table.ajax.reload(null,false)}catch(erro){campo.value=anterior;mostrarFeedback(erro.message||'Falha ao alterar o status.',true)}finally{campo.disabled=false}});

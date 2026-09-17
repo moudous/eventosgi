@@ -310,6 +310,7 @@ class SubmissaoController
 
     public function historico(Request $request, Submissao $submissao, int $trabalho): JsonResponse
     {
+        app(GiPermissionService::class)->exigir('submissoes.inscritos.trabalhos.autores');
         $registro = $submissao->trabalhos()->withTrashed()->whereKey($trabalho)->firstOrFail();
         $query = $registro->historicos();
         $total = $query->count();

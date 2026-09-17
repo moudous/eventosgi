@@ -2,7 +2,7 @@
 @if(!$trabalho->trashed() && $permissoes->permite('submissoes.inscritos.trabalhos'))
 <a href="{{ route('submissoes.inscritos.visualizar-trabalho', [$submissao, $trabalho->id]) }}" class="btn btn-sm btn-outline-info" title="Visualizar trabalho"><i class="bi bi-eye-fill"></i></a>
 @endif
-@if($permissoes->permite('submissoes.inscritos.trabalhos'))
+@if($permissoes->permite('submissoes.inscritos.trabalhos') && $permissoes->permite('submissoes.inscritos.trabalhos.autores'))
 <button type="button" class="btn btn-sm btn-outline-secondary" title="Histórico" data-history-url="{{ route('submissoes.inscritos.historico', [$submissao, $trabalho->id]) }}" data-history-name="{{ $trabalho->titulo_trabalho }}"><i class="bi bi-clock-history"></i></button>
 @endif
 @if(!$trabalho->trashed() && $permissoes->permite('submissoes.avaliar'))
