@@ -69,7 +69,7 @@ if (! str_contains($html, 'id="inicio-formulario"') || ! str_contains($html, 'Vo
     throw new RuntimeException('A âncora do início do formulário não foi renderizada no aviso de identificação.');
 }
 if (! str_contains($html, 'id="participante_instituicao"')
-    || ! str_contains($html, '<option value="FCO"')
+    || ! preg_match('/<option value="FCO"[^>]*selected/', $html)
     || ! str_contains($html, '<option value="__outra__"')
     || ! str_contains($html, 'name="participante[instituicao_ensino_outra_ativa]"')
     || ! str_contains($html, 'id="participante_instituicao_outra_bloco"')

@@ -242,6 +242,7 @@ class FormularioInscricaoService
             ->pluck('instituicao_ensino')
             ->map(fn ($instituicao) => trim((string) $instituicao))
             ->filter()
+            ->prepend('FCO')
             ->unique(fn (string $instituicao) => mb_strtolower($instituicao, 'UTF-8'))
             ->sort(SORT_NATURAL | SORT_FLAG_CASE)
             ->values()

@@ -296,6 +296,7 @@
                             $instituicaoAtual = trim((string) old('participante.instituicao_ensino', $participante->instituicao_ensino));
                             $outraInstituicaoAtiva = old('participante.instituicao_ensino_outra_ativa') === '1'
                                 || ($instituicaoAtual !== '' && !in_array($instituicaoAtual, $instituicoesEnsino, true));
+                            $instituicaoSelecionada = $instituicaoAtual !== '' ? $instituicaoAtual : 'FCO';
                             $novaInstituicao = old('participante.instituicao_ensino_outra', $outraInstituicaoAtiva ? $instituicaoAtual : '');
                         @endphp
                         <div class="col-12 col-md-8">
@@ -305,7 +306,7 @@
                                     <option value="">Não informada</option>
                                     <option value="__outra__" hidden @selected($outraInstituicaoAtiva)>-</option>
                                     @foreach($instituicoesEnsino as $instituicao)
-                                        <option value="{{ $instituicao }}" @selected(!$outraInstituicaoAtiva && $instituicaoAtual === $instituicao)>{{ $instituicao }}</option>
+                                        <option value="{{ $instituicao }}" @selected(!$outraInstituicaoAtiva && $instituicaoSelecionada === $instituicao)>{{ $instituicao }}</option>
                                     @endforeach
                                 </select>
                                 <div class="form-check form-switch flex-shrink-0 mb-0">
