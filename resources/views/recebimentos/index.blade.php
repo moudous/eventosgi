@@ -14,7 +14,7 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">Recebimentos PIX</h1><p class="page-description mb-0">{{ $atividadeSelecionada?->nome ?? 'Pagamentos confirmados de todas as atividades.' }}</p></div>
-    <div class="d-flex gap-2">@if(app(\App\Services\GiPermissionService::class)->permite($atividadeSelecionada ? 'atividades.recebimentos.exportar' : 'recebimentos.exportar'))<button class="btn btn-success" id="exportarRecebimentos"><i class="bi bi-file-earmark-excel me-1"></i>Exportar pagamentos</button>@endif<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a></div>
+    <div class="d-flex gap-2">@if(app(\App\Services\GiPermissionService::class)->permite($atividadeSelecionada ? 'atividades.recebimentos.exportar' : 'recebimentos.exportar'))<button class="btn btn-success" id="exportarRecebimentos"><i class="bi bi-file-earmark-excel me-1"></i>Exportar pagamentos</button>@endif @if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif</div>
 </div>
 
 <div class="card content-card mb-4">

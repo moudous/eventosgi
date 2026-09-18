@@ -13,7 +13,7 @@
         <div class="d-flex flex-wrap gap-2 align-items-start">
             <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#buildOpenModal" data-mutate><i class="bi bi-folder2-open me-1"></i>Abrir template</button>
             <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#buildNewModal" data-mutate><i class="bi bi-plus-lg me-1"></i>Novo template</button>
-            <a href="{{ route('eventos.pagina.editar', $evento) }}" class="btn btn-outline-secondary">Voltar</a>
+            @if(app(\App\Services\GiPermissionService::class)->permiteAlguma(['eventos.pagina.editar', 'templates.variaveis.visualizar', 'templates.variaveis.editar', 'templates.codigo_fonte.visualizar', 'templates.codigo_fonte.editar']))<a href="{{ route('eventos.pagina.editar', $evento) }}" class="btn btn-outline-secondary">Voltar</a>@endif
         </div>
     </div>
     <div id="buildFeedback" class="alert alert-info" role="status" aria-live="polite">Preparando o editor...</div>

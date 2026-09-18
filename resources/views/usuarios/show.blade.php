@@ -3,7 +3,7 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">Visualizar usuário</h1><p class="page-description mb-0">Dados do usuário sincronizado com o GI.</p></div>
-    <a href="{{ route('usuarios.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Voltar</a>
+    @if(app(\App\Services\GiPermissionService::class)->permite('usuarios.listar'))<a href="{{ route('usuarios.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Voltar</a>@endif
 </div>
 <div class="card content-card">
     <div class="card-header"><h2 class="h5 fw-bold mb-0">Dados do usuário</h2></div>

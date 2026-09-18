@@ -4,7 +4,7 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">{{ $submissao->exists ? 'Editar submissão' : 'Adicionar submissão' }}</h1><p class="page-description mb-0">Configure separadamente a submissão dos trabalhos e o envio dos e-pôsteres.</p></div>
-    <div class="d-flex flex-wrap gap-2"><a href="{{ route('submissoes.index') }}" class="btn btn-outline-secondary">Voltar</a>@if($submissao->exists)<a href="{{ route('submissoes.publicas.formulario', $submissao) }}" target="_blank" rel="noopener" class="btn btn-outline-dark"><i class="bi bi-box-arrow-up-right me-1"></i>Formulário público</a>@endif</div>
+    <div class="d-flex flex-wrap gap-2">@if(app(\App\Services\GiPermissionService::class)->permite('submissoes.listar'))<a href="{{ route('submissoes.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif @if($submissao->exists)<a href="{{ route('submissoes.publicas.formulario', $submissao) }}" target="_blank" rel="noopener" class="btn btn-outline-dark"><i class="bi bi-box-arrow-up-right me-1"></i>Formulário público</a>@endif</div>
 </div>
 @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{ session('status') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>@endif

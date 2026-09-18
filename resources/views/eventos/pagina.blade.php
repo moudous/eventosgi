@@ -7,7 +7,7 @@
         @if($podeEditarCodigo)
             <a href="{{ route('eventos.pagina.criador.index', $evento) }}" class="btn btn-primary"><i class="bi bi-code-square me-1"></i>Criador de template</a>
         @endif
-        <a href="{{ route('eventos.index') }}" class="btn btn-outline-secondary">Voltar</a>
+        @if(app(\App\Services\GiPermissionService::class)->permite('eventos.listar'))<a href="{{ route('eventos.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif
         @if(app(\App\Services\GiPermissionService::class)->permite('eventos.pagina.visualizar'))
             <a href="{{ route('eventos.pagina.visualizar', $evento) }}" target="_blank" rel="noopener" class="btn btn-outline-info"><i class="bi bi-box-arrow-up-right me-1"></i>Visualizar página</a>
         @endif

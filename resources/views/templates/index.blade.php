@@ -3,7 +3,7 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">Templates de página</h1><p class="page-description mb-0">Modelos HTML usados nas páginas públicas dos eventos.</p></div>
-    <a href="{{ route('eventos.index') }}" class="btn btn-outline-secondary">Voltar para eventos</a>
+    @if(app(\App\Services\GiPermissionService::class)->permite('eventos.listar'))<a href="{{ route('eventos.index') }}" class="btn btn-outline-secondary">Voltar para eventos</a>@endif
 </div>
 @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{ session('status') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 @if($errors->any())<div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach($errors->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>@endif
