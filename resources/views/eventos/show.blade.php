@@ -4,7 +4,7 @@
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">Visualizar evento</h1><p class="page-description mb-0">Dados completos do evento.</p></div>
     <div class="d-flex gap-2">
-        <a href="{{ route('eventos.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Voltar</a>
+        @if(app(\App\Services\GiPermissionService::class)->permite('eventos.listar'))<a href="{{ route('eventos.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-2"></i>Voltar</a>@endif
         @if(app(\App\Services\GiPermissionService::class)->permite('eventos.editar'))<a href="{{ route('eventos.edit', $evento) }}" class="btn btn-primary"><i class="bi bi-pencil-fill me-2"></i>Editar</a>@endif
     </div>
 </div>

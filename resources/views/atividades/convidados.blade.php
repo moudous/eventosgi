@@ -43,7 +43,7 @@
         </ol>
         @endif
     </div></div>
-    <div class="mt-4 d-flex justify-content-end gap-2"><a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@if($podeEditar)<button type="submit" class="btn btn-primary">Salvar</button>@endif</div>
+    <div class="mt-4 d-flex justify-content-end gap-2">@if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif @if($podeEditar)<button type="submit" class="btn btn-primary">Salvar</button>@endif</div>
 @if($podeEditar)</form>@endif
 @endsection
 @if($podeEditar)

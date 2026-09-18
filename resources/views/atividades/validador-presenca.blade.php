@@ -4,7 +4,7 @@
 <div class="container py-4" style="max-width:760px">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
         <div><h1 class="page-title"><i class="bi bi-qr-code-scan me-2"></i>Validador de presença</h1><p class="page-description mb-0">Leia o QR Code apresentado pelo participante.</p></div>
-        <a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>
+        @if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif
     </div>
 
     @if($errors->any())<div class="alert alert-danger"><i class="bi bi-x-circle me-1"></i>{{ $errors->first() }}</div>@endif

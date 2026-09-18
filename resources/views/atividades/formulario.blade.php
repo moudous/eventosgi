@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title','Construtor de formulário')
 @section('content')
-<div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3"><div><h1 class="page-title">Formulário de inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div><a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a></div>
+<div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3"><div><h1 class="page-title">Formulário de inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div>@if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif</div>
 @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
 @error('formulario')<div class="alert alert-danger">{{ $message }}</div>@enderror
 @php

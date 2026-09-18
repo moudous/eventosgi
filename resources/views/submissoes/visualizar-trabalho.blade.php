@@ -6,7 +6,7 @@
         <h1 class="page-title">Visualizar trabalho</h1>
         <p class="page-description mb-0">{{ $submissao->titulo }} — {{ $submissao->evento?->nome }}</p>
     </div>
-    <a href="{{ route('submissoes.inscritos', $submissao) }}" class="btn btn-outline-secondary align-self-start">Voltar</a>
+    @if(app(\App\Services\GiPermissionService::class)->permite('submissoes.inscritos'))<a href="{{ route('submissoes.inscritos', $submissao) }}" class="btn btn-outline-secondary align-self-start">Voltar</a>@endif
 </div>
 
 <div class="card content-card">

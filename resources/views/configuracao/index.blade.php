@@ -3,7 +3,7 @@
 @section('content')
 <div class="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
     <div><h1 class="page-title">Configuração</h1><p class="page-description mb-0">Integrações, redes liberadas e publicação dos formulários.</p></div>
-    <a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar para atividades</a>
+    @if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar para atividades</a>@endif
 </div>
 
 @if(session('status'))<div class="alert alert-success alert-dismissible fade show">{{ session('status') }}<button class="btn-close" data-bs-dismiss="alert"></button></div>@endif

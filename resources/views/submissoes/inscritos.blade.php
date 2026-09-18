@@ -17,7 +17,7 @@
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#notificarAprovadosModal"><i class="bi bi-envelope-check me-1"></i>Notificar autores de trabalhos aprovados</button>
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#notificarReprovadosModal"><i class="bi bi-envelope-x me-1"></i>Notificar reprovados</button>
         @endif
-        <a href="{{ route('submissoes.index') }}" class="btn btn-outline-secondary">Voltar</a>
+        @if(app(\App\Services\GiPermissionService::class)->permite('submissoes.listar'))<a href="{{ route('submissoes.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif
     </div>
 </div>
 <div id="actionFeedback" class="alert alert-dismissible fade d-none"><span></span><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
