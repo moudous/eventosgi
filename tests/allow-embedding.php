@@ -15,6 +15,7 @@ $middleware = new AllowGiEmbedding;
 $publicas = [
     '/formularios/'.str_repeat('a', 64),
     '/biblioteca/arquivos/'.str_repeat('a', 36).'.png/visualizar',
+    '/convidados/foto/'.str_repeat('c', 40).'.jpg/visualizar',
     '/personalizacao/imagens/'.str_repeat('b', 36).'.jpg/visualizar',
     '/inscricoes/1/arquivos/documento/0/visualizar',
     '/formularios/'.str_repeat('a', 64).'/pix/321/status',
@@ -58,4 +59,4 @@ try {
     if ($erro->getStatusCode() !== 403) throw $erro;
 }
 
-echo "OK: formulários e arquivos ignoram a opção; rotas administrativas continuam protegidas.\n";
+echo "OK: páginas públicas e seus arquivos ignoram a opção; rotas administrativas continuam protegidas.\n";

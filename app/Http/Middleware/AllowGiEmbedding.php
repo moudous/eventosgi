@@ -12,6 +12,10 @@ class AllowGiEmbedding
         'eventos.pagina.visualizar',
         'eventos.personalizacao.imagem',
         'biblioteca.abrir',
+        // As páginas públicas dos eventos exibem as fotos dos convidados. O nome
+        // imprevisível do arquivo funciona como identificador e o controller só
+        // entrega JPEGs existentes na pasta privada reservada para essas fotos.
+        'convidados.foto',
         'inscricoes.publica*',
         'inscricoes.captcha',
         'inscricoes.legado',
