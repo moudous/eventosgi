@@ -14,6 +14,7 @@ use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -73,90 +74,80 @@ class SicoobPixService
         if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'remover o webhook PIX');
     }
 
-    /** Cria as cobranças dos campos PIX da inscrição que ainda não foram geradas. */
+    /** Cria a cobrança única com a soma dos valores associados às respostas. */
     public function gerarParaInscricao(InscricaoAtividade $inscricao): array
     {
-        $camposPix = array_values(array_filter(
-            $inscricao->atividade->formulario['campos'] ?? [],
-            fn (array $campo) => ($campo['tipo'] ?? '') === 'pagamento_pix' && ! empty($campo['nome']),
-        ));
-        if ($camposPix === []) return [];
+        $pagamento = $inscricao->atividade->configuracaoPagamentoPix();
+        $valorTotal = $inscricao->atividade->valorPagamentoPix($inscricao->resposta ?? []);
+        if (! $pagamento || $valorTotal <= 0) return [];
 
         $configuracao = $this->configuracaoAtiva();
         if (! PixConfiguracao::chavePixValida($configuracao->chave_pix)) {
             throw new RuntimeException('A chave PIX configurada não tem um formato válido. Em Configuração, informe um CPF ou CNPJ sem pontuação, telefone no padrão +5511999999999, e-mail ou chave aleatória UUID.');
         }
         $ambiente = $this->ambienteEfetivo($configuracao);
-        $criadas = [];
+        $campoCobranca = array_key_exists('pagamento_inscricao', $inscricao->atividade->formulario ?? [])
+            ? 'pagamento_inscricao'
+            : (string) (collect($inscricao->atividade->formulario['campos'] ?? [])->firstWhere('tipo', 'pagamento_pix')['nome'] ?? 'pagamento_inscricao');
+        $existente = PixCobranca::query()
+            ->where('inscricao_atividade_id', $inscricao->id)
+            ->where('campo', $campoCobranca)->first();
+        $deveRegenerarEmProducao = $existente
+            && $existente->ambiente === 'sandbox'
+            && $ambiente === 'producao';
+        $deveRegenerarRemovida = $existente?->removidaSemPagamento() ?? false;
+        if ($existente && ! $deveRegenerarEmProducao && ! $deveRegenerarRemovida) return [$existente];
 
-        foreach ($camposPix as $campo) {
-            $existente = PixCobranca::query()
-                ->where('inscricao_atividade_id', $inscricao->id)
-                ->where('campo', $campo['nome'])->first();
-            $deveRegenerarEmProducao = $existente
-                && $existente->ambiente === 'sandbox'
-                && $ambiente === 'producao';
-            if ($existente && ! $deveRegenerarEmProducao) {
-                $criadas[] = $existente;
-                continue;
-            }
+        $valor = number_format($valorTotal, 2, '.', '');
+        $txid = 'EVGI'.strtoupper(Str::random(28));
+        $payload = [
+            'calendario' => ['expiracao' => $pagamento['expiracao']],
+            'valor' => ['original' => $valor],
+            'chave' => $configuracao->chave_pix,
+            'solicitacaoPagador' => Str::limit($pagamento['descricao'], 140, ''),
+            'infoAdicionais' => [
+                ['nome' => 'Inscrição', 'valor' => (string) $inscricao->id],
+                ['nome' => 'Atividade', 'valor' => Str::limit($inscricao->atividade->nome, 50, '')],
+            ],
+        ];
 
-            $valor = number_format((float) ($campo['valor_pix'] ?? 0), 2, '.', '');
-            if ((float) $valor <= 0) throw new RuntimeException('O valor do campo PIX não foi configurado.');
-
-            $txid = 'EVGI'.strtoupper(Str::random(28));
-            $payload = [
-                'calendario' => ['expiracao' => min(86400, max(300, (int) ($campo['expiracao_pix'] ?? 3600)))],
-                'valor' => ['original' => $valor],
-                'chave' => $configuracao->chave_pix,
-                'solicitacaoPagador' => Str::limit((string) ($campo['descricao_pix'] ?? $inscricao->atividade->nome), 140, ''),
-                'infoAdicionais' => [
-                    ['nome' => 'Inscrição', 'valor' => (string) $inscricao->id],
-                    ['nome' => 'Atividade', 'valor' => Str::limit($inscricao->atividade->nome, 50, '')],
-                ],
-            ];
-
-            $participante = $inscricao->participante;
-            $cpf = preg_replace('/\D+/', '', (string) $participante?->cpf);
-            if ($participante && strlen($cpf) === 11) {
-                $payload['devedor'] = ['cpf' => $cpf, 'nome' => Str::limit($participante->nome, 200, '')];
-            }
-
-            $sandbox = $ambiente === 'sandbox';
-            $resposta = $this->enviar(
-                $configuracao,
-                $sandbox ? 'post' : 'put',
-                rtrim($configuracao->api_url, '/').'/cob'.($sandbox ? '' : '/'.$txid),
-                $payload,
-            );
-            if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'criar a cobrança');
-            $dados = (array) $resposta->json();
-
-            $atributos = [
-                'inscricao_atividade_id' => $inscricao->id,
-                'campo' => $campo['nome'],
-                'ambiente' => $ambiente,
-                'txid' => $dados['txid'] ?? $txid,
-                'valor' => $valor,
-                'status' => $dados['status'] ?? 'ATIVA',
-                'pix_copia_cola' => $dados['pixCopiaECola'] ?? $dados['brcode'] ?? null,
-                'location' => $dados['location'] ?? data_get($dados, 'loc.location'),
-                'resposta_api' => $dados,
-            ];
-            if ($existente) {
-                $existente->update($atributos + [
-                    'pago_em' => null,
-                    'pagador_nome' => null,
-                    'pagador_documento' => null,
-                    'end_to_end_id' => null,
-                ]);
-                $criadas[] = $existente->refresh();
-            } else {
-                $criadas[] = PixCobranca::create($atributos);
-            }
+        $participante = $inscricao->participante;
+        $cpf = preg_replace('/\D+/', '', (string) $participante?->cpf);
+        if ($participante && strlen($cpf) === 11) {
+            $payload['devedor'] = ['cpf' => $cpf, 'nome' => Str::limit($participante->nome, 200, '')];
         }
 
-        return $criadas;
+        $sandbox = $ambiente === 'sandbox';
+        $resposta = $this->enviar(
+            $configuracao,
+            $sandbox ? 'post' : 'put',
+            rtrim($configuracao->api_url, '/').'/cob'.($sandbox ? '' : '/'.$txid),
+            $payload,
+        );
+        if (! $resposta->successful()) $this->falha($resposta->status(), $resposta->json(), 'criar a cobrança');
+        $dados = (array) $resposta->json();
+
+        $atributos = [
+            'inscricao_atividade_id' => $inscricao->id,
+            'campo' => $campoCobranca,
+            'ambiente' => $ambiente,
+            'txid' => $dados['txid'] ?? $txid,
+            'valor' => $valor,
+            'status' => $dados['status'] ?? 'ATIVA',
+            'pix_copia_cola' => $dados['pixCopiaECola'] ?? $dados['brcode'] ?? null,
+            'location' => $dados['location'] ?? data_get($dados, 'loc.location'),
+            'resposta_api' => $dados,
+        ];
+        if (! $existente) return [PixCobranca::create($atributos)];
+
+        $existente->update($atributos + [
+            'pago_em' => null,
+            'pagador_nome' => null,
+            'pagador_documento' => null,
+            'end_to_end_id' => null,
+        ]);
+
+        return [$existente->refresh()];
     }
 
     public function consultar(PixCobranca $cobranca): PixCobranca
@@ -187,7 +178,28 @@ class SicoobPixService
             'pago_em' => $pago ? $pagoEm : null,
         ]);
 
+        if ($pago) $this->confirmarInscricao($cobranca);
+
         return $cobranca->refresh();
+    }
+
+    private function confirmarInscricao(PixCobranca $cobranca): void
+    {
+        DB::transaction(function () use ($cobranca): void {
+            $inscricao = InscricaoAtividade::query()->withoutGlobalScope('ativas')
+                ->whereKey($cobranca->inscricao_atividade_id)->lockForUpdate()->first();
+            if (! $inscricao || $inscricao->ativa || $inscricao->cancelada_em) return;
+
+            $inscricao->forceFill([
+                'ativa' => true,
+                'codigo_qr' => ! empty($inscricao->atividade?->formulario['registrar_presenca_qrcode'])
+                    ? app(PresencaQrService::class)->novoCodigo()
+                    : null,
+            ])->save();
+        });
+
+        $inscricao = InscricaoAtividade::query()->find($cobranca->inscricao_atividade_id);
+        if ($inscricao) app(DistribuicaoVagasService::class)->recalcular($inscricao->atividade);
     }
 
     public function cancelar(PixCobranca $cobranca): PixCobranca

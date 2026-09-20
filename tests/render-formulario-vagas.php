@@ -170,6 +170,20 @@ if (! str_contains($htmlPagamentoPendente, 'data-pix-status-url=')
     || ! str_contains($htmlPagamentoPendente, 'Aguardando confirmação automática')) {
     throw new RuntimeException('A cobrança pendente deve consultar o banco local e exibir o indicador de confirmação automática.');
 }
+$tentativaPagamento = new App\Models\InscricaoAtividade(['ativa' => false, 'lista_reserva' => false, 'comprovante_hash' => str_repeat('e', 64)]);
+$tentativaPagamento->id = 100;
+$htmlTentativaPagamento = view('atividades.formulario-publico', [
+    'atividade' => $atividade, 'config' => $configComPix,
+    'identificacao' => ['email' => 'pessoa@example.com'], 'participante' => $participante,
+    'estado' => ['aberto' => false, 'motivo' => 'pagamento_pendente', 'mensagem' => 'Aguardando pagamento.', 'lista_reserva' => false],
+    'inscricao' => $tentativaPagamento, 'dadosComprovante' => [], 'respostasComprovante' => [], 'qrPresenca' => null,
+    'cancelamentoBloqueadoPix' => false,
+    'cobrancasPix' => collect([['model' => $cobrancaPendente, 'qr' => ['imagem' => 'data:image/png;base64,AAAA', 'codigo' => 'PIX-CODIGO']]]),
+])->render();
+if (! str_contains($htmlTentativaPagamento, 'value="cancelar_pix"')
+    || ! str_contains($htmlTentativaPagamento, 'Cancelar QR Code PIX')) {
+    throw new RuntimeException('A tentativa aguardando pagamento deve permitir cancelar o QR Code e voltar ao formulário.');
+}
 $cobrancaConfirmada = new App\Models\PixCobranca([
     'inscricao_atividade_id' => $inscricaoReserva->id,
     'txid' => 'TX-COMPROVANTE',

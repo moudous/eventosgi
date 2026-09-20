@@ -8,7 +8,6 @@
     const choiceTypes = ['select', 'radio', 'checkbox', 'multiselect'];
     const quotaTypes = ['select', 'radio', 'checkbox'];
     const hierarchicalTypes = ['select', 'radio'];
-    const canInsertPixField = window.formularioPodeInserirPix === true;
     const slug = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
     const fieldsPerRow = field => {
         const explicit = Number(field.campos_por_linha);
@@ -22,7 +21,7 @@
     function optionHtml(option = {valor: '', texto: ''}) {
         const item = typeof option === 'object' && option !== null ? option : {valor: String(option), texto: String(option)};
         const percentual = item.percentual_vagas === null || item.percentual_vagas === undefined ? '' : `${Number(item.percentual_vagas)}%`;
-        return `<div class="row g-2 align-items-end mb-2 option-item"><div class="col-md-4"><label class="form-label small mb-1">Texto exibido<input class="form-control option-text" value="${esc(item.texto)}" required></label></div><div class="col-md-3"><label class="form-label small mb-1">Valor<input class="form-control option-value" value="${esc(item.valor)}" required></label></div><div class="col-md-3 option-percent-column"><label class="form-label small mb-1">% de vaga<input class="form-control option-percent quota-percent" inputmode="decimal" value="${esc(percentual)}" placeholder="Ex.: 33% ou 3"></label><div class="small text-muted option-quota-number"></div></div><div class="col-md-2"><div class="btn-group mb-1" role="group" aria-label="Ordenar ou remover item"><button type="button" class="btn btn-outline-secondary move-option-up" aria-label="Subir item" title="Subir item"><i class="bi bi-arrow-up"></i></button><button type="button" class="btn btn-outline-secondary move-option-down" aria-label="Descer item" title="Descer item"><i class="bi bi-arrow-down"></i></button><button type="button" class="btn btn-outline-danger remove-option" aria-label="Remover item" title="Remover item"><i class="bi bi-trash"></i></button></div></div></div>`;
+        return `<div class="row g-2 align-items-end mb-2 option-item"><div class="col-md-4"><label class="form-label small mb-1">Texto exibido<input class="form-control option-text" value="${esc(item.texto)}" required></label></div><div class="col-md-3"><label class="form-label small mb-1">Valor<input class="form-control option-value" value="${esc(item.valor)}" required></label></div><div class="col-md-3 option-price-column"><label class="form-label small mb-1">Cobrança PIX (R$)<input class="form-control option-pix-value" type="number" min="0.01" max="9999999999.99" step="0.01" value="${esc(item.valor_pix)}" placeholder="0,00"></label></div><div class="col-md-3 option-percent-column"><label class="form-label small mb-1">% de vaga<input class="form-control option-percent quota-percent" inputmode="decimal" value="${esc(percentual)}" placeholder="Ex.: 33% ou 3"></label><div class="small text-muted option-quota-number"></div></div><div class="col-md-2"><div class="btn-group mb-1" role="group" aria-label="Ordenar ou remover item"><button type="button" class="btn btn-outline-secondary move-option-up" aria-label="Subir item" title="Subir item"><i class="bi bi-arrow-up"></i></button><button type="button" class="btn btn-outline-secondary move-option-down" aria-label="Descer item" title="Descer item"><i class="bi bi-arrow-down"></i></button><button type="button" class="btn btn-outline-danger remove-option" aria-label="Remover item" title="Remover item"><i class="bi bi-trash"></i></button></div></div></div>`;
     }
     function refresh() {
         const fields = [...root.children];
@@ -37,7 +36,6 @@
             el.style.setProperty('--campos-por-linha', amount);
             el.style.setProperty('--largura-campo', `${100 / amount}%`);
             const type = el.querySelector('.f-type').value;
-            const pagamentoPix = type === 'pagamento_pix';
             const criterio = el.querySelector('.f-criterion');
             const checkboxSimples = type === 'checkbox' && !el.querySelector('.option-item');
             criterio.disabled = !quotaTypes.includes(type);
@@ -47,9 +45,22 @@
                 section.hidden = !visible;
                 section.querySelectorAll('input,button').forEach(control => control.disabled = !visible);
             }
-            const pix = el.querySelector('.field-pix');
-            pix.hidden = type !== 'pagamento_pix';
-            pix.querySelectorAll('input').forEach(control => control.disabled = type !== 'pagamento_pix');
+            const pagamentoAtivo = document.getElementById('pagamento_pix_sicoob')?.checked === true;
+            const cobranca = el.querySelector('.f-charge-enabled');
+            cobranca.disabled = !pagamentoAtivo;
+            const modo = el.querySelector('.f-charge-mode');
+            const permiteItens = choiceTypes.includes(type) && el.querySelectorAll('.option-item').length > 0;
+            modo.closest('.charge-mode-column').hidden = !permiteItens;
+            if (!permiteItens) modo.value = 'campo';
+            const cobrancaAtiva = pagamentoAtivo && cobranca.checked;
+            modo.disabled = !cobrancaAtiva || !permiteItens;
+            const porItem = cobrancaAtiva && permiteItens && modo.value === 'itens';
+            const valorCampo = el.querySelector('.f-charge-value');
+            valorCampo.closest('.charge-value-column').hidden = porItem;
+            valorCampo.disabled = !cobrancaAtiva || porItem;
+            valorCampo.required = cobrancaAtiva && !porItem;
+            el.querySelectorAll('.option-price-column').forEach(area => area.hidden = !porItem);
+            el.querySelectorAll('.option-pix-value').forEach(input => { input.disabled = !porItem; input.required = porItem; });
             el.querySelector('.criterion-toggle').hidden = !quotaTypes.includes(type);
             const opcaoUnica = el.querySelector('.single-checkbox-option');
             opcaoUnica.hidden = !checkboxSimples;
@@ -70,11 +81,8 @@
             percentualCampo.required = criterio.checked && checkboxSimples;
             el.querySelector('.field-percent-column').hidden = !criterio.checked || !checkboxSimples;
             const obrigatorio = el.querySelector('.f-required');
-            if (pagamentoPix) obrigatorio.checked = false;
             if (criterio.checked && hierarchicalTypes.includes(type)) obrigatorio.checked = true;
-            obrigatorio.disabled = pagamentoPix || (criterio.checked && hierarchicalTypes.includes(type));
-            el.querySelector('.f-placeholder').disabled = pagamentoPix;
-            el.querySelector('.f-validation').disabled = pagamentoPix;
+            obrigatorio.disabled = criterio.checked && hierarchicalTypes.includes(type);
         });
         renderCriteria();
         updateQuotaNumbers();
@@ -87,17 +95,18 @@
         el.innerHTML = `<section class="border rounded-3 bg-white h-100 shadow-sm overflow-hidden"><div class="p-3 bg-light border-bottom d-flex gap-2 align-items-center"><span class="badge bg-primary field-number"></span><strong class="field-title text-break flex-grow-1"></strong><div class="d-flex gap-1"><button type="button" class="btn btn-sm btn-outline-secondary move-up" title="Mover antes" aria-label="Mover campo antes"><i class="bi bi-arrow-up"></i></button><button type="button" class="btn btn-sm btn-outline-secondary move-down" title="Mover depois" aria-label="Mover campo depois"><i class="bi bi-arrow-down"></i></button><button type="button" class="btn btn-sm btn-outline-danger remove-field" title="Remover campo" aria-label="Remover campo"><i class="bi bi-trash"></i></button></div></div><div class="p-3"><div class="row g-3">
         <div class="col-12"><label class="form-label" for="${id}">Título do campo</label><input id="${id}" class="form-control f-label" value="${esc(field.label)}" required placeholder="Ex.: Turno de participação"></div>
         <div class="col-12"><label class="form-label">Nome único<input class="form-control f-name" value="${esc(field.nome)}" placeholder="Ex.: turno" required></label></div>
-        <div class="col-12"><label class="form-label">Tipo<select class="form-select f-type">${Object.entries({text:'Texto',date:'Data','datetime-local':'Data e hora',textarea:'Texto longo',file:'Arquivo',select:'Combo',radio:'Radio',checkbox:'Checkbox',multiselect:'Seleção múltipla',...(canInsertPixField || field.tipo === 'pagamento_pix' ? {pagamento_pix:'Pagamento PIX'} : {})}).map(([value,text]) => `<option value="${value}">${text}</option>`).join('')}</select></label></div>
+        <div class="col-12"><label class="form-label">Tipo<select class="form-select f-type">${Object.entries({text:'Texto',date:'Data','datetime-local':'Data e hora',textarea:'Texto longo',file:'Arquivo',select:'Combo',radio:'Radio',checkbox:'Checkbox',multiselect:'Seleção múltipla'}).map(([value,text]) => `<option value="${value}">${text}</option>`).join('')}</select></label></div>
         <div class="col-12"><label class="form-label">Campos por linha<select class="form-select f-grid">${fieldsPerRowOptions}</select></label></div>
         <div class="col-12"><label class="form-label">Texto de exemplo<input class="form-control f-placeholder" value="${esc(field.placeholder)}"></label></div>
         <div class="col-12"><label class="form-label">Validação<select class="form-select f-validation"><option value="">Nenhuma</option><option value="cpf">CPF</option><option value="telefone">Telefone</option><option value="email">E-mail</option></select></label></div>
         <div class="col-12"><label class="form-check"><input class="form-check-input f-required" type="checkbox" ${field.obrigatorio ? 'checked' : ''}><span class="form-check-label">Preenchimento obrigatório</span></label></div>
         </div><div class="field-options border-top mt-3 pt-3"><div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><h3 class="h6 mb-0">Itens da lista</h3><label class="form-check criterion-toggle"><input class="form-check-input f-criterion" type="checkbox" ${field.criterio_vagas ? 'checked' : ''}><span class="form-check-label fw-semibold">Habilitar % de vaga</span></label></div><p class="small text-muted mt-2">O valor é sugerido pelo texto e pode ser editado. Em um checkbox de declaração única, deixe os itens vazios e informe abaixo o texto mostrado ao lado da caixa. Ao habilitar vagas, informe uma porcentagem ou um número inteiro de vagas. As reservas de checkbox são independentes e não tornam o preenchimento obrigatório.</p><div class="single-checkbox-option mb-3"><label class="form-label small mb-1">Texto da opção única<input class="form-control f-single-option-text" maxlength="255" value="${esc(field.texto_opcao || 'Sim')}" placeholder="Ex.: Sim, desejo participar"></label><div class="form-text">Este texto aparece ao lado da caixa de seleção.</div></div><div class="field-percent-column mb-3"><label class="form-label small mb-1">% de vagas deste checkbox<input class="form-control f-field-percent quota-percent" inputmode="decimal" value="${field.percentual_vagas === null || field.percentual_vagas === undefined ? '' : `${Number(field.percentual_vagas)}%`}" placeholder="Ex.: 25% ou 3"></label><div class="small text-muted field-quota-number"></div></div><div class="option-items">${(field.opcoes || []).map(optionHtml).join('')}</div><button type="button" class="btn btn-outline-primary btn-sm add-option"><i class="bi bi-plus-lg me-1"></i>Adicionar item da lista</button></div>
         <div class="field-upload border-top mt-3 pt-3"><label class="form-label">Extensões aceitas<input class="form-control f-accept" placeholder="pdf,jpg" value="${esc((field.aceitos || []).join(','))}"></label><label class="form-label">Máximo de arquivos<input class="form-control f-max" type="number" min="1" max="10" value="${Number(field.max_arquivos) || 1}"></label></div>
-        <div class="field-pix border-top mt-3 pt-3"><div class="alert alert-light border small">O valor é definido aqui e não pode ser alterado pelo participante. Após a inscrição, o sistema gera uma cobrança imediata e apresenta o QR Code.</div><div class="row g-3"><div class="col-md-4"><label class="form-label">Valor do PIX (R$)<input class="form-control f-pix-value" type="number" min="0.01" max="9999999999.99" step="0.01" value="${esc(field.valor_pix)}" required placeholder="0,00"></label></div><div class="col-md-4"><label class="form-label">Expiração (segundos)<input class="form-control f-pix-expiration" type="number" min="300" max="86400" step="1" value="${Number(field.expiracao_pix) || 3600}" required></label></div><div class="col-md-4"><label class="form-label">Descrição no PIX<input class="form-control f-pix-description" maxlength="140" value="${esc(field.descricao_pix)}" placeholder="Inscrição na atividade"></label></div></div></div></div></section>`;
+        <div class="field-charge border-top mt-3 pt-3"><label class="form-check mb-3"><input class="form-check-input f-charge-enabled" type="checkbox" ${field.cobranca_pix ? 'checked' : ''}><span class="form-check-label fw-semibold">Cobrança</span></label><div class="row g-3"><div class="col-md-6 charge-mode-column"><label class="form-label">Associar a cobrança<select class="form-select f-charge-mode"><option value="campo">Ao campo inteiro</option><option value="itens">A cada item selecionado</option></select></label></div><div class="col-md-6 charge-value-column"><label class="form-label">Valor do PIX (R$)<input class="form-control f-charge-value" type="number" min="0.01" max="9999999999.99" step="0.01" value="${esc(field.valor_pix)}" placeholder="0,00"></label></div></div><div class="form-text">Este valor será somado aos demais e apresentado em um único QR Code.</div></div></div></section>`;
         el.querySelector('.f-type').value = field.tipo || 'text';
         el.querySelector('.f-grid').value = fieldsPerRow(field);
         el.querySelector('.f-validation').value = field.validacao || '';
+        el.querySelector('.f-charge-mode').value = field.cobranca_pix_modo === 'itens' ? 'itens' : 'campo';
         el.querySelectorAll('.option-value').forEach(input => {
             if (input.value && input.value !== slug(input.closest('.option-item').querySelector('.option-text').value)) input.dataset.edited = '1';
         });
@@ -171,17 +180,18 @@
             criterio_vagas:el.querySelector('.f-criterion').checked,
             percentual_vagas:el.querySelector('.f-field-percent').disabled?null:parsePercent(el.querySelector('.f-field-percent').value),
             texto_opcao:el.querySelector('.f-single-option-text').disabled?null:value('.f-single-option-text'),
-            opcoes:[...el.querySelectorAll('.option-item')].map(item => ({texto:item.querySelector('.option-text').value,valor:item.querySelector('.option-value').value,percentual_vagas:item.querySelector('.option-percent').disabled?null:parsePercent(item.querySelector('.option-percent').value)})),
+            opcoes:[...el.querySelectorAll('.option-item')].map(item => ({texto:item.querySelector('.option-text').value,valor:item.querySelector('.option-value').value,percentual_vagas:item.querySelector('.option-percent').disabled?null:parsePercent(item.querySelector('.option-percent').value),valor_pix:Number(item.querySelector('.option-pix-value').value)||null})),
             aceitos:value('.f-accept').split(',').map(v => v.trim()).filter(Boolean), max_arquivos:Number(value('.f-max')) || 1, validacao:value('.f-validation'),
-            valor_pix:el.querySelector('.f-pix-value').disabled?null:Number(value('.f-pix-value')), expiracao_pix:el.querySelector('.f-pix-expiration').disabled?null:Number(value('.f-pix-expiration')), descricao_pix:el.querySelector('.f-pix-description').disabled?null:value('.f-pix-description')};
+            cobranca_pix:el.querySelector('.f-charge-enabled').checked,cobranca_pix_modo:value('.f-charge-mode'),valor_pix:Number(value('.f-charge-value'))||null};
     });
     document.getElementById('addField').onclick = () => add({campos_por_linha:1}, true);
-    const fields = initial.campos ?? (initial.rows || []).flatMap(row => row.columns.flatMap(col => col.fields));
+    const fields = (initial.campos ?? (initial.rows || []).flatMap(row => row.columns.flatMap(col => col.fields))).filter(field => field.tipo !== 'pagamento_pix');
     fields.forEach(field => add(field));
     criteriaUids = (initial.criterios_vagas || []).map(nome => [...root.children].find(el => el.querySelector('.f-name').value === nome)?.dataset.builderId).filter(Boolean);
     refresh();
     window.readBuilderCriteria = () => criteriaUids.map(uid => [...root.children].find(el => el.dataset.builderId === uid)?.querySelector('.f-name').value).filter(Boolean);
     window.refreshBuilderQuota = refresh;
+    window.refreshBuilderPayment = refresh;
 
     function criterionFields() {
         return [...root.children].filter(el => el.querySelector('.f-criterion').checked

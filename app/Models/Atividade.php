@@ -36,9 +36,64 @@ class Atividade extends Model
 
     public function temPagamentoPix(): bool
     {
+        if (! empty($this->formulario['pagamento_inscricao']['pix_sicoob'])) return true;
+
+        // Compatibilidade com formulários criados antes de o pagamento deixar de ser
+        // um campo da estrutura.
         return collect($this->formulario['campos'] ?? [])->contains(
             fn (array $campo) => ($campo['tipo'] ?? '') === 'pagamento_pix',
         );
+    }
+
+    public function configuracaoPagamentoPix(): ?array
+    {
+        $configuracao = $this->formulario['pagamento_inscricao'] ?? [];
+        if (! empty($configuracao['pix_sicoob'])) {
+            return [
+                'expiracao' => min(86400, max(300, (int) ($configuracao['expiracao'] ?? 3600))),
+                'descricao' => trim((string) ($configuracao['descricao'] ?? '')) ?: $this->nome,
+            ];
+        }
+
+        $legado = collect($this->formulario['campos'] ?? [])->first(
+            fn (array $campo) => ($campo['tipo'] ?? '') === 'pagamento_pix',
+        );
+        if (! $legado) return null;
+
+        return [
+            'expiracao' => min(86400, max(300, (int) ($legado['expiracao_pix'] ?? 3600))),
+            'descricao' => trim((string) ($legado['descricao_pix'] ?? '')) ?: $this->nome,
+        ];
+    }
+
+    public function valorPagamentoPix(array $resposta): float
+    {
+        if (! isset($this->formulario['pagamento_inscricao'])) {
+            return round(collect($this->formulario['campos'] ?? [])
+                ->where('tipo', 'pagamento_pix')->sum(fn (array $campo) => (float) ($campo['valor_pix'] ?? 0)), 2);
+        }
+        if (! $this->temPagamentoPix()) return 0.0;
+
+        $total = 0.0;
+        foreach (($this->formulario['campos'] ?? []) as $campo) {
+            if (empty($campo['cobranca_pix']) || empty($campo['nome'])) continue;
+            $respondido = $resposta[$campo['nome']] ?? null;
+            if ($respondido === null || $respondido === '' || $respondido === []) continue;
+
+            $modo = $campo['cobranca_pix_modo'] ?? 'campo';
+            if ($modo !== 'itens') {
+                $total += max(0, (float) ($campo['valor_pix'] ?? 0));
+                continue;
+            }
+
+            $selecionados = array_map('strval', is_array($respondido) ? $respondido : [$respondido]);
+            foreach (($campo['opcoes'] ?? []) as $opcao) {
+                if (! is_array($opcao) || ! in_array((string) ($opcao['valor'] ?? ''), $selecionados, true)) continue;
+                $total += max(0, (float) ($opcao['valor_pix'] ?? 0));
+            }
+        }
+
+        return round($total, 2);
     }
 
     private const MENSAGENS_IDENTIFICACAO_ANTIGAS = [

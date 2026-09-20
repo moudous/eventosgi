@@ -49,10 +49,10 @@ class FormularioPublicoController
             'aceitos' => array_values($campo['aceitos'] ?? []),
             'max_arquivos' => min(10, max(1, (int) ($campo['max_arquivos'] ?? 1))),
             'validacao' => $campo['validacao'] ?? '',
-            'valor_pix' => ($campo['tipo'] ?? '') === 'pagamento_pix' ? (float) ($campo['valor_pix'] ?? 0) : null,
-            'expiracao_pix' => ($campo['tipo'] ?? '') === 'pagamento_pix' ? (int) ($campo['expiracao_pix'] ?? 3600) : null,
-            'descricao_pix' => ($campo['tipo'] ?? '') === 'pagamento_pix' ? ($campo['descricao_pix'] ?? '') : null,
-        ], array_filter($config['campos'] ?? [], fn ($campo) => ! empty($campo['nome']))));
+            'cobranca_pix' => (bool) ($campo['cobranca_pix'] ?? false),
+            'cobranca_pix_modo' => $campo['cobranca_pix_modo'] ?? 'campo',
+            'valor_pix' => isset($campo['valor_pix']) ? (float) $campo['valor_pix'] : null,
+        ], array_filter($config['campos'] ?? [], fn ($campo) => ! empty($campo['nome']) && ($campo['tipo'] ?? '') !== 'pagamento_pix')));
         if ($atividade->comSessoes()) {
             $sessoes = $atividade->sessoesAtivas()->withCount('inscricoes')->get();
             array_unshift($campos, [
@@ -82,6 +82,7 @@ class FormularioPublicoController
                 'conteudo' => $this->editor->sanitizar($config['editor']['conteudo'] ?? ''),
             ],
             'distribuicao_vagas' => $config['distribuicao_vagas'] ?? null,
+            'pagamento_inscricao' => $config['pagamento_inscricao'] ?? ['pix_sicoob' => false],
             'campos' => $campos,
             'estado' => $estado,
             // Identificacao por e-mail: o consumidor externo exibe esta etapa antes dos campos.
@@ -205,7 +206,7 @@ class FormularioPublicoController
 
         if ($resultado['sucesso']) {
             try {
-                $inscricao = \App\Models\InscricaoAtividade::query()->with(['atividade', 'participante'])->findOrFail($resultado['inscricao_id']);
+                $inscricao = \App\Models\InscricaoAtividade::query()->withoutGlobalScope('ativas')->with(['atividade', 'participante'])->findOrFail($resultado['inscricao_id']);
                 $resultado['pix'] = collect($this->pix->gerarParaInscricao($inscricao))->map(fn ($cobranca) => [
                     'txid' => $cobranca->txid,
                     'valor' => $cobranca->valor,
@@ -216,10 +217,10 @@ class FormularioPublicoController
                 report($erro);
                 $resultado['pix_erro'] = $erro->getMessage();
             }
-            $this->identificacao->revogarToken($atividade, $this->token($request));
+            if (empty($resultado['pagamento_pendente'])) $this->identificacao->revogarToken($atividade, $this->token($request));
         }
 
-        return response()->json($resultado, $resultado['sucesso'] ? 201 : 422);
+        return response()->json($resultado, $resultado['sucesso'] ? (! empty($resultado['pagamento_pendente']) ? 202 : 201) : 422);
     }
 
     private function conferirAtividade(Atividade $atividade): void

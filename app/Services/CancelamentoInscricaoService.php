@@ -23,7 +23,8 @@ class CancelamentoInscricaoService
         foreach ($cobrancas as $cobranca) $this->pix->cancelar($cobranca);
 
         $cancelada = DB::transaction(function () use ($inscricao, $motivo): InscricaoAtividade {
-            $registro = InscricaoAtividade::query()->whereKey($inscricao->id)->lockForUpdate()->firstOrFail();
+            $registro = InscricaoAtividade::query()->withoutGlobalScope('ativas')
+                ->whereKey($inscricao->id)->lockForUpdate()->firstOrFail();
             if ($registro->cobrancasPix()->confirmadas()->lockForUpdate()->exists()) {
                 throw new PagamentoPixConfirmadoException;
             }

@@ -160,6 +160,20 @@ class FormularioInscricaoService
             })->latest('id')->first();
     }
 
+    public function inscricaoPendenteDoParticipante(Atividade $atividade, ?Participante $participante, ?string $email = null): ?InscricaoAtividade
+    {
+        $email = mb_strtolower(trim((string) ($email ?: $participante?->email)));
+        if (! $participante && $email === '') return null;
+
+        return InscricaoAtividade::query()->withoutGlobalScope('ativas')
+            ->where('atividade_id', $atividade->id)
+            ->where('ativa', false)->whereNull('cancelada_em')
+            ->where(function ($consulta) use ($participante, $email): void {
+                if ($participante) $consulta->orWhere('participante_id', $participante->id);
+                if ($email !== '') $consulta->orWhere('participante_email', $email);
+            })->latest('id')->first();
+    }
+
     /**
      * Mesma conferencia, porem a partir apenas do e-mail digitado, antes de existir
      * participante identificado.
@@ -419,6 +433,7 @@ class FormularioInscricaoService
             }
             $resposta = Arr::except($validados, ['participante', 'sessao_atividade_id']);
             if (! $listaReserva) $this->distribuicao->conferirDisponibilidade($atividade, $resposta);
+            $aguardandoPagamento = $atividade->valorPagamentoPix($resposta) > 0;
 
             // Guarda apenas os arquivos de campos declarados no formulario; qualquer outro upload e descartado.
             // Disco privado: anexos de inscricao so saem por rota assinada, nunca por URL direta.
@@ -441,8 +456,11 @@ class FormularioInscricaoService
                     'participante_email' => $participante ? ($emailIdentificado ?: $participante->email) : null,
                     'utm_rastreio' => $this->rastreioAtivo($request, $atividade),
                     'lista_reserva' => $listaReserva,
+                    'ativa' => ! $aguardandoPagamento,
                     'resposta' => $resposta,
-                    'codigo_qr' => ! empty($atividade->formulario['registrar_presenca_qrcode']) ? $this->presencaQr->novoCodigo() : null,
+                    'codigo_qr' => ! $aguardandoPagamento && ! empty($atividade->formulario['registrar_presenca_qrcode'])
+                        ? $this->presencaQr->novoCodigo()
+                        : null,
                     ...$this->dispositivo->capturar($request),
                 ]);
             } catch (UniqueConstraintViolationException) {
@@ -450,14 +468,17 @@ class FormularioInscricaoService
                 return ['sucesso' => false, 'motivo' => 'duplicada', 'mensagem' => $atividade->mensagemJaInscrito(), 'inscricao_id' => null, 'lista_reserva' => false];
             }
 
-            $this->distribuicao->recalcular($atividade->refresh());
+            if (! $aguardandoPagamento) $this->distribuicao->recalcular($atividade->refresh());
 
             return [
                 'sucesso' => true,
                 'motivo' => null,
-                'mensagem' => $atividade->formulario['mensagem_sucesso'] ?? 'Inscrição realizada com sucesso.',
+                'mensagem' => $aguardandoPagamento
+                    ? 'Respostas recebidas. A inscrição será realizada automaticamente após a confirmação do PIX.'
+                    : ($atividade->formulario['mensagem_sucesso'] ?? 'Inscrição realizada com sucesso.'),
                 'inscricao_id' => $inscricao->id,
                 'lista_reserva' => $listaReserva,
+                'pagamento_pendente' => $aguardandoPagamento,
             ];
         });
     }

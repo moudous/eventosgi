@@ -40,8 +40,9 @@ try {
     Schema::create('inscricoes_atividade', function (Blueprint $table): void {
         $table->id(); $table->unsignedBigInteger('atividade_id'); $table->unsignedBigInteger('participante_id')->nullable();
         $table->string('participante_email')->nullable(); $table->boolean('ativa')->nullable()->default(true);
+        $table->boolean('lista_reserva')->default(false);
         $table->timestamp('cancelada_em')->nullable(); $table->string('cancelamento_motivo')->nullable();
-        $table->json('resposta'); $table->string('comprovante_hash', 64)->nullable();
+        $table->json('resposta'); $table->string('comprovante_hash', 64)->nullable(); $table->string('codigo_qr', 64)->nullable();
         $table->timestamps();
     });
     (require __DIR__.'/../database/migrations/2026_09_14_000000_create_pix_configuracoes_and_cobrancas_tables.php')->up();
@@ -49,6 +50,7 @@ try {
     (require __DIR__.'/../database/migrations/2026_09_14_020000_add_sandbox_token_to_pix_configuracoes_table.php')->up();
     (require __DIR__.'/../database/migrations/2026_09_15_000000_add_pagador_fields_to_pix_cobrancas_table.php')->up();
     (require __DIR__.'/../database/migrations/2026_09_17_020000_add_ambiente_to_pix_cobrancas.php')->up();
+    (require __DIR__.'/../database/migrations/2026_09_20_120000_expand_status_on_pix_cobrancas_table.php')->up();
 
     PixConfiguracao::create([
         'ativo' => true, 'ambiente' => 'producao', 'client_id' => 'cliente-teste', 'chave_pix' => 'receber@example.com',
@@ -127,6 +129,34 @@ try {
 
     $regras = app(FormularioInscricaoService::class)->regras($atividade);
     if (array_key_exists('pagamento', $regras)) throw new RuntimeException('O valor PIX não pode ser aceito do navegador.');
+
+    $atividadeSomada = Atividade::create([
+        'nome' => 'Curso com valores somados', 'ativo' => true, 'criado_por' => 1, 'evento_id' => 1,
+        'formulario' => [
+            'pagamento_inscricao' => ['pix_sicoob' => true, 'expiracao' => 2400, 'descricao' => 'Inscrição somada'],
+            'campos' => [
+                ['nome' => 'modalidade', 'tipo' => 'select', 'cobranca_pix' => true, 'cobranca_pix_modo' => 'itens', 'opcoes' => [
+                    ['valor' => 'basica', 'texto' => 'Básica', 'valor_pix' => 20],
+                    ['valor' => 'completa', 'texto' => 'Completa', 'valor_pix' => 30],
+                ]],
+                ['nome' => 'material', 'tipo' => 'checkbox', 'cobranca_pix' => true, 'cobranca_pix_modo' => 'campo', 'valor_pix' => 5],
+            ],
+        ],
+    ]);
+    $inscricaoSomada = InscricaoAtividade::create([
+        'atividade_id' => $atividadeSomada->id, 'ativa' => false,
+        'resposta' => ['modalidade' => 'completa', 'material' => '1'],
+    ]);
+    $cobrancasSomadas = $servico->gerarParaInscricao($inscricaoSomada->load('atividade'));
+    if (count($cobrancasSomadas) !== 1 || $cobrancasSomadas[0]->valor !== '35.00' || $cobrancasSomadas[0]->campo !== 'pagamento_inscricao') {
+        throw new RuntimeException('Os valores por campo e por item devem ser somados em uma única cobrança PIX.');
+    }
+    $confirmarConsultaComHorarioUtc = true;
+    $servico->consultar($cobrancasSomadas[0]);
+    $confirmarConsultaComHorarioUtc = false;
+    if (! InscricaoAtividade::find($inscricaoSomada->id)) {
+        throw new RuntimeException('A inscrição pendente deve ser ativada automaticamente após a confirmação do PIX.');
+    }
 
     $configuracao->update([
         'ambiente' => 'sandbox', 'sandbox_token' => 'bearer-sandbox',

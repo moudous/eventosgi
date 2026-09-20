@@ -119,7 +119,7 @@
         </div>
     @endif
 
-    @if($estado['motivo'] === 'duplicada' && $inscricao)
+    @if(in_array($estado['motivo'], ['duplicada', 'pagamento_pendente'], true) && $inscricao)
         @php
             $itensComprovante = count($dadosComprovante) + count($respostasComprovante);
             $caracteresComprovante = collect([...$dadosComprovante, ...$respostasComprovante])
@@ -128,7 +128,7 @@
                 ? 'comprovante-ultracompacto'
                 : ($itensComprovante > 13 || $caracteresComprovante > 1500 ? 'comprovante-compacto' : '');
         @endphp
-        @if(collect($config['campos'] ?? [])->contains(fn ($campo) => ($campo['tipo'] ?? '') === 'pagamento_pix'))
+        @if(!empty($config['pagamento_inscricao']['pix_sicoob']) || collect($config['campos'] ?? [])->contains(fn ($campo) => ($campo['tipo'] ?? '') === 'pagamento_pix'))
             <div class="card content-card mb-3">
                 <div class="card-header"><h2 class="h5 fw-bold mb-0"><i class="bi bi-qr-code me-1"></i>Pagamento PIX</h2></div>
                 <div class="card-body p-4">
@@ -165,7 +165,12 @@
                                         <label class="form-label" for="pix_codigo_{{ $cobrancaPix->id }}">PIX copia e cola</label>
                                         <div class="input-group mb-3"><textarea class="form-control font-monospace" id="pix_codigo_{{ $cobrancaPix->id }}" rows="3" readonly>{{ $itemPix['qr']['codigo'] }}</textarea><button class="btn btn-outline-primary" type="button" data-copiar-pix="#pix_codigo_{{ $cobrancaPix->id }}"><i class="bi bi-clipboard"></i> Copiar</button></div>
                                     @endif
-                                    <form method="POST" action="{{ request()->fullUrl() }}">@csrf<input type="hidden" name="acao" value="atualizar_pix"><input type="hidden" name="cobranca_id" value="{{ $cobrancaPix->id }}"><button class="btn btn-outline-success"><i class="bi bi-arrow-clockwise me-1"></i>Já paguei — verificar</button></form>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <form method="POST" action="{{ request()->fullUrl() }}">@csrf<input type="hidden" name="acao" value="atualizar_pix"><input type="hidden" name="cobranca_id" value="{{ $cobrancaPix->id }}"><button class="btn btn-outline-success"><i class="bi bi-arrow-clockwise me-1"></i>Já paguei — verificar</button></form>
+                                        @if(!($inscricao->ativa ?? true))
+                                            <form method="POST" action="{{ request()->fullUrl() }}" onsubmit="return confirm('Cancelar este QR Code PIX e voltar ao formulário?')">@csrf<input type="hidden" name="acao" value="cancelar_pix"><button class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar QR Code PIX</button></form>
+                                        @endif
+                                    </div>
                                 @endif
                                 <div class="small text-muted mt-2">TXID: <code>{{ $cobrancaPix->txid }}</code></div>
                             </div>
@@ -177,6 +182,7 @@
                 </div>
             </div>
         @endif
+        @if($inscricao->ativa ?? true)
         <div class="d-flex flex-wrap gap-2 mb-3">
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#comprovanteModal"><i class="bi bi-printer me-1"></i>Imprimir comprovante</button>
             @if($cancelamentoBloqueadoPix ?? false)
@@ -214,6 +220,7 @@
                 <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Voltar</button><button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>Cancelar inscrição</button></div>
             </form></div></div>
         </div>
+        @endif
         @endif
     @endif
 
@@ -392,30 +399,34 @@
                                 $criterioVagas = !empty($campo['criterio_vagas']);
                                 $nivelVagas = collect($config['distribuicao_vagas']['niveis'] ?? [])->firstWhere('campo', $nome);
                                 $reservaCheckbox = collect($config['distribuicao_vagas']['reservas_checkbox'] ?? [])->firstWhere('campo', $nome);
+                                $cobrancaCampo = !empty($config['pagamento_inscricao']['pix_sicoob']) && !empty($campo['cobranca_pix']);
+                                $cobrancaPorItem = $cobrancaCampo && ($campo['cobranca_pix_modo'] ?? 'campo') === 'itens';
+                                $rotuloValorCampo = $cobrancaCampo && !$cobrancaPorItem
+                                    ? ' — R$ '.number_format((float) ($campo['valor_pix'] ?? 0), 2, ',', '.')
+                                    : '';
                                 $camposPorLinha = (int) ($campo['campos_por_linha'] ?? match ((int) ($campo['grid'] ?? 6)) { 12 => 1, 6 => 2, 4 => 3, default => 2 });
                                 $camposPorLinha = min(12, max(1, $camposPorLinha));
                             @endphp
+                            @continue($tipo === 'pagamento_pix')
                             <div class="col-12 campo-formulario-publico" style="--campos-por-linha: {{ $camposPorLinha }}; --largura-campo: {{ 100 / $camposPorLinha }}%">
                                 @if(in_array($tipo, ['radio', 'checkbox', 'pagamento_pix'], true))
-                                    <div class="form-label">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</div>
+                                    <div class="form-label">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif{{ $rotuloValorCampo }}</div>
                                 @else
-                                    <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif</label>
+                                    <label class="form-label" for="campo_{{ $loop->index }}">{{ $campo['label'] ?? $nome }} @if(!empty($campo['obrigatorio']))*@endif{{ $rotuloValorCampo }}</label>
                                 @endif
-                                @if($tipo === 'pagamento_pix')
-                                    <div class="border rounded-3 p-3 bg-light">
-                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2"><span class="text-muted"><i class="bi bi-qr-code me-1"></i>A cobrança será gerada após o envio da inscrição.</span><strong class="fs-5">R$ {{ number_format((float) ($campo['valor_pix'] ?? 0), 2, ',', '.') }}</strong></div>
-                                        @if(!empty($campo['descricao_pix']))<div class="small mt-2">{{ $campo['descricao_pix'] }}</div>@endif
-                                    </div>
-                                @elseif(in_array($tipo, ['select', 'multiselect'], true))
+                                @if(in_array($tipo, ['select', 'multiselect'], true))
                                     <select class="form-select" id="campo_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" data-nome-campo="{{ $nome }}" @if($criterioVagas) data-criterio-vagas="1" @endif @if(!empty($campo['obrigatorio']) || $criterioVagas) required @endif @if($multiplo) multiple @endif>
                                         @foreach($campo['opcoes'] ?? [] as $opcao)
                                             @php
                                                 $valorOpcao = is_array($opcao) ? (string) $opcao['valor'] : (string) $opcao;
                                                 $textoOpcao = is_array($opcao) ? $opcao['texto'] : $opcao;
+                                                $textoCobrancaOpcao = $cobrancaPorItem && is_array($opcao)
+                                                    ? ' — R$ '.number_format((float) ($opcao['valor_pix'] ?? 0), 2, ',', '.')
+                                                    : '';
                                                 $cotasOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['usadas'] ?? 0));
                                                 $restantesOpcao = collect($nivelVagas['contextos'] ?? [])->sum(fn ($contexto) => (int) ($contexto['opcoes'][$valorOpcao]['restantes'] ?? 0));
                                             @endphp
-                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}@if($criterioVagas && !empty($config['mostrar_vagas_restantes']) && !$listaReservaAtiva) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
+                                            <option value="{{ $valorOpcao }}" data-texto="{{ $textoOpcao }}{{ $textoCobrancaOpcao }}" @selected(is_array($anterior) ? in_array($valorOpcao, $anterior) : (string) $anterior === $valorOpcao)>{{ $textoOpcao }}{{ $textoCobrancaOpcao }}@if($criterioVagas && !empty($config['mostrar_vagas_restantes']) && !$listaReservaAtiva) — {{ $cotasOpcao }}/{{ $restantesOpcao }}@endif</option>
                                         @endforeach
                                     </select>
                                 @elseif(in_array($tipo, ['radio', 'checkbox'], true))
@@ -435,6 +446,9 @@
                                             @php
                                                 $valorOpcao = is_array($opcao) ? (string) $opcao['valor'] : (string) $opcao;
                                                 $textoOpcao = is_array($opcao) ? $opcao['texto'] : $opcao;
+                                                $textoCobrancaOpcao = $cobrancaPorItem && is_array($opcao)
+                                                    ? ' — R$ '.number_format((float) ($opcao['valor_pix'] ?? 0), 2, ',', '.')
+                                                    : '';
                                                 $selecionado = $multiplo
                                                     ? in_array($valorOpcao, (array) $anterior, true)
                                                     : (string) $anterior === $valorOpcao;
@@ -446,7 +460,7 @@
                                             @endphp
                                             <div class="form-check">
                                                 <input class="form-check-input" type="{{ $tipo }}" id="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}" name="{{ $nome }}{{ $multiplo ? '[]' : '' }}" value="{{ $valorOpcao }}" @checked($selecionado) @disabled($checkboxEsgotado && !$listaReservaAtiva) @if($tipo === 'radio' && !empty($campo['obrigatorio'])) required @endif>
-                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}@if($cotaCheckbox && !$listaReservaAtiva) <span class="text-muted">— {{ $cotaCheckbox['restantes'] }} vaga(s) restante(s)</span>@endif</label>
+                                                <label class="form-check-label" for="campo_{{ $loop->parent->index }}_opcao_{{ $loop->index }}">{{ $textoOpcao }}{{ $textoCobrancaOpcao }}@if($cotaCheckbox && !$listaReservaAtiva) <span class="text-muted">— {{ $cotaCheckbox['restantes'] }} vaga(s) restante(s)</span>@endif</label>
                                             </div>
                                         @endforeach
                                         @if($tipo === 'checkbox' && !empty($campo['obrigatorio']))<div class="invalid-feedback">Selecione pelo menos uma opção.</div>@endif
@@ -485,7 +499,7 @@
                         @endforeach
                     </div>
 
-                    <button class="btn btn-primary mt-4"><i class="bi bi-send me-1"></i>Enviar inscrição</button>
+                    <button class="btn btn-primary mt-4" data-enviar-inscricao><i class="bi bi-send me-1"></i>Enviar inscrição</button>
                 </div>
             </div>
         </form>
@@ -670,6 +684,12 @@ const emailValido = valor => /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(valor.trim()
 
 const formularioInscricao = document.getElementById('formularioInscricaoAtividade');
 let navegacaoParaErroAgendada = false;
+formularioInscricao?.addEventListener('submit', () => {
+    const botao = formularioInscricao.querySelector('[data-enviar-inscricao]');
+    if (!botao) return;
+    botao.disabled = true;
+    botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Aguardando pagamento';
+});
 
 const alvoVisualDoErro = campo => {
     if (campo.matches?.('[data-anexos-campo]')) return campo;
