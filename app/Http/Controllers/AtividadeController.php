@@ -680,6 +680,9 @@ class AtividadeController
 
         $atividade->load('evento');
         $canceladaEm = now();
+        $avisoPix = $atividade->temPagamentoPix()
+            ? '<p>Caso tenha ocorrido cobrança PIX, os registros e a cobrança serão preservados para segurança e auditoria.</p>'
+            : '';
         $avisoEmail = '';
         try {
             $email->enviar(
@@ -691,7 +694,7 @@ class AtividadeController
                     .'<p><strong>Atividade:</strong> '.e($atividade->nome).'<br>'
                     .'<strong>Evento:</strong> '.e($atividade->evento?->nome ?? 'Não informado').'<br>'
                     .'<strong>Data e hora:</strong> '.$canceladaEm->format('d/m/Y \à\s H:i:s').'</p>'
-                    .'<p>O registro e a cobrança PIX foram preservados para segurança e auditoria.</p></div>',
+                    .$avisoPix.'</div>',
                 'inscricao-cancelada-'.$inscricao->id.'-'.bin2hex(random_bytes(8)),
             );
         } catch (Throwable $excecao) {

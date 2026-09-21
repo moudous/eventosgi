@@ -25,6 +25,7 @@
 /storage/*.key
 /storage/pail
 /storage/framework/cache/*
+/storage/framework/testing/
 /templates/
 /templates-build/
 /vendor

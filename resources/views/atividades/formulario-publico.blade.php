@@ -38,7 +38,7 @@
                     @endif
                 </div>
                 @if($atividade->mostrar_link_evento && $atividade->evento?->ativo)
-                    <a href="{{ route('eventos.pagina.visualizar', $atividade->evento) }}" class="btn btn-light btn-sm mt-3"><i class="bi bi-arrow-left me-1"></i>Voltar para a página do evento</a>
+                    <a href="{{ route('eventos.pagina.visualizar', $atividade->evento) }}" class="btn btn-light btn-sm mt-3"><i class="bi bi-arrow-left me-1"></i>Ir para a página do evento</a>
                 @endif
             </div>
         </div>
