@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title','Inscrições da atividade')
 @section('content')
-<div class="mb-4 d-flex flex-wrap gap-3 justify-content-between"><div><h1 class="page-title">Inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div><div class="d-flex gap-2 align-items-start"><div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download me-1"></i>Exportar respostas</button><ul class="dropdown-menu">@foreach(['ods' => 'Planilha (.ods)', 'csv' => 'CSV (.csv)', 'xls' => 'Excel (.xls)', 'xlsx' => 'Excel (.xlsx)'] as $formato => $rotulo)<li><a class="dropdown-item exportar-respostas" href="#" data-link="{{ route('atividades.inscricoes.exportar-link', [$atividade, $formato]) }}">{{ $rotulo }}</a></li>@endforeach</ul></div>@if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif</div></div>
+<div class="mb-4 d-flex flex-wrap gap-3 justify-content-between"><div><h1 class="page-title">Inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div><div class="d-flex gap-2 align-items-start"><button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#autoPresencaModal"><i class="bi bi-person-check-fill me-1"></i>Auto registro de presença</button><div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download me-1"></i>Exportar respostas</button><ul class="dropdown-menu">@foreach(['ods' => 'Planilha (.ods)', 'csv' => 'CSV (.csv)', 'xls' => 'Excel (.xls)', 'xlsx' => 'Excel (.xlsx)'] as $formato => $rotulo)<li><a class="dropdown-item exportar-respostas" href="#" data-link="{{ route('atividades.inscricoes.exportar-link', [$atividade, $formato]) }}">{{ $rotulo }}</a></li>@endforeach</ul></div>@if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif</div></div>
 <form method="GET" action="{{ route('atividades.inscricoes',$atividade) }}" class="row g-2 justify-content-end mb-3"><div class="col-12 col-md-5 col-lg-4"><label class="visually-hidden" for="pesquisar">Pesquisar</label><div class="input-group"><input id="pesquisar" name="pesquisar" class="form-control" value="{{ $pesquisar }}" placeholder="Pesquisar inscrições"><button class="btn btn-outline-primary" type="submit"><i class="bi bi-search me-1"></i>Pesquisar</button>@if($pesquisar!=='')<a class="btn btn-outline-secondary" href="{{ route('atividades.inscricoes',$atividade) }}?pesquisar=">Limpar</a>@endif</div></div></form>
 @php
     $campos = collect($atividade->formulario['campos'] ?? [])->keyBy('nome');
@@ -192,6 +192,20 @@
     <div class="modal-body" id="respostaCorpo"></div>
 </div></div></div>
 
+<div class="modal fade" id="autoPresencaModal" tabindex="-1" aria-labelledby="autoPresencaTitulo" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><div><h2 class="modal-title fs-5" id="autoPresencaTitulo"><i class="bi bi-person-check-fill text-success me-2"></i>Auto registro de presença</h2><small class="text-muted">Crie links temporários para os participantes confirmarem a própria presença.</small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+        <form id="criarAutoPresenca" class="row g-3 align-items-end border rounded p-3 bg-light mb-4">
+            <div class="col-12 col-md-4"><label class="form-label" for="autoPresencaInicio">Data e hora inicial</label><input class="form-control" type="datetime-local" id="autoPresencaInicio" required></div>
+            <div class="col-12 col-md-4"><label class="form-label" for="autoPresencaFim">Data e hora final</label><input class="form-control" type="datetime-local" id="autoPresencaFim" required></div>
+            <div class="col-12 col-md-4 d-grid"><button class="btn btn-success" id="gerarAutoPresenca"><i class="bi bi-link-45deg me-1"></i>Gerar link</button></div>
+            <div class="col-12"><div class="alert alert-danger py-2 mb-0 d-none" id="autoPresencaErro"></div></div>
+        </form>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Link</th><th>Período de validade</th><th class="text-center">Cliques</th><th class="text-center">Ajuste</th><th class="text-end">Ações</th></tr></thead><tbody id="listaAutoPresenca"></tbody></table></div>
+        <p class="text-muted text-center py-3 mb-0 d-none" id="autoPresencaVazia">Nenhum link de auto presença foi criado.</p>
+    </div>
+</div></div></div>
+
 @if($podeExcluirInscricao)
 <div class="modal fade" id="excluirInscricaoModal" tabindex="-1" aria-labelledby="excluirInscricaoTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
     <div class="modal-header"><h2 class="modal-title fs-5" id="excluirInscricaoTitulo"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Cancelar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
@@ -242,6 +256,65 @@
 @push('scripts')
 <script>
 const inscricoes = @json(collect($linhas)->keyBy('id'));
+const linksAutoPresenca = @json($linksAutoPresenca);
+const csrfAutoPresenca = @json(csrf_token());
+const listaAutoPresenca = document.getElementById('listaAutoPresenca');
+const autoPresencaVazia = document.getElementById('autoPresencaVazia');
+const autoPresencaErro = document.getElementById('autoPresencaErro');
+
+function ajusteAutoPresenca(minutos) { return (minutos > 0 ? '+' : '') + minutos; }
+function desenharLinksAutoPresenca() {
+    listaAutoPresenca.replaceChildren();
+    linksAutoPresenca.forEach(link => {
+        const linha = document.createElement('tr');
+        const celulaLink = document.createElement('td');
+        const ancora = document.createElement('a');
+        ancora.href = link.url; ancora.target = '_blank'; ancora.rel = 'noopener noreferrer';
+        ancora.className = 'small text-break'; ancora.textContent = link.url;
+        celulaLink.append(ancora);
+        const periodo = document.createElement('td'); periodo.textContent = link.inicio + ' até ' + link.fim;
+        const cliques = document.createElement('td'); cliques.className = 'text-center'; cliques.textContent = link.cliques;
+        const ajuste = document.createElement('td'); ajuste.className = 'text-center'; ajuste.textContent = ajusteAutoPresenca(link.ajuste_minutos);
+        const acoes = document.createElement('td'); acoes.className = 'text-end text-nowrap';
+        [[1, 'bi-plus-lg', 'Adicionar um minuto', 'btn-outline-success'], [-1, 'bi-dash-lg', 'Reduzir um minuto', 'btn-outline-warning']].forEach(([minutos, icone, titulo, classe]) => {
+            const botao = document.createElement('button'); botao.type = 'button'; botao.className = 'btn btn-sm ' + classe + ' me-1';
+            botao.title = titulo; botao.setAttribute('aria-label', titulo); botao.innerHTML = '<i class="bi ' + icone + '"></i>';
+            botao.addEventListener('click', () => ajustarLinkAutoPresenca(link, minutos, botao)); acoes.append(botao);
+        });
+        const excluir = document.createElement('button'); excluir.type = 'button'; excluir.className = 'btn btn-sm btn-outline-danger';
+        excluir.title = 'Excluir definitivamente'; excluir.setAttribute('aria-label', 'Excluir definitivamente'); excluir.innerHTML = '<i class="bi bi-trash-fill"></i>';
+        excluir.addEventListener('click', () => excluirLinkAutoPresenca(link, excluir)); acoes.append(excluir);
+        linha.append(celulaLink, periodo, cliques, ajuste, acoes); listaAutoPresenca.append(linha);
+    });
+    autoPresencaVazia.classList.toggle('d-none', linksAutoPresenca.length > 0);
+}
+async function ajustarLinkAutoPresenca(link, minutos, botao) {
+    botao.disabled = true;
+    try {
+        const resposta = await fetch(link.ajustar_url, {method: 'PATCH', credentials: 'same-origin', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrfAutoPresenca}, body: JSON.stringify({minutos})});
+        const dados = await resposta.json(); if (!resposta.ok) throw new Error(dados.message || 'Não foi possível ajustar o prazo.');
+        Object.assign(link, dados); desenharLinksAutoPresenca();
+    } catch (erro) { alert(erro.message || 'Não foi possível ajustar o prazo.'); } finally { botao.disabled = false; }
+}
+async function excluirLinkAutoPresenca(link, botao) {
+    if (!confirm('Excluir definitivamente este link de auto presença?')) return;
+    botao.disabled = true;
+    try {
+        const resposta = await fetch(link.excluir_url, {method: 'DELETE', credentials: 'same-origin', headers: {'Accept':'application/json','X-CSRF-TOKEN':csrfAutoPresenca}});
+        const dados = await resposta.json(); if (!resposta.ok) throw new Error(dados.message || 'Não foi possível excluir o link.');
+        linksAutoPresenca.splice(linksAutoPresenca.indexOf(link), 1); desenharLinksAutoPresenca();
+    } catch (erro) { alert(erro.message || 'Não foi possível excluir o link.'); } finally { botao.disabled = false; }
+}
+document.getElementById('criarAutoPresenca').addEventListener('submit', async event => {
+    event.preventDefault(); autoPresencaErro.classList.add('d-none');
+    const botao = document.getElementById('gerarAutoPresenca'); if (botao.disabled) return; botao.disabled = true;
+    try {
+        const resposta = await fetch(@json(route('atividades.auto-presenca.criar', $atividade)), {method: 'POST', credentials: 'same-origin', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrfAutoPresenca}, body: JSON.stringify({inicio:document.getElementById('autoPresencaInicio').value, fim:document.getElementById('autoPresencaFim').value})});
+        const dados = await resposta.json(); if (!resposta.ok) throw new Error(dados.message || Object.values(dados.errors || {}).flat()[0] || 'Não foi possível gerar o link.');
+        linksAutoPresenca.unshift(dados); desenharLinksAutoPresenca(); event.target.reset();
+    } catch (erro) { autoPresencaErro.textContent = erro.message || 'Não foi possível gerar o link.'; autoPresencaErro.classList.remove('d-none'); } finally { botao.disabled = false; }
+});
+desenharLinksAutoPresenca();
 
 function atualizarBotaoPresenca(botao, inscricao) {
     if (!botao) return;

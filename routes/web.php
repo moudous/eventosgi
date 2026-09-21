@@ -239,6 +239,9 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     // pela permissao em inscricoes.exportar-link.
     Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
     Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.inscritos')->name('inscricoes');
+    Route::post('/{atividade}/auto-presenca', [\App\Http\Controllers\AutoPresencaController::class, 'criar'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.criar');
+    Route::patch('/{atividade}/auto-presenca/{link}', [\App\Http\Controllers\AutoPresencaController::class, 'ajustar'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.ajustar');
+    Route::delete('/{atividade}/auto-presenca/{link}', [\App\Http\Controllers\AutoPresencaController::class, 'excluir'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.excluir');
     Route::delete('/{atividade}/inscricoes/{inscricao}', [AtividadeController::class, 'excluirInscricao'])
         ->middleware('gi.permission:atividades.inscricoes.excluir')->name('inscricoes.destroy');
     Route::get('/{atividade}/recebimentos', [RecebimentoPixController::class, 'index'])->middleware('gi.permission:atividades.recebimentoslistar')->name('recebimentos.index');
@@ -263,6 +266,11 @@ Route::prefix('recebimentos')->name('recebimentos.')->group(function (): void {
     Route::get('/exportar', [RecebimentoPixController::class, 'exportar'])->middleware('gi.permission:recebimentos.exportar')->name('exportar');
     Route::get('/{recebimento}', [RecebimentoPixController::class, 'show'])->middleware('gi.permission:recebimentos.visualizar')->name('show');
 });
+
+// Um hash imprevisível dá acesso apenas ao período de auto presença configurado.
+Route::get('/auto-presenca/{link:hash}', [\App\Http\Controllers\AutoPresencaController::class, 'abrir'])->name('auto-presenca.abrir');
+Route::get('/auto-presenca/{link:hash}/participantes', [\App\Http\Controllers\AutoPresencaController::class, 'participantes'])->name('auto-presenca.participantes');
+Route::post('/auto-presenca/{link:hash}/confirmar', [\App\Http\Controllers\AutoPresencaController::class, 'confirmar'])->name('auto-presenca.confirmar');
 
 // Endereço permanente por hash. A disponibilidade segue as datas do formulário.
 Route::get('/inscricoes/{atividade}', [AtividadeController::class, 'previewRedirect'])->whereNumber('atividade')->name('inscricoes.legado');

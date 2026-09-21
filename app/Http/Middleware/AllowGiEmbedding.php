@@ -16,6 +16,7 @@ class AllowGiEmbedding
         // imprevisível do arquivo funciona como identificador e o controller só
         // entrega JPEGs existentes na pasta privada reservada para essas fotos.
         'convidados.foto',
+        'auto-presenca.*',
         'inscricoes.publica*',
         'inscricoes.captcha',
         'inscricoes.legado',

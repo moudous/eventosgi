@@ -204,6 +204,11 @@ class Atividade extends Model
         return $this->hasMany(InscricaoAtividade::class);
     }
 
+    public function linksAutoPresenca(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AutoPresencaLink::class, 'atividade_id');
+    }
+
     public function sessoes(): HasMany
     {
         return $this->hasMany(SessaoAtividade::class)->orderBy('ordem')->orderBy('data_inicio')->orderBy('id');

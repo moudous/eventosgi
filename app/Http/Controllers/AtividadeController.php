@@ -748,6 +748,16 @@ class AtividadeController
 
         return view('atividades.inscricoes', compact('atividade', 'inscricoes', 'pesquisar') + [
             'camposExportacao' => $exportacao->camposDisponiveis($atividade),
+            'linksAutoPresenca' => $atividade->linksAutoPresenca()->latest()->get()->map(fn ($link) => [
+                'id' => $link->id,
+                'url' => route('auto-presenca.abrir', ['link' => $link->hash]),
+                'inicio' => $link->inicio->format('d/m/Y H:i'),
+                'fim' => $link->fim->format('d/m/Y H:i'),
+                'ajuste_minutos' => $link->ajuste_minutos,
+                'cliques' => $link->cliques,
+                'ajustar_url' => route('atividades.auto-presenca.ajustar', [$atividade, $link]),
+                'excluir_url' => route('atividades.auto-presenca.excluir', [$atividade, $link]),
+            ])->values(),
         ]);
     }
 

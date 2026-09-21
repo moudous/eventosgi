@@ -16,6 +16,7 @@ $publicas = [
     '/formularios/'.str_repeat('a', 64),
     '/biblioteca/arquivos/'.str_repeat('a', 36).'.png/visualizar',
     '/convidados/foto/'.str_repeat('c', 40).'.jpg/visualizar',
+    '/auto-presenca/'.str_repeat('d', 64),
     '/personalizacao/imagens/'.str_repeat('b', 36).'.jpg/visualizar',
     '/inscricoes/1/arquivos/documento/0/visualizar',
     '/formularios/'.str_repeat('a', 64).'/pix/321/status',
