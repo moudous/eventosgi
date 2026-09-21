@@ -18,6 +18,11 @@ config(['database.connections.cert' => ['driver' => 'sqlite', 'database' => ':me
 Schema::connection('cert')->create('participantes', function (Blueprint $table): void {
     $table->id();
     $table->string('nome');
+    $table->string('email')->nullable();
+    $table->string('email2')->nullable();
+    $table->string('email_institucional')->nullable();
+    $table->string('instituicao_ensino')->nullable();
+    $table->string('sexo')->nullable();
     $table->dateTime('excluido_em')->nullable();
 });
 
@@ -46,12 +51,18 @@ $camposExportacao = [
     ['chave' => 'id', 'rotulo' => 'ID', 'grupo' => 'Campos principais', 'marcado' => true],
     ['chave' => 'codigo_qr', 'rotulo' => 'Código QR', 'grupo' => 'Dados técnicos', 'marcado' => false],
 ];
-$html = view('atividades.inscricoes', compact('atividade', 'inscricoes', 'camposExportacao') + ['pesquisar' => ''])->render();
+$html = view('atividades.inscricoes', compact('atividade', 'inscricoes', 'camposExportacao') + ['pesquisar' => '', 'linksAutoPresenca' => []])->render();
 if (! str_contains($html, '<th>Presença</th>') || ! str_contains($html, '>Presente</span>')) {
     throw new RuntimeException('A coluna e o estado de presença não foram renderizados.');
 }
 if (! str_contains($html, 'title="Remover presença"') || ! str_contains($html, 'aria-label="Visualizar respostas"') || ! str_contains($html, 'id="respostaDataPresenca"')) {
     throw new RuntimeException('As ações por ícone da inscrição não foram renderizadas.');
+}
+if (! str_contains($html, "if (!confirm('Deseja ' + acao + ' desta inscrição?')) return;")
+    || ! str_contains($html, 'Ver dados do participante')
+    || ! str_contains($html, 'Ocultar dados do participante')
+    || ! str_contains($html, '<span>Marcar presença</span>')) {
+    throw new RuntimeException('A confirmação de presença e os controles do modal de respostas não foram renderizados.');
 }
 if (! str_contains($html, 'id="exportacaoCamposModal"') || ! str_contains($html, 'value="id" data-padrao="1" checked') || ! str_contains($html, 'value="codigo_qr" data-padrao="0"')) {
     throw new RuntimeException('A seleção de campos da exportação não foi renderizada com os padrões esperados.');

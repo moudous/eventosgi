@@ -7,7 +7,8 @@
     $campos = collect($atividade->formulario['campos'] ?? [])->keyBy('nome');
     $participantes = App\Models\Participante::query()
         ->whereIn('id', $inscricoes->pluck('participante_id')->filter()->unique()->all())
-        ->pluck('nome', 'id');
+        ->get(['id', 'nome', 'email', 'email2', 'email_institucional', 'instituicao_ensino', 'sexo'])
+        ->keyBy('id');
     $dispositivos = app(App\Services\DispositivoVisitanteService::class);
     $podeValidarPresenca = app(App\Services\GiPermissionService::class)->permite('atividades.validador_qr');
     $podeExcluirInscricao = app(App\Services\GiPermissionService::class)->permite('atividades.inscricoes.excluir');
@@ -17,6 +18,7 @@
 
     foreach ($inscricoes as $inscricao) {
         $resposta = $inscricao->resposta ?? [];
+        $participante = $participantes->get($inscricao->participante_id);
         // Segue a ordem dos campos do formulário para alinhar as colunas entre as linhas;
         // respostas de campos já removidos vão para o fim.
         $checkboxesSimples = $campos->filter(fn ($campo) =>
@@ -85,9 +87,15 @@
                 'Origem' => $dispositivo['origem'] ?? '',
                 'Sessão' => $dispositivo['sessao'] ?? '',
             ], 'strlen'),
-            'participante' => $participantes->get($inscricao->participante_id),
+            'participante' => $participante?->nome,
             'participante_id' => $inscricao->participante_id,
             'participante_email' => $inscricao->participante_email,
+            'dados_participante' => $participante ? array_filter([
+                'Instituição de ensino' => $participante->instituicao_ensino,
+                'E-mail alternativo' => $participante->email2,
+                'E-mail institucional' => $participante->email_institucional,
+                'Sexo' => $participante->sexo,
+            ], fn ($valor) => filled($valor)) : [],
             'lista_reserva' => (bool) $inscricao->lista_reserva,
             'data' => $inscricao->created_at?->format('d/m/Y') ?? '—',
             'hora' => $inscricao->created_at?->format('H:i') ?? '',
@@ -96,7 +104,7 @@
             'presenca_url' => route('atividades.inscricoes.presenca', $inscricao),
             'possui_pix_confirmado' => (int) $inscricao->cobrancas_pix_confirmadas_count > 0,
             'exclusao_url' => route('atividades.inscricoes.destroy', [$atividade, $inscricao]),
-            'exclusao_identificacao' => $participantes->get($inscricao->participante_id)
+            'exclusao_identificacao' => $participante?->nome
                 ?: ($inscricao->participante_email ?: 'Inscrição #'.$inscricao->id),
             'respostas' => $respostas,
             'anexos' => $anexos,
@@ -188,8 +196,9 @@
 </div>
 
 <div class="modal fade" id="respostaModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-    <div class="modal-header"><div><h2 class="modal-title fs-5">Inscrição <span id="respostaNumero"></span></h2><small class="text-muted d-block" id="respostaData"></small><small class="text-success fw-semibold d-block" id="respostaDataPresenca"></small></div><div class="d-flex align-items-center gap-2">@if($podeValidarPresenca)<button type="button" class="btn btn-sm btn-outline-success alternar-presenca" id="respostaPresenca" title="Marcar presença" aria-label="Marcar presença"><i class="bi bi-person-check-fill" aria-hidden="true"></i></button>@endif<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div></div>
+    <div class="modal-header"><div><h2 class="modal-title fs-5">Inscrição <span id="respostaNumero"></span></h2><small class="text-muted d-block" id="respostaData"></small><small class="text-success fw-semibold d-block" id="respostaDataPresenca"></small></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
     <div class="modal-body" id="respostaCorpo"></div>
+    <div class="modal-footer">@if($podeValidarPresenca)<button type="button" class="btn btn-outline-success alternar-presenca me-auto" id="respostaPresenca"><i class="bi bi-person-check-fill me-1" aria-hidden="true"></i><span>Marcar presença</span></button>@endif<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button></div>
 </div></div></div>
 
 <div class="modal fade" id="autoPresencaModal" tabindex="-1" aria-labelledby="autoPresencaTitulo" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
@@ -325,6 +334,8 @@ function atualizarBotaoPresenca(botao, inscricao) {
     botao.title = titulo;
     botao.setAttribute('aria-label', titulo);
     botao.querySelector('i').className = 'bi ' + (inscricao.presente ? 'bi-person-x-fill' : 'bi-person-check-fill');
+    const texto = botao.querySelector('span');
+    if (texto) texto.textContent = titulo;
 }
 
 function atualizarPresencaNaTela(inscricao) {
@@ -361,6 +372,8 @@ document.addEventListener('click', async evento => {
     if (!botao) return;
     const inscricao = inscricoes[botao.dataset.inscricao];
     if (!inscricao || botao.disabled) return;
+    const acao = inscricao.presente ? 'remover a presença' : 'marcar a presença';
+    if (!confirm('Deseja ' + acao + ' desta inscrição?')) return;
     botao.disabled = true;
     try {
         const resposta = await fetch(inscricao.presenca_url, {method:'PATCH', credentials:'same-origin', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':@json(csrf_token())}, body:JSON.stringify({presente:!inscricao.presente})});
@@ -388,6 +401,43 @@ document.querySelectorAll('.ver-respostas').forEach(botao => botao.addEventListe
 
     const corpo = document.getElementById('respostaCorpo');
     corpo.replaceChildren();
+
+    if (Object.keys(inscricao.dados_participante || {}).length) {
+        const alternarDados = document.createElement('button');
+        alternarDados.type = 'button';
+        alternarDados.className = 'btn btn-link btn-sm px-0 mb-2';
+        alternarDados.setAttribute('aria-expanded', 'false');
+        alternarDados.innerHTML = '<i class="bi bi-person-vcard me-1" aria-hidden="true"></i>Ver dados do participante';
+        const dados = document.createElement('div');
+        dados.className = 'd-none mb-4';
+        const gradeDados = document.createElement('div');
+        gradeDados.className = 'resposta-detalhe row g-3 mx-0';
+        Object.entries(inscricao.dados_participante).forEach(([rotulo, valor]) => {
+            const coluna = document.createElement('div');
+            coluna.className = 'col-sm-6 px-0';
+            const titulo = document.createElement('div');
+            titulo.className = 'resposta-rotulo';
+            titulo.textContent = rotulo;
+            const conteudo = document.createElement('div');
+            conteudo.className = 'resposta-valor text-break';
+            conteudo.textContent = valor;
+            coluna.append(titulo, conteudo);
+            gradeDados.append(coluna);
+        });
+        dados.append(gradeDados);
+        alternarDados.addEventListener('click', () => {
+            const oculto = dados.classList.toggle('d-none');
+            alternarDados.setAttribute('aria-expanded', String(!oculto));
+            alternarDados.innerHTML = '<i class="bi bi-person-vcard me-1" aria-hidden="true"></i>'
+                + (oculto ? 'Ver dados do participante' : 'Ocultar dados do participante');
+        });
+        corpo.append(alternarDados, dados);
+    }
+
+    const tituloRespostas = document.createElement('h3');
+    tituloRespostas.className = 'h6 text-uppercase text-muted fw-semibold mb-3';
+    tituloRespostas.textContent = 'Respostas da inscrição';
+    corpo.append(tituloRespostas);
 
     // Monta o conteúdo por nó para que as respostas dos participantes nunca sejam interpretadas como HTML.
     const grade = document.createElement('div');
