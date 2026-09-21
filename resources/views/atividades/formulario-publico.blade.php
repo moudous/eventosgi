@@ -48,7 +48,7 @@
         <div class="editor-publico mb-4">{!! $config['editor']['conteudo'] !!}</div>
     @endif
 
-    @if(!empty($config['limitar_inscricoes']) && !$listaReservaAtiva && $estado['motivo'] !== 'duplicada')
+    @if(!empty($config['limitar_inscricoes']) && !empty($config['mostrar_vagas_restantes']) && !$listaReservaAtiva && $estado['motivo'] !== 'duplicada')
         @php
             $totalVagas = $config['distribuicao_vagas']['total'] ?? [
                 'usadas' => $atividade->inscricoes()->count(),

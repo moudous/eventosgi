@@ -31,6 +31,7 @@ if ($atividade->mensagemIdentificacao() !== Atividade::MENSAGEM_IDENTIFICACAO
 $participante = new Participante(['nome' => 'Pessoa Teste', 'cpf' => '12345678901']);
 $config = [
     'titulo' => 'Formulário', 'limitar_inscricoes' => true, 'limite_inscricoes' => 12,
+    'mostrar_vagas_restantes' => false,
     'campos' => [
         ['nome' => 'periodo', 'label' => 'Período', 'tipo' => 'select', 'criterio_vagas' => true, 'opcoes' => [['valor' => 'manha', 'texto' => 'Manhã', 'percentual_vagas' => 25]]],
         ['nome' => 'interesses', 'label' => 'Interesses', 'tipo' => 'checkbox', 'obrigatorio' => false, 'criterio_vagas' => true, 'opcoes' => [['valor' => 'arte', 'texto' => 'Arte', 'percentual_vagas' => 50], ['valor' => 'musica', 'texto' => 'Música', 'percentual_vagas' => 50]]],
@@ -48,8 +49,8 @@ $html = view('atividades.formulario-publico', [
     'qrPresenca' => null,
 ])->render();
 
-if (! str_contains($html, 'Vagas restantes: 4') || str_contains($html, 'Manhã — 1/2')) {
-    throw new RuntimeException('O total deve aparecer e os contadores hierárquicos devem respeitar sua configuração.');
+if (str_contains($html, 'Vagas restantes: 4') || str_contains($html, 'Manhã — 1/2')) {
+    throw new RuntimeException('Os contadores de vagas não devem aparecer quando desabilitados.');
 }
 if (substr_count($html, 'type="checkbox"') < 2 || ! str_contains($html, 'name="interesses[]"') || ! str_contains($html, 'value="arte" checked') || ! str_contains($html, 'Arte <span class="text-muted">— 2 vaga(s) restante(s)</span>')) {
     throw new RuntimeException('O campo checkbox não foi renderizado como caixas de seleção.');
