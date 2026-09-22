@@ -965,8 +965,8 @@ class AtividadeController
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'categoria_id' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'integer', 'exists:categorias,id'],
             'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],
-            'tipo_link_transmissao' => ['exclude_unless:modalidade,ead', 'nullable', 'in:link,iframe'],
-            'link_transmissao' => ['exclude_unless:modalidade,ead', 'nullable', 'string', 'max:10000', 'required_with:tipo_link_transmissao', function (string $atributo, mixed $valor, \Closure $falhar) use ($request): void {
+            'tipo_link_transmissao' => ['exclude_unless:modalidade,ead', 'nullable', 'in:nao_usar,link,iframe'],
+            'link_transmissao' => ['exclude_unless:modalidade,ead', 'nullable', 'string', 'max:10000', function (string $atributo, mixed $valor, \Closure $falhar) use ($request): void {
                 if (blank($valor)) return;
                 if ($request->input('tipo_link_transmissao') === 'link'
                     && (! filter_var($valor, FILTER_VALIDATE_URL) || ! in_array(strtolower((string) parse_url($valor, PHP_URL_SCHEME)), ['http', 'https'], true))) {
@@ -1014,7 +1014,7 @@ class AtividadeController
             $dados['local'] = trim((string) $dados['local']) ?: null;
         }
 
-        if (($dados['modalidade'] ?? null) !== 'ead') {
+        if (($dados['modalidade'] ?? null) !== 'ead' || ($dados['tipo_link_transmissao'] ?? null) === 'nao_usar') {
             $dados['tipo_link_transmissao'] = $dados['link_transmissao'] = null;
         } elseif (isset($dados['link_transmissao'])) {
             $dados['link_transmissao'] = trim((string) $dados['link_transmissao']) ?: null;
