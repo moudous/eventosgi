@@ -11,7 +11,7 @@ class Atividade extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['mostrar_link_evento', 'tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'local', 'data_inicio', 'data_fim', 'formulario', 'personalizacao', 'url'];
+    protected $fillable = ['mostrar_link_evento', 'tipo', 'formato', 'nome', 'palestrante', 'ativo', 'criado_por', 'evento_id', 'categoria_id', 'modalidade', 'tipo_link_transmissao', 'link_transmissao', 'local', 'data_inicio', 'data_fim', 'formulario', 'personalizacao', 'url'];
     protected $casts = [
         'mostrar_link_evento' => 'boolean',
         'ativo' => 'boolean', 'criado_por' => 'integer', 'evento_id' => 'integer', 'categoria_id' => 'integer',
@@ -33,6 +33,59 @@ class Atividade extends Model
     public const MENSAGEM_LISTA_RESERVA = 'As vagas regulares foram preenchidas. Esta inscrição será registrada além do limite e não garante direito a uma vaga. A ordem e os critérios da inscrição serão considerados para efetivá-la.';
 
     public const MENSAGEM_IDENTIFICACAO = 'Informe seu e-mail e sua senha para entrar. Caso ainda não possua uma senha, solicite uma senha temporária por e-mail.';
+
+    /** URL de uma miniatura oficial quando o link de transmissão é do YouTube. */
+    public function miniaturaTransmissao(): ?string
+    {
+        if ($this->tipo_link_transmissao !== 'link' || ! $this->link_transmissao) return null;
+
+        $url = parse_url($this->link_transmissao);
+        $host = strtolower((string) ($url['host'] ?? ''));
+        $caminho = trim((string) ($url['path'] ?? ''), '/');
+        parse_str((string) ($url['query'] ?? ''), $consulta);
+
+        $video = match (true) {
+            $host === 'youtu.be' || $host === 'www.youtu.be' => strtok($caminho, '/'),
+            in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com'], true) && $caminho === 'watch' => $consulta['v'] ?? null,
+            in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com'], true) && preg_match('#^(?:embed|shorts)/([^/]+)#', $caminho, $achado) === 1 => $achado[1],
+            default => null,
+        };
+
+        return is_string($video) && preg_match('/^[A-Za-z0-9_-]{11}$/', $video)
+            ? 'https://i.ytimg.com/vi/'.$video.'/hqdefault.jpg'
+            : null;
+    }
+
+    /**
+     * Normaliza o iframe informado pela organização antes de ele chegar à página pública.
+     * Scripts, eventos HTML e atributos fora da lista fechada nunca são reproduzidos.
+     */
+    public function iframeTransmissaoSeguro(): ?string
+    {
+        if ($this->tipo_link_transmissao !== 'iframe' || ! $this->link_transmissao) return null;
+
+        $documento = new \DOMDocument();
+        $internos = libxml_use_internal_errors(true);
+        $documento->loadHTML('<?xml encoding="utf-8" ?><div>'.trim($this->link_transmissao).'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        libxml_clear_errors();
+        libxml_use_internal_errors($internos);
+        $iframes = $documento->getElementsByTagName('iframe');
+        if ($iframes->length !== 1) return null;
+
+        $iframe = $iframes->item(0);
+        $src = trim((string) $iframe?->getAttribute('src'));
+        if (! filter_var($src, FILTER_VALIDATE_URL) || ! in_array(strtolower((string) parse_url($src, PHP_URL_SCHEME)), ['http', 'https'], true)) return null;
+
+        $atributos = ['src', 'title', 'width', 'height', 'allow', 'referrerpolicy', 'loading', 'frameborder'];
+        $resultado = [];
+        foreach ($atributos as $atributo) {
+            $valor = trim((string) $iframe->getAttribute($atributo));
+            if ($valor !== '') $resultado[] = $atributo.'="'.e($valor).'"';
+        }
+        if ($iframe->hasAttribute('allowfullscreen')) $resultado[] = 'allowfullscreen';
+
+        return '<iframe '.implode(' ', $resultado).'></iframe>';
+    }
 
     public function temPagamentoPix(): bool
     {

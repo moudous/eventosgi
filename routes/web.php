@@ -219,6 +219,7 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/apagados', [AtividadeController::class, 'apagados'])->middleware('gi.permission:atividades.listar')->name('apagados');
     Route::get('/criar', [AtividadeController::class, 'create'])->middleware('gi.permission:atividades.criar')->name('create');
     Route::post('/', [AtividadeController::class, 'store'])->middleware('gi.permission:atividades.criar')->name('store');
+    Route::get('/{atividade}/transmissao', [AtividadeController::class, 'transmissao'])->name('transmissao');
     Route::get('/validador-presenca', [PresencaController::class, 'index'])->middleware('gi.permission:atividades.validador_qr')->name('validador-presenca');
     Route::post('/validador-presenca', [PresencaController::class, 'validar'])->middleware('gi.permission:atividades.validador_qr')->name('validador-presenca.validar');
     Route::post('/validador-presenca/confirmar', [PresencaController::class, 'confirmar'])->middleware('gi.permission:atividades.validador_qr')->name('validador-presenca.confirmar');

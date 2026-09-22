@@ -101,6 +101,13 @@ class PaginaEventoRenderer
                 ...$this->dadosInscricao($atividade),
                 'formato' => $atividade->formato,
                 'modalidade' => match ($atividade->modalidade) { 'ead' => 'ONLINE', 'presencial' => 'PRESENCIAL', default => '' },
+                'mostrar_link_transmissao' => $atividade->modalidade === 'ead' && (bool) $atividade->link_transmissao,
+                'tipo_link_transmissao' => (string) ($atividade->tipo_link_transmissao ?? ''),
+                'iframe_transmissao' => $atividade->tipo_link_transmissao === 'iframe',
+                'url_transmissao' => $atividade->tipo_link_transmissao === 'iframe'
+                    ? route('atividades.transmissao', $atividade)
+                    : (string) ($atividade->link_transmissao ?? ''),
+                'miniatura_transmissao' => $atividade->miniaturaTransmissao() ?? '',
                 'data_inicio' => $atividade->data_inicio?->format('d/m/Y H:i') ?? '',
                 'data_fim' => $atividade->data_fim?->format('d/m/Y H:i') ?? '',
                 'data_inicio_iso' => $atividade->data_inicio?->toIso8601String() ?? '',

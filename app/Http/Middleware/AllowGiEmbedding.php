@@ -10,6 +10,7 @@ class AllowGiEmbedding
 {
     private const ROTAS_PUBLICAS_INCORPORAVEIS = [
         'eventos.pagina.visualizar',
+        'atividades.transmissao',
         'eventos.personalizacao.imagem',
         'biblioteca.abrir',
         // As páginas públicas dos eventos exibem as fotos dos convidados. O nome

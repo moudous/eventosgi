@@ -89,10 +89,18 @@ class AtividadeController
             $this->sincronizarSessoes($atividade, $sessoes);
             return $atividade;
         });
-        $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'tipo', 'formato', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'data_inicio', 'data_fim']), $request);
+        $historico->atividade($atividade, 'Atividade Inserida', $atividade->only(['id', 'tipo', 'formato', 'nome', 'ativo', 'criado_por', 'evento_id', 'modalidade', 'tipo_link_transmissao', 'link_transmissao', 'data_inicio', 'data_fim']), $request);
         return redirect()->route('atividades.index')->with('status', 'Atividade cadastrada com sucesso.');
     }
     public function show(Atividade $atividade): View { $atividade->load(['evento', 'categoria', 'sessoes' => fn ($q) => $q->withCount('inscricoes')]); return view('atividades.show', compact('atividade')); }
+    public function transmissao(Atividade $atividade): Response
+    {
+        $atividade->loadMissing('evento');
+        abort_unless($atividade->ativo && $atividade->evento?->ativo && $atividade->modalidade === 'ead', 404);
+        abort_unless($iframe = $atividade->iframeTransmissaoSeguro(), 404);
+
+        return response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body,iframe{width:100%;height:100%;margin:0;border:0;background:#000}iframe{display:block}</style></head><body>'.$iframe.'</body></html>');
+    }
     public function edit(Atividade $atividade): View { $atividade->load(['sessoes', 'evento']); return view('atividades.edit', ['atividade' => $atividade, 'eventos' => Evento::query()->where('ativo', true)->orWhereKey($atividade->evento_id)->orderBy('nome')->get(), 'categorias' => $this->categoriasDisponiveis($atividade)]); }
 
     /**
@@ -863,7 +871,7 @@ class AtividadeController
     public function previewLink(Atividade $atividade): JsonResponse { return response()->json(['url' => $atividade->urlPublica()]); }
     public function update(Request $request, Atividade $atividade, HistoricoService $historico): RedirectResponse
     {
-        $campos = ['mostrar_link_evento', 'tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'data_inicio', 'data_fim', 'personalizacao'];
+        $campos = ['mostrar_link_evento', 'tipo', 'formato', 'categoria_id', 'nome', 'palestrante', 'ativo', 'evento_id', 'modalidade', 'tipo_link_transmissao', 'link_transmissao', 'data_inicio', 'data_fim', 'personalizacao'];
         $arquivosAnteriores = collect(['imagem', 'imagem_fundo_card', 'imagem_fundo_pagina'])
             ->map(fn ($chave) => $atividade->personalizacao[$chave] ?? null)->filter()->all();
         $antes = $atividade->only($campos); $dados = $this->validar($request, $atividade); $sessoes = $dados['sessoes'] ?? []; unset($dados['sessoes']);
@@ -957,6 +965,18 @@ class AtividadeController
             'evento_id' => ['required', 'integer', 'exists:eventos,id'],
             'categoria_id' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'integer', 'exists:categorias,id'],
             'modalidade' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'in:ead,presencial'],
+            'tipo_link_transmissao' => ['exclude_unless:modalidade,ead', 'nullable', 'in:link,iframe'],
+            'link_transmissao' => ['exclude_unless:modalidade,ead', 'nullable', 'string', 'max:10000', 'required_with:tipo_link_transmissao', function (string $atributo, mixed $valor, \Closure $falhar) use ($request): void {
+                if (blank($valor)) return;
+                if ($request->input('tipo_link_transmissao') === 'link'
+                    && (! filter_var($valor, FILTER_VALIDATE_URL) || ! in_array(strtolower((string) parse_url($valor, PHP_URL_SCHEME)), ['http', 'https'], true))) {
+                    $falhar('Informe um link HTTP ou HTTPS válido.');
+                }
+                if ($request->input('tipo_link_transmissao') === 'iframe') {
+                    $teste = new Atividade(['tipo_link_transmissao' => 'iframe', 'link_transmissao' => $valor]);
+                    if (! $teste->iframeTransmissaoSeguro()) $falhar('Informe somente um iframe com endereço HTTP ou HTTPS válido.');
+                }
+            }],
             'local' => ['exclude_if:tipo,somente_inscricao', 'nullable', 'string', 'max:255'],
             'data_inicio' => ['nullable', 'date'],
             'data_fim' => ['nullable', 'date'],
@@ -989,9 +1009,15 @@ class AtividadeController
         ]);
 
         if ($dados['tipo'] === 'somente_inscricao') {
-            $dados['categoria_id'] = $dados['modalidade'] = $dados['local'] = null;
+            $dados['categoria_id'] = $dados['modalidade'] = $dados['tipo_link_transmissao'] = $dados['link_transmissao'] = $dados['local'] = null;
         } elseif (array_key_exists('local', $dados)) {
             $dados['local'] = trim((string) $dados['local']) ?: null;
+        }
+
+        if (($dados['modalidade'] ?? null) !== 'ead') {
+            $dados['tipo_link_transmissao'] = $dados['link_transmissao'] = null;
+        } elseif (isset($dados['link_transmissao'])) {
+            $dados['link_transmissao'] = trim((string) $dados['link_transmissao']) ?: null;
         }
 
         if (($dados['formato'] ?? 'simples') === 'com_sessoes' && $atividade) {
