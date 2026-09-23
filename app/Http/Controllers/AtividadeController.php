@@ -309,6 +309,7 @@ class AtividadeController
     public function preview(Request $request, Atividade $atividade, IdentificacaoParticipanteService $identificacao, FormularioInscricaoService $servico, ComprovanteInscricaoService $comprovante, ConteudoEditorFormularioService $editor, DistribuicaoVagasService $distribuicao): View
     {
         abort_unless($atividade->formulario, 404);
+        $atividade->loadMissing(['evento', 'categoria']);
 
         $sessao = $identificacao->daSessao($request, $atividade);
         $participante = $sessao ? $identificacao->participanteDaSessao($request, $atividade) : null;

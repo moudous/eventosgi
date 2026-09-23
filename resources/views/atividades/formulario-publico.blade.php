@@ -26,6 +26,12 @@
                 <img src="{{ route('eventos.personalizacao.imagem', ['arquivo' => $imagemVisual['imagem']]) }}" alt="Imagem da atividade {{ $atividade->nome }}" width="150" height="108" class="rounded object-fit-cover flex-shrink-0" style="{{ $imagemVisual['borda'] ? 'border: 3px solid '.$imagemVisual['cor_borda'].';' : '' }}">
             @endif
             <div>
+                @if($atividade->categoria || $atividade->modalidade)
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        @if($atividade->categoria)<span class="badge text-bg-primary">{{ $atividade->categoria->nome }}</span>@endif
+                        @if($atividade->modalidade)<span class="badge text-bg-secondary">{{ strtoupper($atividade->modalidade) }}</span>@endif
+                    </div>
+                @endif
                 <h1 class="page-title">{{ $config['titulo'] ?? $atividade->nome }}</h1>
                 <p class="page-description" style="color: inherit;">{{ $config['subtitulo'] ?? '' }}</p>
                 <div class="small d-flex flex-wrap column-gap-4 row-gap-2">
