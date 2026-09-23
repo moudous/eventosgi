@@ -47,32 +47,36 @@ use Throwable;
 
 class AtividadeController
 {
-    public function index(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => false, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome'])]); }
-    public function apagados(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => true, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome'])]); }
+    public function index(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => false, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome']), 'categoriasFiltro' => Categoria::orderBy('nome')->get(['id', 'nome'])]); }
+    public function apagados(Request $request, ArmazemService $armazem): View { return view('atividades.index', ['apagados' => true, 'estadoTabela' => $armazem->recuperar('atividades', $request), 'eventosFiltro' => Evento::withTrashed()->orderByDesc('created_at')->orderByDesc('id')->get(['id', 'nome']), 'categoriasFiltro' => Categoria::orderBy('nome')->get(['id', 'nome'])]); }
 
     public function dados(Request $request, ArmazemService $armazem): JsonResponse
     {
         $apagados = $request->boolean('apagados');
-        $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with('evento')->withCount('inscricoes');
+        $query = ($apagados ? Atividade::onlyTrashed() : Atividade::query())->with(['evento', 'categoria'])->withCount('inscricoes');
         $total = (clone $query)->count();
         $filtroEvento = max(0, (int) $request->input('filtro_evento', 0));
         if ($filtroEvento > 0) $query->where('evento_id', $filtroEvento);
+        $filtroCategoria = max(0, (int) $request->input('filtro_categoria', 0));
+        if ($filtroCategoria > 0) $query->where('categoria_id', $filtroCategoria);
         $busca = trim((string) $request->input('search.value', ''));
-        if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%")));
+        if ($busca !== '') $query->where(fn ($q) => $q->where('nome', 'like', "%{$busca}%")
+            ->orWhereHas('evento', fn ($e) => $e->where('nome', 'like', "%{$busca}%"))
+            ->orWhereHas('categoria', fn ($c) => $c->where('nome', 'like', "%{$busca}%")));
         $filtrados = (clone $query)->count();
-        $colunas = ['id', 'nome', 'evento_id', 'data_inicio', 'data_fim', 'inscricoes_count', 'ativo', 'updated_at', 'deleted_at'];
+        $colunas = ['id', 'nome', 'evento_id', 'categoria_id', 'data_inicio', 'inscricoes_count', 'ativo', 'updated_at', 'deleted_at'];
         $coluna = $colunas[(int) $request->input('order.0.column', 0)] ?? 'id';
         $direcao = $request->input('order.0.dir') === 'asc' ? 'asc' : 'desc';
         $inicio = max(0, (int) $request->input('start', 0));
         $tamanho = min(100, max(1, (int) $request->input('length', 10)));
-        $armazem->salvar('atividades', $request, intdiv($inicio, $tamanho) + 1, $busca, $tamanho, ['filtro_evento' => $filtroEvento]);
+        $armazem->salvar('atividades', $request, intdiv($inicio, $tamanho) + 1, $busca, $tamanho, ['filtro_evento' => $filtroEvento, 'filtro_categoria' => $filtroCategoria]);
         $permissoes = app(GiPermissionService::class);
         $dados = $query->orderBy($coluna, $direcao)->skip($inicio)->take($tamanho)->get()->map(fn (Atividade $atividade) => [
             'inscricoes_count' => $atividade->inscricoes_count, 'id' => $atividade->id, 'nome' => e($atividade->nome),
-            'evento' => e($atividade->evento?->nome ?? '—'),
-            'data_inicio' => $atividade->data_inicio?->format('d/m/Y H:i') ?? '—', 'data_fim' => $atividade->data_fim?->format('d/m/Y H:i') ?? '—',
+            'evento' => e($atividade->evento?->nome ?? '—'), 'categoria' => e($atividade->categoria?->nome ?? '—'),
+            'periodo' => '<div class="atividade-data-hora"><div><span class="text-muted">Início:</span> '.e($atividade->data_inicio?->format('d/m/Y H:i') ?? '—').'</div><div><span class="text-muted">Fim:</span> '.e($atividade->data_fim?->format('d/m/Y H:i') ?? '—').'</div></div>',
             'ativo' => view('eventos.partials.status', ['evento' => $atividade])->render(),
-            'updated_at' => $atividade->updated_at?->format('d/m/Y H:i') ?? '—',
+            'updated_at' => $atividade->updated_at ? '<div class="atividade-data-hora">'.e($atividade->updated_at->format('d/m/Y')).'<br>'.e($atividade->updated_at->format('H:i')).'</div>' : '—',
             'deleted_at' => $atividade->deleted_at?->format('d/m/Y H:i') ?? '—',
             'acoes' => view('atividades.partials.acoes', ['atividade' => $atividade, 'apagados' => $apagados, 'permissoes' => $permissoes])->render(),
         ]);
