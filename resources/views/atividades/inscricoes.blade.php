@@ -192,7 +192,7 @@
             </table>
         </div>
     </div>
-    <div class="card-footer">{{ $inscricoes->links() }}</div>
+    <div class="card-footer">{{ $inscricoes->onEachSide(1)->links('pagination::bootstrap-5') }}</div>
 </div>
 
 <div class="modal fade" id="respostaModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
