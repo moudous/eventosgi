@@ -241,6 +241,7 @@ Route::prefix('atividades')->name('atividades.')->group(function (): void {
     Route::get('/{atividade}/inscricoes/exportar/{formato}', [AtividadeController::class, 'exportarInscricoes'])->middleware('signed')->whereIn('formato', ['ods', 'csv', 'xls', 'xlsx'])->name('inscricoes.exportar');
     Route::get('/{atividade}/inscricoes', [AtividadeController::class, 'inscricoes'])->middleware('gi.permission:atividades.inscritos')->name('inscricoes');
     Route::post('/{atividade}/auto-presenca', [\App\Http\Controllers\AutoPresencaController::class, 'criar'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.criar');
+    Route::patch('/{atividade}/auto-presenca/{link}/periodo', [\App\Http\Controllers\AutoPresencaController::class, 'alterarPeriodo'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.periodo');
     Route::patch('/{atividade}/auto-presenca/{link}', [\App\Http\Controllers\AutoPresencaController::class, 'ajustar'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.ajustar');
     Route::delete('/{atividade}/auto-presenca/{link}', [\App\Http\Controllers\AutoPresencaController::class, 'excluir'])->middleware('gi.permission:atividades.inscritos')->name('auto-presenca.excluir');
     Route::delete('/{atividade}/inscricoes/{inscricao}', [AtividadeController::class, 'excluirInscricao'])

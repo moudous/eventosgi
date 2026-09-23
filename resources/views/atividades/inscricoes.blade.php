@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title','Inscrições da atividade')
 @section('content')
-<div class="mb-4 d-flex flex-wrap gap-3 justify-content-between"><div><h1 class="page-title">Inscrições</h1><p class="page-description mb-0">{{ $atividade->nome }}</p></div><div class="d-flex gap-2 align-items-start"><button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#autoPresencaModal"><i class="bi bi-person-check-fill me-1"></i>Auto registro de presença</button><div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download me-1"></i>Exportar respostas</button><ul class="dropdown-menu">@foreach(['ods' => 'Planilha (.ods)', 'csv' => 'CSV (.csv)', 'xls' => 'Excel (.xls)', 'xlsx' => 'Excel (.xlsx)'] as $formato => $rotulo)<li><a class="dropdown-item exportar-respostas" href="#" data-link="{{ route('atividades.inscricoes.exportar-link', [$atividade, $formato]) }}">{{ $rotulo }}</a></li>@endforeach</ul></div>@if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif</div></div>
+<div class="mb-4 d-flex flex-wrap gap-3 justify-content-between"><div><h1 class="page-title">Inscrições</h1><p class="page-description mb-1">{{ $atividade->nome }}</p><div class="small d-flex flex-wrap column-gap-4 row-gap-1"><span><strong>Início:</strong> {{ $atividade->data_inicio?->format('d/m/Y H:i') ?? 'Não informado' }}</span><span><strong>Fim:</strong> {{ $atividade->data_fim?->format('d/m/Y H:i') ?? 'Não informado' }}</span>@if($atividade->categoria)<span><strong>Categoria:</strong> {{ $atividade->categoria->nome }}</span>@endif @if($atividade->modalidade)<span><strong>Modalidade:</strong> {{ strtoupper($atividade->modalidade) }}</span>@endif @if($atividade->convidados->isNotEmpty())<span><strong>Convidados:</strong> {{ $atividade->convidados->map(fn ($convidado) => trim($convidado->nome.' '.$convidado->sobrenome))->join(', ') }}</span>@endif</div></div><div class="d-flex gap-2 align-items-start"><button class="btn btn-outline-success" type="button" data-bs-toggle="modal" data-bs-target="#autoPresencaModal"><i class="bi bi-person-check-fill me-1"></i>Auto registro de presença</button><div class="dropdown"><button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-download me-1"></i>Exportar respostas</button><ul class="dropdown-menu">@foreach(['ods' => 'Planilha (.ods)', 'csv' => 'CSV (.csv)', 'xls' => 'Excel (.xls)', 'xlsx' => 'Excel (.xlsx)'] as $formato => $rotulo)<li><a class="dropdown-item exportar-respostas" href="#" data-link="{{ route('atividades.inscricoes.exportar-link', [$atividade, $formato]) }}">{{ $rotulo }}</a></li>@endforeach</ul></div>@if(app(\App\Services\GiPermissionService::class)->permite('atividades.listar'))<a href="{{ route('atividades.index') }}" class="btn btn-outline-secondary">Voltar</a>@endif</div></div>
 <form method="GET" action="{{ route('atividades.inscricoes',$atividade) }}" class="row g-2 justify-content-end mb-3"><div class="col-12 col-md-5 col-lg-4"><label class="visually-hidden" for="pesquisar">Pesquisar</label><div class="input-group"><input id="pesquisar" name="pesquisar" class="form-control" value="{{ $pesquisar }}" placeholder="Pesquisar inscrições"><button class="btn btn-outline-primary" type="submit"><i class="bi bi-search me-1"></i>Pesquisar</button>@if($pesquisar!=='')<a class="btn btn-outline-secondary" href="{{ route('atividades.inscricoes',$atividade) }}?pesquisar=">Limpar</a>@endif</div></div></form>
 @php
     $campos = collect($atividade->formulario['campos'] ?? [])->keyBy('nome');
@@ -215,6 +215,14 @@
     </div>
 </div></div></div>
 
+<div class="modal fade" id="editarAutoPresencaModal" tabindex="-1" aria-labelledby="editarAutoPresencaTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <form id="editarAutoPresenca">
+        <div class="modal-header"><h2 class="modal-title fs-5" id="editarAutoPresencaTitulo"><i class="bi bi-pencil-fill me-2"></i>Editar período de validade</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+        <div class="modal-body"><div class="row g-3"><div class="col-12"><label class="form-label" for="editarAutoPresencaInicio">Data e hora inicial</label><input class="form-control" type="datetime-local" id="editarAutoPresencaInicio" required></div><div class="col-12"><label class="form-label" for="editarAutoPresencaFim">Data e hora final</label><input class="form-control" type="datetime-local" id="editarAutoPresencaFim" required></div><div class="col-12"><div class="alert alert-danger py-2 mb-0 d-none" id="editarAutoPresencaErro"></div></div></div></div>
+        <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-primary" id="salvarAutoPresenca"><i class="bi bi-save me-1"></i>Salvar período</button></div>
+    </form>
+</div></div></div>
+
 @if($podeExcluirInscricao)
 <div class="modal fade" id="excluirInscricaoModal" tabindex="-1" aria-labelledby="excluirInscricaoTitulo" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
     <div class="modal-header"><h2 class="modal-title fs-5" id="excluirInscricaoTitulo"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Cancelar inscrição</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
@@ -267,9 +275,33 @@
 const inscricoes = @json(collect($linhas)->keyBy('id'));
 const linksAutoPresenca = @json($linksAutoPresenca);
 const csrfAutoPresenca = @json(csrf_token());
+const sugestaoAutoPresencaInicio = @json($atividade->data_fim?->copy()->subMinutes(10)->format('Y-m-d\TH:i'));
+const sugestaoAutoPresencaFim = @json($atividade->data_fim?->format('Y-m-d\TH:i'));
 const listaAutoPresenca = document.getElementById('listaAutoPresenca');
 const autoPresencaVazia = document.getElementById('autoPresencaVazia');
 const autoPresencaErro = document.getElementById('autoPresencaErro');
+const autoPresencaInicio = document.getElementById('autoPresencaInicio');
+const autoPresencaFim = document.getElementById('autoPresencaFim');
+const modalEditarAutoPresenca = bootstrap.Modal.getOrCreateInstance(document.getElementById('editarAutoPresencaModal'));
+const editarAutoPresencaInicio = document.getElementById('editarAutoPresencaInicio');
+const editarAutoPresencaFim = document.getElementById('editarAutoPresencaFim');
+const editarAutoPresencaErro = document.getElementById('editarAutoPresencaErro');
+let linkAutoPresencaEmEdicao = null;
+
+function preencherSugestaoAutoPresenca() {
+    if (!sugestaoAutoPresencaInicio || !sugestaoAutoPresencaFim) return;
+    autoPresencaInicio.value = sugestaoAutoPresencaInicio;
+    autoPresencaFim.value = sugestaoAutoPresencaFim;
+}
+document.getElementById('autoPresencaModal').addEventListener('show.bs.modal', preencherSugestaoAutoPresenca);
+
+function editarPeriodoAutoPresenca(link) {
+    linkAutoPresencaEmEdicao = link;
+    editarAutoPresencaInicio.value = link.inicio_input;
+    editarAutoPresencaFim.value = link.fim_input;
+    editarAutoPresencaErro.classList.add('d-none');
+    modalEditarAutoPresenca.show();
+}
 
 function ajusteAutoPresenca(minutos) { return (minutos > 0 ? '+' : '') + minutos; }
 function desenharLinksAutoPresenca() {
@@ -290,6 +322,9 @@ function desenharLinksAutoPresenca() {
             botao.title = titulo; botao.setAttribute('aria-label', titulo); botao.innerHTML = '<i class="bi ' + icone + '"></i>';
             botao.addEventListener('click', () => ajustarLinkAutoPresenca(link, minutos, botao)); acoes.append(botao);
         });
+        const editar = document.createElement('button'); editar.type = 'button'; editar.className = 'btn btn-sm btn-outline-primary me-1';
+        editar.title = 'Editar período de validade'; editar.setAttribute('aria-label', editar.title); editar.innerHTML = '<i class="bi bi-pencil-fill"></i>';
+        editar.addEventListener('click', () => editarPeriodoAutoPresenca(link)); acoes.append(editar);
         const excluir = document.createElement('button'); excluir.type = 'button'; excluir.className = 'btn btn-sm btn-outline-danger';
         excluir.title = 'Excluir definitivamente'; excluir.setAttribute('aria-label', 'Excluir definitivamente'); excluir.innerHTML = '<i class="bi bi-trash-fill"></i>';
         excluir.addEventListener('click', () => excluirLinkAutoPresenca(link, excluir)); acoes.append(excluir);
@@ -314,13 +349,24 @@ async function excluirLinkAutoPresenca(link, botao) {
         linksAutoPresenca.splice(linksAutoPresenca.indexOf(link), 1); desenharLinksAutoPresenca();
     } catch (erro) { alert(erro.message || 'Não foi possível excluir o link.'); } finally { botao.disabled = false; }
 }
+document.getElementById('editarAutoPresenca').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!linkAutoPresencaEmEdicao) return;
+    editarAutoPresencaErro.classList.add('d-none');
+    const botao = document.getElementById('salvarAutoPresenca'); if (botao.disabled) return; botao.disabled = true;
+    try {
+        const resposta = await fetch(linkAutoPresencaEmEdicao.periodo_url, {method: 'PATCH', credentials: 'same-origin', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrfAutoPresenca}, body: JSON.stringify({inicio:editarAutoPresencaInicio.value, fim:editarAutoPresencaFim.value})});
+        const dados = await resposta.json(); if (!resposta.ok) throw new Error(dados.message || Object.values(dados.errors || {}).flat()[0] || 'Não foi possível alterar o período.');
+        Object.assign(linkAutoPresencaEmEdicao, dados); desenharLinksAutoPresenca(); modalEditarAutoPresenca.hide();
+    } catch (erro) { editarAutoPresencaErro.textContent = erro.message || 'Não foi possível alterar o período.'; editarAutoPresencaErro.classList.remove('d-none'); } finally { botao.disabled = false; }
+});
 document.getElementById('criarAutoPresenca').addEventListener('submit', async event => {
     event.preventDefault(); autoPresencaErro.classList.add('d-none');
     const botao = document.getElementById('gerarAutoPresenca'); if (botao.disabled) return; botao.disabled = true;
     try {
         const resposta = await fetch(@json(route('atividades.auto-presenca.criar', $atividade)), {method: 'POST', credentials: 'same-origin', headers: {'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrfAutoPresenca}, body: JSON.stringify({inicio:document.getElementById('autoPresencaInicio').value, fim:document.getElementById('autoPresencaFim').value})});
         const dados = await resposta.json(); if (!resposta.ok) throw new Error(dados.message || Object.values(dados.errors || {}).flat()[0] || 'Não foi possível gerar o link.');
-        linksAutoPresenca.unshift(dados); desenharLinksAutoPresenca(); event.target.reset();
+        linksAutoPresenca.unshift(dados); desenharLinksAutoPresenca(); event.target.reset(); preencherSugestaoAutoPresenca();
     } catch (erro) { autoPresencaErro.textContent = erro.message || 'Não foi possível gerar o link.'; autoPresencaErro.classList.remove('d-none'); } finally { botao.disabled = false; }
 });
 desenharLinksAutoPresenca();

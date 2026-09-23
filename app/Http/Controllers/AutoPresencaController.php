@@ -50,6 +50,19 @@ class AutoPresencaController
         return response()->json($this->dadosLink($link->fresh()));
     }
 
+    public function alterarPeriodo(Atividade $atividade, AutoPresencaLink $link, Request $request): JsonResponse
+    {
+        abort_unless((int) $link->atividade_id === (int) $atividade->id, 404);
+        $dados = $request->validate([
+            'inicio' => ['required', 'date'],
+            'fim' => ['required', 'date', 'after:inicio'],
+        ], ['fim.after' => 'A data e hora final deve ser posterior à inicial.']);
+
+        $link->update($dados);
+
+        return response()->json($this->dadosLink($link->fresh()));
+    }
+
     public function excluir(Atividade $atividade, AutoPresencaLink $link): JsonResponse
     {
         abort_unless((int) $link->atividade_id === (int) $atividade->id, 404);
@@ -156,9 +169,12 @@ class AutoPresencaController
             'url' => route('auto-presenca.abrir', ['link' => $link->hash]),
             'inicio' => $link->inicio->format('d/m/Y H:i'),
             'fim' => $link->fim->format('d/m/Y H:i'),
+            'inicio_input' => $link->inicio->format('Y-m-d\TH:i'),
+            'fim_input' => $link->fim->format('Y-m-d\TH:i'),
             'ajuste_minutos' => $link->ajuste_minutos,
             'cliques' => $link->cliques,
             'ajustar_url' => route('atividades.auto-presenca.ajustar', [$link->atividade_id, $link]),
+            'periodo_url' => route('atividades.auto-presenca.periodo', [$link->atividade_id, $link]),
             'excluir_url' => route('atividades.auto-presenca.excluir', [$link->atividade_id, $link]),
         ];
     }
