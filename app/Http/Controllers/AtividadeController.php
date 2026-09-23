@@ -73,7 +73,8 @@ class AtividadeController
         $permissoes = app(GiPermissionService::class);
         $dados = $query->orderBy($coluna, $direcao)->skip($inicio)->take($tamanho)->get()->map(fn (Atividade $atividade) => [
             'inscricoes_count' => $atividade->inscricoes_count, 'id' => $atividade->id, 'nome' => e($atividade->nome),
-            'evento' => e($atividade->evento?->nome ?? '—'), 'categoria' => e($atividade->categoria?->nome ?? '—'),
+            'evento' => e($atividade->evento?->nome ?? '—'),
+            'categoria' => '<div>'.e($atividade->categoria?->nome ?? '—').'</div><small class="text-muted">'.e($atividade->modalidade === 'ead' ? 'EAD' : 'Presencial').'</small>',
             'periodo' => '<div class="atividade-data-hora"><div><span class="text-muted">Início:</span> '.e($atividade->data_inicio?->format('d/m/Y H:i') ?? '—').'</div><div><span class="text-muted">Fim:</span> '.e($atividade->data_fim?->format('d/m/Y H:i') ?? '—').'</div></div>',
             'ativo' => view('eventos.partials.status', ['evento' => $atividade])->render(),
             'updated_at' => $atividade->updated_at ? '<div class="atividade-data-hora">'.e($atividade->updated_at->format('d/m/Y')).'<br>'.e($atividade->updated_at->format('H:i')).'</div>' : '—',
