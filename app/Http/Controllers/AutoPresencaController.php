@@ -171,6 +171,7 @@ class AutoPresencaController
             'fim' => $link->fim->format('d/m/Y H:i'),
             'inicio_input' => $link->inicio->format('Y-m-d\TH:i'),
             'fim_input' => $link->fim->format('Y-m-d\TH:i'),
+            'duracao_minutos' => (int) $link->inicio->diffInMinutes($link->fim),
             'ajuste_minutos' => $link->ajuste_minutos,
             'cliques' => $link->cliques,
             'ajustar_url' => route('atividades.auto-presenca.ajustar', [$link->atividade_id, $link]),

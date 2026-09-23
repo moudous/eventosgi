@@ -210,7 +210,7 @@
             <div class="col-12 col-md-4 d-grid"><button class="btn btn-success" id="gerarAutoPresenca"><i class="bi bi-link-45deg me-1"></i>Gerar link</button></div>
             <div class="col-12"><div class="alert alert-danger py-2 mb-0 d-none" id="autoPresencaErro"></div></div>
         </form>
-        <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Link</th><th>Período de validade</th><th class="text-center">Cliques</th><th class="text-center">Ajuste</th><th class="text-end">Ações</th></tr></thead><tbody id="listaAutoPresenca"></tbody></table></div>
+        <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Link</th><th>Período de validade</th><th class="text-center">Tempo</th><th class="text-center">Cliques</th><th class="text-center">Ajuste</th><th class="text-end">Ações</th></tr></thead><tbody id="listaAutoPresenca"></tbody></table></div>
         <p class="text-muted text-center py-3 mb-0 d-none" id="autoPresencaVazia">Nenhum link de auto presença foi criado.</p>
     </div>
 </div></div></div>
@@ -304,6 +304,7 @@ function editarPeriodoAutoPresenca(link) {
 }
 
 function ajusteAutoPresenca(minutos) { return (minutos > 0 ? '+' : '') + minutos; }
+function duracaoAutoPresenca(minutos) { const total = Math.max(0, Number(minutos) || 0), horas = Math.floor(total / 60), restantes = total % 60; if (!horas) return `${restantes} min`; return restantes ? `${horas}h ${restantes} min` : `${horas}h`; }
 function desenharLinksAutoPresenca() {
     listaAutoPresenca.replaceChildren();
     linksAutoPresenca.forEach(link => {
@@ -314,6 +315,7 @@ function desenharLinksAutoPresenca() {
         ancora.className = 'small text-break'; ancora.textContent = link.url;
         celulaLink.append(ancora);
         const periodo = document.createElement('td'); periodo.textContent = link.inicio + ' até ' + link.fim;
+        const tempo = document.createElement('td'); tempo.className = 'text-center text-nowrap'; tempo.textContent = duracaoAutoPresenca(link.duracao_minutos);
         const cliques = document.createElement('td'); cliques.className = 'text-center'; cliques.textContent = link.cliques;
         const ajuste = document.createElement('td'); ajuste.className = 'text-center'; ajuste.textContent = ajusteAutoPresenca(link.ajuste_minutos);
         const acoes = document.createElement('td'); acoes.className = 'text-end text-nowrap';
@@ -328,7 +330,7 @@ function desenharLinksAutoPresenca() {
         const excluir = document.createElement('button'); excluir.type = 'button'; excluir.className = 'btn btn-sm btn-outline-danger';
         excluir.title = 'Excluir definitivamente'; excluir.setAttribute('aria-label', 'Excluir definitivamente'); excluir.innerHTML = '<i class="bi bi-trash-fill"></i>';
         excluir.addEventListener('click', () => excluirLinkAutoPresenca(link, excluir)); acoes.append(excluir);
-        linha.append(celulaLink, periodo, cliques, ajuste, acoes); listaAutoPresenca.append(linha);
+        linha.append(celulaLink, periodo, tempo, cliques, ajuste, acoes); listaAutoPresenca.append(linha);
     });
     autoPresencaVazia.classList.toggle('d-none', linksAutoPresenca.length > 0);
 }
