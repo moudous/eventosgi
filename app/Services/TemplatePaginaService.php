@@ -199,6 +199,43 @@ class TemplatePaginaService
         ));
     }
 
+    /**
+     * Arquivos do template organizados para a árvore do editor.
+     *
+     * @return list<array{nome: string, caminho: string|null, editavel: bool, filhos: array}>
+     */
+    public function arvoreArquivos(TemplatePagina $template): array
+    {
+        $raiz = [];
+
+        foreach ($this->arquivos($template) as $arquivo) {
+            $partes = explode('/', $arquivo);
+            $atual =& $raiz;
+
+            foreach ($partes as $indice => $parte) {
+                $ultimo = $indice === count($partes) - 1;
+                $atual[$parte] ??= [
+                    'nome' => $parte,
+                    'caminho' => $ultimo ? $arquivo : null,
+                    'editavel' => $ultimo && in_array(strtolower(pathinfo($arquivo, PATHINFO_EXTENSION)), self::EXTENSOES_EDITAVEIS, true),
+                    'filhos' => [],
+                ];
+                $atual =& $atual[$parte]['filhos'];
+            }
+            unset($atual);
+        }
+
+        $ordenar = static function (array $itens) use (&$ordenar): array {
+            uasort($itens, static fn (array $a, array $b): int => ($a['caminho'] === null ? 0 : 1) <=> ($b['caminho'] === null ? 0 : 1) ?: strnatcasecmp($a['nome'], $b['nome']));
+            foreach ($itens as &$item) $item['filhos'] = $ordenar($item['filhos']);
+            unset($item);
+
+            return array_values($itens);
+        };
+
+        return $ordenar($raiz);
+    }
+
     /** Lê um arquivo textual depois de garantir que ele continua dentro do template. */
     public function lerArquivoEditavel(TemplatePagina $template, string $arquivo): string
     {

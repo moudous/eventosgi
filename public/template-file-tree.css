@@ -1,0 +1,6 @@
+.source-file-tree{list-style:none;margin:0;padding:0}
+.source-folder>span{align-items:center;color:#52606d;display:flex;font:700 11px/1.4 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;gap:7px;padding:7px 8px}
+.source-folder>span i{color:#d69e2e}
+.source-folder>.source-file-tree{border-left:1px solid #d9e0e5;margin-left:13px;padding-left:8px}
+.source-file-readonly{color:#84919d;cursor:default}
+.source-file-readonly:hover{background:transparent;color:#84919d}

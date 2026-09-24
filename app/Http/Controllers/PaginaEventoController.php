@@ -53,6 +53,7 @@ class PaginaEventoController
             'valores' => (array) ($evento->pagina_variaveis ?? []),
             'arquivos' => $evento->templatePagina ? $this->templates->arquivos($evento->templatePagina) : [],
             'arquivosCodigo' => $evento->templatePagina ? $this->templates->arquivosEditaveis($evento->templatePagina) : [],
+            'arvoreArquivosCodigo' => $evento->templatePagina ? $this->templates->arvoreArquivos($evento->templatePagina) : [],
             'proximaVersao' => $evento->templatePagina ? $this->templates->proximaVersao($evento->templatePagina->versao) : '1.0.0',
             'configuracaoPadrao' => $paginaPadrao?->configuracaoCompleta() ?? PaginaPadraoEvento::padrao(),
             'submissoes' => $evento->submissoes,

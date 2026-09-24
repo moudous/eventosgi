@@ -117,11 +117,10 @@
                     <div class="small mt-2" id="sourceFeedback" role="status" aria-live="polite"></div>
                 </section>
                 <aside class="source-explorer" id="sourceExplorer" aria-label="Arquivos do template"><header><i class="bi bi-folder2-open me-2"></i><strong>Raiz do template</strong><small>{{ $evento->templatePagina?->pasta }}/</small></header><div class="source-file-list">
-                    @forelse($arquivosCodigo as $arquivo)
-                        @php($extensao = strtolower(pathinfo($arquivo, PATHINFO_EXTENSION)))
-                        <button type="button" class="source-file source-file-{{ $extensao }}" data-arquivo="{{ $arquivo }}" data-extensao="{{ $extensao }}"><i class="bi {{ match($extensao) {'html','htm' => 'bi-filetype-html', 'css' => 'bi-filetype-css', 'js' => 'bi-filetype-js', 'json' => 'bi-braces', default => 'bi-file-earmark-code'} }}" aria-hidden="true"></i><span>{{ $arquivo }}</span><small>{{ strtoupper($extensao) }}</small></button>
+                    @forelse($arvoreArquivosCodigo as $no)
+                        @include('eventos.partials.arvore-arquivos-template', ['nos' => [$no]])
                     @empty
-                        <p class="small text-secondary p-3 mb-0">Nenhum arquivo textual editável.</p>
+                        <p class="small text-secondary p-3 mb-0">Nenhum arquivo no template.</p>
                     @endforelse
                 </div></aside>
             </div>
@@ -147,7 +146,8 @@
 @endsection
 
 @push('styles')
-<link href="{{ asset('template-editor.css') }}?v=1" rel="stylesheet">
+<link href="{{ asset('template-editor.css') }}?v=2" rel="stylesheet">
+<link href="{{ asset('template-file-tree.css') }}?v=1" rel="stylesheet">
 @endpush
 
 @if($evento->template_pagina_id && $podeVerCodigo)
