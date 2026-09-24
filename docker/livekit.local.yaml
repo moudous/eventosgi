@@ -1,0 +1,15 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+  node_ip: 172.29.166.86
+  turn_servers:
+    - host: 172.29.166.86
+      port: 3478
+      protocol: tcp
+      username: eventosgi
+      credential: eventosgi-turn-local-2026
+keys:
+  devkey: eventosgi-livekit-desenvolvimento-segredo-2026

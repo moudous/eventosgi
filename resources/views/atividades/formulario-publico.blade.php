@@ -70,7 +70,7 @@
     @endif
 
     @if(session('status'))<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>{{ session('status') }}</div>@endif
-    @if(session('senha_temporaria_enviada'))<div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas.</div>@endif
+    @if(session('senha_temporaria_enviada'))<div class="alert alert-success"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas. Abra seu e-mail e veja a mensagem que foi enviada.</div>@endif
     @if(session('vagas_esgotadas'))<div class="alert alert-warning">{{ session('vagas_esgotadas') }}</div>@endif
     @if(session('identificacao_expirada'))<div class="alert alert-warning">{{ session('identificacao_expirada') }}</div>@endif
     @if(session('comprovante_erro'))<div class="alert alert-danger">{{ session('comprovante_erro') }}</div>@endif
@@ -268,7 +268,7 @@
                             </div>
                             <input class="form-control @if($errosIdentificacao->has('captcha')) is-invalid @endif" style="max-width:220px;text-transform:uppercase;letter-spacing:.2em" type="text" id="captcha" name="captcha" maxlength="6" autocomplete="off" autocapitalize="characters">
                             @if($errosIdentificacao->has('captcha'))<div class="text-danger small mt-1">{{ $errosIdentificacao->first('captcha') }}</div>@endif
-                            @if(session('senha_temporaria_enviada'))<div class="alert alert-success mt-3 mb-0"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas.</div>@endif
+                            @if(session('senha_temporaria_enviada'))<div class="alert alert-success mt-3 mb-0"><i class="bi bi-envelope-check me-1"></i>A senha temporária foi enviada para <strong>{{ session('senha_temporaria_enviada') }}</strong>. Ela vale por {{ \App\Services\IdentificacaoParticipanteService::HORAS_VALIDADE }} horas. Abra seu e-mail e veja a mensagem que foi enviada.</div>@endif
                         </div>
                         <button class="btn btn-outline-primary mb-3" type="submit" name="acao" value="solicitar_codigo"><i class="bi bi-send me-1"></i>Enviar senha para o e-mail</button>
                     </div>

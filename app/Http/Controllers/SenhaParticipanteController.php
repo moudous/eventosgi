@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CodigoInscricao;
 use App\Models\CredencialParticipante;
+use App\Models\Atividade;
 use App\Services\SenhaCompartilhadaService;
 use App\Services\IdentificacaoParticipanteService;
 use Illuminate\Http\Request;
@@ -30,6 +31,7 @@ class SenhaParticipanteController
             'token' => $token,
             'nome' => (string) $participante->nome,
             'email' => (string) $codigo->email,
+            'atividade' => $this->atividadeDoLink($codigo),
         ]);
     }
 
@@ -48,6 +50,7 @@ class SenhaParticipanteController
 
         $resolucao = $identificacao->resolverParticipante((string) $codigo->email);
         $participante = $resolucao['participante'];
+        $atividade = $this->atividadeDoLink($codigo);
         $senhaHash = Hash::make($dados['senha']);
         $submissoesAtualizadas = 0;
 
@@ -84,11 +87,16 @@ class SenhaParticipanteController
             ]);
         });
 
+        if ($atividade) {
+            $identificacao->identificarNaSessao($request, $atividade, $participante, (string) $codigo->email);
+        }
+
         return view('participantes.senha', [
             'valido' => false,
             'sucesso' => true,
             'nome' => (string) $participante->nome,
             'submissoesAtualizadas' => $submissoesAtualizadas,
+            'atividade' => $atividade,
         ]);
     }
 
@@ -101,5 +109,16 @@ class SenhaParticipanteController
             ->whereNull('redefinicao_usado_em')
             ->where('redefinicao_expira_em', '>', now())
             ->first();
+    }
+
+    private function atividadeDoLink(CodigoInscricao $codigo): ?Atividade
+    {
+        $url = (string) request()->query('atividade');
+
+        if (preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $url)) {
+            return Atividade::query()->where('url', $url)->first();
+        }
+
+        return $codigo->atividade_id ? Atividade::query()->find($codigo->atividade_id) : null;
     }
 }

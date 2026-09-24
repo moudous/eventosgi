@@ -11,6 +11,8 @@ class AllowGiEmbedding
     private const ROTAS_PUBLICAS_INCORPORAVEIS = [
         'eventos.pagina.visualizar',
         'atividades.transmissao',
+        'transmissoes.sala',
+        'transmissoes.entrar',
         'eventos.personalizacao.imagem',
         'biblioteca.abrir',
         // As páginas públicas dos eventos exibem as fotos dos convidados. O nome
@@ -61,6 +63,9 @@ class AllowGiEmbedding
         $response->headers->remove('X-Frame-Options');
         if ($request->routeIs('atividades.validador-presenca*')) {
             $response->headers->set('Permissions-Policy', 'camera=(self)');
+        }
+        if ($request->routeIs('transmissoes.sala*')) {
+            $response->headers->set('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self)');
         }
 
         // Estas páginas foram feitas para visitantes e podem ser incorporadas em sites

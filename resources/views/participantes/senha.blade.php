@@ -9,6 +9,7 @@
                 <h1 class="h3 mt-3">Senha definida com sucesso</h1>
                 <p class="text-muted mb-0">{{ $nome }}, sua nova senha já pode ser usada para se identificar nas inscrições de outros eventos e atividades.</p>
                 @if($submissoesAtualizadas > 0)<p class="alert alert-info mt-4 mb-0">A senha de inscrição em submissão também foi alterada.</p>@endif
+                @if($atividade)<p class="mt-4 mb-0"><a href="{{ $atividade->urlPublica() }}">{{ $atividade->nome }}</a></p>@endif
             </div>
         @elseif(!$valido)
             <div class="text-center">
@@ -20,7 +21,7 @@
             <h1 class="h3">Definir senha de inscrição</h1>
             <p class="text-muted">Olá, <strong>{{ $nome }}</strong>. Defina uma senha para <strong>{{ $email }}</strong>. Ela poderá ser usada para se inscrever em outros eventos e atividades.</p>
             @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $erro)<li>{{ $erro }}</li>@endforeach</ul></div>@endif
-            <form method="POST" action="{{ route('senha-participante.atualizar', ['token' => $token]) }}">
+            <form method="POST" action="{{ route('senha-participante.atualizar', ['token' => $token, 'atividade' => $atividade?->url]) }}">
                 @csrf
                 <div class="mb-3"><label class="form-label fw-semibold" for="senha">Nova senha</label><input class="form-control" type="password" id="senha" name="senha" minlength="8" required autocomplete="new-password"><div class="form-text">Use pelo menos 8 caracteres, com letras e números.</div></div>
                 <div class="mb-4"><label class="form-label fw-semibold" for="senha_confirmation">Confirmar nova senha</label><input class="form-control" type="password" id="senha_confirmation" name="senha_confirmation" minlength="8" required autocomplete="new-password"></div>

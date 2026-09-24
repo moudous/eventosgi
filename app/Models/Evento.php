@@ -84,6 +84,11 @@ class Evento extends Model
         return $this->hasMany(Atividade::class);
     }
 
+    public function transmissoes(): HasMany
+    {
+        return $this->hasMany(Transmissao::class);
+    }
+
     /** Considera também atividades na lixeira, pois elas ainda podem ser restauradas. */
     public function temAtividadesOuSubmissoes(): bool
     {

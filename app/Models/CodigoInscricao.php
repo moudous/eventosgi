@@ -10,9 +10,9 @@ use Illuminate\Database\Eloquent\Model;
 class CodigoInscricao extends Model
 {
     protected $table = 'codigos_inscricao';
-    protected $fillable = ['email', 'participante_id', 'codigo_hash', 'token_hash', 'tentativas', 'expira_em',
+    protected $fillable = ['atividade_id', 'email', 'participante_id', 'codigo_hash', 'token_hash', 'tentativas', 'expira_em',
         'token_expira_em', 'validado_em', 'ip', 'redefinicao_token_hash', 'redefinicao_expira_em', 'redefinicao_usado_em'];
-    protected $casts = ['participante_id' => 'integer', 'tentativas' => 'integer', 'expira_em' => 'datetime',
+    protected $casts = ['atividade_id' => 'integer', 'participante_id' => 'integer', 'tentativas' => 'integer', 'expira_em' => 'datetime',
         'token_expira_em' => 'datetime', 'validado_em' => 'datetime', 'redefinicao_expira_em' => 'datetime',
         'redefinicao_usado_em' => 'datetime'];
 

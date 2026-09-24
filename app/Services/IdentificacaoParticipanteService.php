@@ -82,11 +82,12 @@ class IdentificacaoParticipanteService
         $expiraEm = now()->addMinutes(self::MINUTOS_VALIDADE);
         $tokenRedefinicao = \Illuminate\Support\Str::random(64);
 
-        $registro = DB::transaction(function () use ($email, $codigo, $expiraEm, $request, $tokenRedefinicao): CodigoInscricao {
+        $registro = DB::transaction(function () use ($atividade, $email, $codigo, $expiraEm, $request, $tokenRedefinicao): CodigoInscricao {
             CodigoInscricao::query()->where('email', $email)
                 ->update(['expira_em' => now()->subSecond(), 'redefinicao_expira_em' => now()->subSecond()]);
 
             return CodigoInscricao::create([
+                'atividade_id' => $atividade->id,
                 'email' => $email,
                 'codigo_hash' => hash('sha256', $codigo),
                 'redefinicao_token_hash' => hash('sha256', $tokenRedefinicao),
@@ -101,7 +102,7 @@ class IdentificacaoParticipanteService
                 $email,
                 null,
                 'Senha temporária — '.$atividade->nome,
-                $this->conteudo($atividade, $codigo, route('senha-participante.editar', ['token' => $tokenRedefinicao])),
+                $this->conteudo($atividade, $codigo, route('senha-participante.editar', ['token' => $tokenRedefinicao, 'atividade' => $atividade->url])),
                 "eventosgi-codigo-{$registro->id}",
             );
         } catch (Throwable $excecao) {
@@ -231,6 +232,20 @@ class IdentificacaoParticipanteService
             $senhas->invalidarCodigosAtividade($email);
             if ($request->boolean('usar_na_submissao', true)) $senhas->atualizarSubmissao($email, $hash);
         });
+    }
+
+    /** Registra na sessão o participante que acabou de definir a senha pelo link de e-mail. */
+    public function identificarNaSessao(Request $request, Atividade $atividade, Participante $participante, string $email): void
+    {
+        $request->session()->regenerate();
+        $request->session()->put($this->chaveSessao($atividade), [
+            'participante_id' => (int) $participante->id,
+            'nome' => (string) $participante->nome,
+            'email' => mb_strtolower(trim($email)),
+            'codigo_id' => null,
+            'validado_em' => now()->toIso8601String(),
+            'ultimo_acesso' => now()->timestamp,
+        ]);
     }
 
     /**

@@ -26,7 +26,7 @@ Schema::create('inscritos_submissao_trabalhos', function ($t) { $t->id(); $t->in
 (require __DIR__.'/../database/migrations/2026_09_15_030000_add_categoria_trabalho_to_submissoes.php')->up();
 Schema::create('submissao_autores', function ($t) { $t->id(); $t->integer('inscrito_submissao_trabalho_id'); $t->string('nome'); $t->string('email'); $t->string('afiliacao')->nullable(); $t->boolean('principal'); $t->integer('ordem'); $t->integer('numero')->nullable(); $t->timestamps(); });
 Schema::create('credenciais_participante', function ($t) { $t->id(); $t->integer('participante_id'); $t->string('email')->unique(); $t->string('senha'); $t->integer('credencial_versao')->default(1); $t->timestamps(); });
-Schema::create('codigos_inscricao', function ($t) { $t->id(); $t->string('email'); $t->integer('participante_id')->nullable(); $t->string('codigo_hash'); $t->string('ip')->nullable(); $t->timestamp('expira_em'); $t->string('redefinicao_token_hash')->nullable(); $t->timestamp('redefinicao_expira_em')->nullable(); $t->timestamp('redefinicao_usado_em')->nullable(); $t->timestamps(); });
+Schema::create('codigos_inscricao', function ($t) { $t->id(); $t->integer('atividade_id')->nullable(); $t->string('email'); $t->integer('participante_id')->nullable(); $t->string('codigo_hash'); $t->string('ip')->nullable(); $t->timestamp('expira_em'); $t->string('redefinicao_token_hash')->nullable(); $t->timestamp('redefinicao_expira_em')->nullable(); $t->timestamp('redefinicao_usado_em')->nullable(); $t->timestamps(); });
 
 function check(bool $ok, string $mensagem): void { if (!$ok) throw new RuntimeException($mensagem); }
 function req(array $dados = [], ?Store $sessao = null): Request {

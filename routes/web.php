@@ -24,6 +24,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardExportController;
 use App\Http\Controllers\RecebimentoPixController;
 use App\Http\Controllers\AvaliadorController;
+use App\Http\Controllers\TransmissaoController;
 
 Route::get('/auth/gi', function (Request $request) {
     abort_unless($request->filled('code'), 400, 'Código ausente.');
@@ -348,6 +349,22 @@ Route::prefix('convidados')->name('convidados.')->group(function (): void {
     Route::put('/{convidado}', [ConvidadoController::class, 'update'])->middleware('gi.permission:convidados.editar')->name('update');
     Route::delete('/{convidado}', [ConvidadoController::class, 'destroy'])->middleware('gi.permission:convidados.excluir')->name('destroy');
 });
+
+Route::prefix('transmissao')->name('transmissoes.')->group(function (): void {
+    Route::get('/', [TransmissaoController::class, 'index'])->middleware('gi.permission:transmissao.listar')->name('index');
+    Route::get('/youtube/conectar', [TransmissaoController::class, 'conectarYouTube'])->middleware('gi.permission:transmissao.criar')->name('youtube.conectar');
+    Route::get('/youtube/retorno', [TransmissaoController::class, 'retornoYouTube'])->middleware('gi.permission:transmissao.criar')->name('youtube.retorno');
+    Route::get('/youtube/callback', [TransmissaoController::class, 'retornoYouTube'])->middleware('gi.permission:transmissao.criar')->name('youtube.callback');
+    Route::delete('/youtube', [TransmissaoController::class, 'desconectarYouTube'])->middleware('gi.permission:transmissao.criar')->name('youtube.desconectar');
+    Route::get('/configuracao', [TransmissaoController::class, 'configuracao'])->middleware('gi.permission:transmissao.configuracao')->name('configuracao');
+    Route::put('/configuracao', [TransmissaoController::class, 'salvarConfiguracao'])->middleware('gi.permission:transmissao.configuracao')->name('configuracao.salvar');
+    Route::get('/criar', [TransmissaoController::class, 'create'])->middleware('gi.permission:transmissao.criar')->name('create');
+    Route::post('/', [TransmissaoController::class, 'store'])->middleware('gi.permission:transmissao.criar')->name('store');
+    Route::delete('/{transmissao}', [TransmissaoController::class, 'destroy'])->middleware('gi.permission:transmissao.excluir')->name('destroy');
+});
+
+Route::get('/ao-vivo/{transmissao:hash_publico}', [TransmissaoController::class, 'sala'])->name('transmissoes.sala');
+Route::post('/ao-vivo/{transmissao:hash_publico}/entrar', [TransmissaoController::class, 'entrarSala'])->name('transmissoes.entrar');
 
 Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     // Administração das chamadas de submissão.
