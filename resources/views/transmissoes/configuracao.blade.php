@@ -3,7 +3,7 @@
 @section('title', 'Configuração da videoconferência')
 
 @section('content')
-<div class="mb-4"><h1 class="page-title">Configuração da videoconferência</h1><p class="page-description mb-0">Credenciais do servidor LiveKit usadas para criar as salas de câmera, áudio e compartilhamento de tela.</p></div>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4"><div><h1 class="page-title">Configuração da videoconferência</h1><p class="page-description mb-0">Credenciais do servidor LiveKit usadas para criar as salas de câmera, áudio e compartilhamento de tela.</p></div><a class="btn btn-outline-primary" href="{{ route('transmissoes.configuracao.tutorial') }}"><i class="bi bi-journal-text me-1"></i>Ver tutorial do servidor</a></div>
 @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
 <form method="POST" action="{{ route('transmissoes.configuracao.salvar') }}"><div class="card content-card" style="max-width:760px"><div class="card-body p-4">@csrf @method('PUT')
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif

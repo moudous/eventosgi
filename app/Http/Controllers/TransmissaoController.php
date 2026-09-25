@@ -6,6 +6,7 @@ use App\Models\Evento;
 use App\Models\Transmissao;
 use App\Models\YouTubeConexao;
 use App\Models\LiveKitConfiguracao;
+use App\Models\ArquivoBiblioteca;
 use App\Services\YouTubeOAuthService;
 use App\Services\LiveKitTokenService;
 use App\Services\GiPermissionService;
@@ -93,6 +94,11 @@ class TransmissaoController
         return view('transmissoes.configuracao', ['configuracao' => LiveKitConfiguracao::atual()]);
     }
 
+    public function tutorialConfiguracao(): View
+    {
+        return view('transmissoes.tutorial-configuracao');
+    }
+
     public function salvarConfiguracao(Request $request): RedirectResponse
     {
         $urlValida = function (string $atributo, mixed $valor, \Closure $falhar): void {
@@ -137,11 +143,25 @@ class TransmissaoController
     }
 
     /** Página pública da sala. O hash funciona como convite secreto. */
-    public function sala(Transmissao $transmissao): View
+    public function sala(Request $request, Transmissao $transmissao, GiPermissionService $permissoes): View
     {
         abort_if(in_array($transmissao->status, [Transmissao::STATUS_FINALIZADA, Transmissao::STATUS_CANCELADA], true), 410, 'Esta transmissão foi encerrada.');
 
-        return view('transmissoes.sala', ['transmissao' => $transmissao]);
+        $usuario = (array) $request->session()->get('gi_context.usuario', []);
+        $usuarioLogado = filled($usuario['id'] ?? null) && filled($usuario['nome'] ?? null)
+            ? ['id' => (int) $usuario['id'], 'nome' => (string) $usuario['nome']]
+            : null;
+        $nomeSala = trim((string) $request->session()->get('transmissoes.nome.'.$transmissao->id, ''));
+
+        return view('transmissoes.sala', [
+            'transmissao' => $transmissao,
+            'usuarioLogado' => $usuarioLogado,
+            'nomeSala' => $nomeSala,
+            'podeAdministrarPalco' => $permissoes->permite('transmissao.configuracao', $request),
+            'midiasPalco' => $permissoes->permite('transmissao.configuracao', $request)
+                ? ArquivoBiblioteca::query()->where('tipo', 'imagem')->latest('id')->get(['id', 'nome', 'arquivo'])
+                : collect(),
+        ]);
     }
 
     /** Entrega credenciais temporárias, vinculadas a uma única sala, para o navegador. */
@@ -150,14 +170,38 @@ class TransmissaoController
         abort_if(in_array($transmissao->status, [Transmissao::STATUS_FINALIZADA, Transmissao::STATUS_CANCELADA], true), 410, 'Esta transmissão foi encerrada.');
 
         $dados = $request->validate(['nome' => ['required', 'string', 'min:2', 'max:80']]);
+        $nome = trim($dados['nome']);
+        $request->session()->put('transmissoes.nome.'.$transmissao->id, $nome);
         try {
-            return response()->json($livekit->paraParticipante($transmissao, trim($dados['nome'])));
+            return response()->json($livekit->paraParticipante(
+                $transmissao,
+                $nome,
+                $permissoes->permite('transmissao.configuracao', $request),
+            ));
         } catch (\RuntimeException $excecao) {
             $podeConfigurar = $permissoes->permite('transmissao.configuracao', $request);
             return response()->json([
                 'message' => $podeConfigurar ? $excecao->getMessage() : 'A sala de videoconferência ainda não está disponível.',
                 'configuracao' => $podeConfigurar,
             ], 503);
+        }
+    }
+
+    public function definirMudo(Request $request, Transmissao $transmissao, LiveKitTokenService $livekit, GiPermissionService $permissoes): JsonResponse
+    {
+        abort_if(in_array($transmissao->status, [Transmissao::STATUS_FINALIZADA, Transmissao::STATUS_CANCELADA], true), 410, 'Esta transmissão foi encerrada.');
+        $permissoes->exigir('transmissao.configuracao', $request);
+        $dados = $request->validate([
+            'identity' => ['required', 'string', 'max:255'],
+            'track_sid' => ['required', 'string', 'max:255'],
+            'muted' => ['required', 'boolean'],
+        ]);
+
+        try {
+            $livekit->definirMudo($transmissao, $dados['identity'], $dados['track_sid'], (bool) $dados['muted']);
+            return response()->json(['muted' => (bool) $dados['muted']]);
+        } catch (\RuntimeException $excecao) {
+            return response()->json(['message' => $excecao->getMessage()], 503);
         }
     }
 }

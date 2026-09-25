@@ -357,6 +357,7 @@ Route::prefix('transmissao')->name('transmissoes.')->group(function (): void {
     Route::get('/youtube/callback', [TransmissaoController::class, 'retornoYouTube'])->middleware('gi.permission:transmissao.criar')->name('youtube.callback');
     Route::delete('/youtube', [TransmissaoController::class, 'desconectarYouTube'])->middleware('gi.permission:transmissao.criar')->name('youtube.desconectar');
     Route::get('/configuracao', [TransmissaoController::class, 'configuracao'])->middleware('gi.permission:transmissao.configuracao')->name('configuracao');
+    Route::get('/configuracao/tutorial', [TransmissaoController::class, 'tutorialConfiguracao'])->middleware('gi.permission:transmissao.configuracao')->name('configuracao.tutorial');
     Route::put('/configuracao', [TransmissaoController::class, 'salvarConfiguracao'])->middleware('gi.permission:transmissao.configuracao')->name('configuracao.salvar');
     Route::get('/criar', [TransmissaoController::class, 'create'])->middleware('gi.permission:transmissao.criar')->name('create');
     Route::post('/', [TransmissaoController::class, 'store'])->middleware('gi.permission:transmissao.criar')->name('store');
@@ -365,6 +366,7 @@ Route::prefix('transmissao')->name('transmissoes.')->group(function (): void {
 
 Route::get('/ao-vivo/{transmissao:hash_publico}', [TransmissaoController::class, 'sala'])->name('transmissoes.sala');
 Route::post('/ao-vivo/{transmissao:hash_publico}/entrar', [TransmissaoController::class, 'entrarSala'])->name('transmissoes.entrar');
+Route::post('/ao-vivo/{transmissao:hash_publico}/midia', [TransmissaoController::class, 'definirMudo'])->name('transmissoes.midia');
 
 Route::prefix('submissao')->name('submissoes.')->group(function (): void {
     // Administração das chamadas de submissão.
